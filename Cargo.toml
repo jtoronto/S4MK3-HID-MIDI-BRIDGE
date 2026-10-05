@@ -1,0 +1,35 @@
+[package]
+name = "s4-connectivity-probe"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "S4 MK3 HID connectivity probe and minimal macOS MIDI bridge"
+publish = false
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+crossbeam-channel = "0.5"
+ctrlc = "3"
+encdr = { git = "https://github.com/RufusIbiza/Encdr.git", rev = "5d7a689ca5789161b3efd1b2049d7e54504fe881" }
+hidapi = { version = "2.6", features = ["macos-shared-device"] }
+midir = "0.11"
+num-traits = "0.2"
+plist = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+let_underscore_must_use = "deny"
