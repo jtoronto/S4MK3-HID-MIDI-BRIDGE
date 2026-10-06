@@ -82,14 +82,25 @@ pub const DECK_BINDINGS: &[Binding] = &[
         None,
     ),
     note("sync", 2, "turntable{deck}.bpmSync", None),
-    note("reverse", 3, "turntable{deck}.reverse", None),
+    note("reverse", 3, "turntable{deck}.reverseHold", None),
     note("flux", 4, "turntable{deck}.deckSlipToggle", None),
-    note("move_encoder_press", 5, "turntable{deck}.loopInOut", None),
+    note(
+        "move_one_forward",
+        5,
+        "turntable{deck}.skipForward1Beat",
+        Some("turntable{deck}.skipForward1Beat"),
+    ),
+    note(
+        "move_one_backward",
+        14,
+        "turntable{deck}.skipBackward1Beat",
+        Some("turntable{deck}.skipBackward1Beat"),
+    ),
     note(
         "loop_encoder_press",
         6,
         "turntable{deck}.autoLoopOnOff",
-        Some("turntable{deck}.loopInOut"),
+        Some("turntable{deck}.reloop"),
     ),
     note(
         "wheel_touch",
@@ -114,18 +125,17 @@ pub const DECK_BINDINGS: &[Binding] = &[
         "turntable{deck}.autoLoopDurationRotary",
         Some("turntable{deck}.autoLoopMoveRotary"),
     ),
-    relative(
-        "move_encoder",
-        2,
-        "turntable{deck}.autoLoopMoveRotary",
-        Some("turntable{deck}.skipRotary"),
-    ),
-    relative(
-        "browse_encoder",
-        3,
-        "musicLibrary.libraryRotary",
-        Some("musicLibrary.sectionRotary"),
-    ),
+    relative("move_encoder", 2, "turntable{deck}.skipRotary", None),
+    relative("move_size", 7, "turntable{deck}.skipDurationRotary", None),
+    Binding {
+        flipped: true,
+        ..relative(
+            "browse_encoder",
+            3,
+            "musicLibrary.libraryRotary",
+            Some("musicLibrary.sectionRotary"),
+        )
+    },
     Binding {
         sensitivity: Some(7.0),
         ..relative("jog_bend", 4, "turntable{deck}.pitchBendMove", None)
@@ -447,6 +457,10 @@ pub struct ControlNote {
 
 /// Physically recognized controls that select hardware-local bridge state.
 pub const LOCAL_CONTROLS: &[ControlNote] = &[
+    ControlNote {
+        name: "move_encoder_press",
+        reason: "toggles per-deck beat-jump size selection; selected deck LED pulses",
+    },
     ControlNote {
         name: "shift",
         reason: "selects shifted binding layer",

@@ -225,6 +225,8 @@ pub struct LocalState {
     pub held: [bool; 11],
     /// Physical tempo-fader positions normalized to 0.0..=1.0.
     pub tempo: [Option<f32>; 2],
+    /// Jump-size selection belongs to logical decks, not physical sides.
+    pub move_selecting: [bool; 4],
 }
 
 impl Default for LocalState {
@@ -239,6 +241,7 @@ impl Default for LocalState {
             grid: [false; 2],
             held: [false; 11],
             tempo: [None; 2],
+            move_selecting: [false; 4],
         }
     }
 }

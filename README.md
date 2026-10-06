@@ -82,6 +82,30 @@ application. Guest plug-and-play and support for other DJ applications are
 desirable, but personal Djay use takes priority. Importing a custom mapping is
 acceptable. DDJ-SX2 emulation can be explored later.
 
+## macOS menu-bar app
+
+The standalone Apple Silicon app bundles the bridge and a Djay mapping, so the
+DJ laptop does not need Rust or Cargo. Build with `bash macos/build-app.sh`;
+copy `dist/S4 MK3 Bridge.app` to the laptop. It provides Start/Stop, mapping
+installation, complete LED preferences, and diagnostics.
+See [macos/README.md](macos/README.md) for installation and
+[docs/configurable-controls.md](docs/configurable-controls.md) for control-tuning
+candidates.
+
+## Mapping reference and beta guide
+
+The user confirmed the standalone app works on the DJ laptop. Control-level
+beta findings, explanations, and proposed changes are recorded in the
+[mapping audit and beta guide](docs/mapping-audit.md). The audit is documentation,
+not a new mapping release.
+
+- [Djay input/output master reference](docs/djay-action-reference.md):
+  software actions, state outputs, human descriptions, and current MIDI usage.
+- [Bridge-owned function table](docs/bridge-function-reference.md):
+  local routing, modes, conversion, and LED behavior.
+- [Traktor factory comparison](docs/traktor-djay-comparison.md):
+  supplied S4 MK3 manual references and achievable or unresolved equivalents.
+
 ## Design record
 
 The full profile includes LED feedback, channel meters, and a decorative jog-ring

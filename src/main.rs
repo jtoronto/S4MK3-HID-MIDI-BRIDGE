@@ -264,10 +264,11 @@ fn run_probe(
         if let (Some(bridge), Some(output), Some(config)) = (&mut full, &mut full_leds, &led_config)
         {
             let now = started.elapsed();
-            let received = bridge.drain_feedback(now)?;
+            let (received, sent) = bridge.drain_feedback(now)?;
             counts.feedback_messages = counts
                 .feedback_messages
                 .saturating_add(u64::try_from(received)?);
+            counts.midi_messages = counts.midi_messages.saturating_add(u64::try_from(sent)?);
             let writes = output.tick(
                 config,
                 bridge.feedback_state(),
@@ -432,6 +433,16 @@ fn full_control_descriptor(original: &DeviceDescriptor) -> anyhow::Result<Device
             match item {
                 InputItemDesc::Slider(slider) => slider.max_value = Some(4095),
                 InputItemDesc::Button(button) => {
+                    // Captured physical presses: only the LEFT names are reversed.
+                    match button.name.as_str() {
+                        "left_loop_encoder_press" => {
+                            "left_move_encoder_press".clone_into(&mut button.name);
+                        }
+                        "left_move_encoder_press" => {
+                            "left_loop_encoder_press".clone_into(&mut button.name);
+                        }
+                        _ => {}
+                    }
                     if button.name.starts_with("left_pad_") || button.name.starts_with("right_pad_")
                     {
                         let index = button
@@ -448,9 +459,20 @@ fn full_control_descriptor(original: &DeviceDescriptor) -> anyhow::Result<Device
                         button.mask = HexU16(1_u16 << bit);
                     }
                 }
-                InputItemDesc::Encoder(_)
-                | InputItemDesc::EncoderFine(_)
-                | InputItemDesc::Touch(_) => {}
+                InputItemDesc::Encoder(encoder) => {
+                    // All four rotation names are reversed; preserve wire polarity.
+                    let name = match encoder.name.as_str() {
+                        "left_loop_encoder" => Some("left_move_encoder"),
+                        "left_move_encoder" => Some("left_loop_encoder"),
+                        "right_loop_encoder" => Some("right_move_encoder"),
+                        "right_move_encoder" => Some("right_loop_encoder"),
+                        _ => None,
+                    };
+                    if let Some(name) = name {
+                        name.clone_into(&mut encoder.name);
+                    }
+                }
+                InputItemDesc::EncoderFine(_) | InputItemDesc::Touch(_) => {}
             }
         }
         if packet.id == "buttons" {

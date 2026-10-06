@@ -94,8 +94,11 @@ struct Translator {
     residuals: [f64; 2],
     held: HashMap<&'static str, Vec<Address>>,
     switches: [Option<u8>; 5],
+    delivered_switches: [Option<u8>; 5],
+    front_panel_ready: bool,
     led_held: [bool; 11],
     tempos: [Option<f32>; 2],
+    move_selecting: [bool; 4],
 }
 
 impl Default for Translator {
@@ -112,8 +115,11 @@ impl Default for Translator {
             residuals: [0.0; 2],
             held: HashMap::new(),
             switches: [None; 5],
+            delivered_switches: [None; 5],
+            front_panel_ready: false,
             led_held: [false; 11],
             tempos: [None; 2],
+            move_selecting: [false; 4],
         }
     }
 }
@@ -145,8 +151,13 @@ impl FullBridge {
         })
     }
 
-    pub fn drain_feedback(&mut self, now: Duration) -> anyhow::Result<usize> {
-        self.feedback_input.drain(&mut self.feedback, now)
+    pub fn drain_feedback(&mut self, now: Duration) -> anyhow::Result<(usize, usize)> {
+        let received = self.feedback_input.drain(&mut self.feedback, now)?;
+        self.messages.clear();
+        self.translator
+            .sync_front_panel(&self.feedback, &mut self.messages)?;
+        let sent = self.send_messages()?;
+        Ok((received, sent))
     }
 
     pub const fn feedback_state(&self) -> &feedback::FeedbackState {
@@ -168,6 +179,10 @@ impl FullBridge {
         self.messages.clear();
         self.translator
             .translate(&self.controls, buttons, &mut self.messages)?;
+        self.send_messages()
+    }
+
+    fn send_messages(&mut self) -> anyhow::Result<usize> {
         for message in &self.messages {
             self.connection
                 .send(message)
@@ -204,6 +219,7 @@ impl Translator {
             grid: self.grid,
             held: self.led_held,
             tempo: self.tempos,
+            move_selecting: self.move_selecting,
         }
     }
 
@@ -250,6 +266,7 @@ impl Translator {
             }
         }
         self.selectors(controls, output);
+        self.move_selection(controls);
         if let Some(payload) = buttons {
             self.front_panel(payload, output)?;
         }
@@ -277,20 +294,67 @@ impl Translator {
                     }
                 }
                 Control::Encoder(name, delta) => {
-                    for (binding, channel) in self.routes(name)? {
-                        if binding.kind == Kind::Relative {
-                            relative(
-                                Address {
-                                    channel,
-                                    number: binding.number,
-                                },
-                                delta,
-                                output,
-                            )?;
-                        }
-                    }
+                    self.encoder(name, delta, output)?;
                 }
                 Control::Jog(name, delta) => self.jog(name, delta, output)?,
+            }
+        }
+        Ok(())
+    }
+
+    fn move_selection(&mut self, controls: &[Control]) {
+        for (side, name) in [
+            (0, "left_move_encoder_press"),
+            (1, "right_move_encoder_press"),
+        ] {
+            if pressed(controls, name) && !self.held.contains_key(name) {
+                let deck = usize::from(self.decks[side].channel());
+                self.move_selecting[deck] = !self.move_selecting[deck];
+                // Own the physical press, even though it emits no MIDI note.
+                self.held.insert(name, Vec::new());
+                info!(
+                    deck = deck + 1,
+                    selecting = self.move_selecting[deck],
+                    "MOVE_SIZE_SELECT"
+                );
+            }
+        }
+    }
+
+    fn encoder(&self, name: &str, delta: i32, output: &mut Vec<[u8; 3]>) -> anyhow::Result<()> {
+        if let Some((side, "move_encoder")) = side_name(name)
+            && self.shifted[side]
+        {
+            let action = if delta < 0 {
+                "move_one_backward"
+            } else {
+                "move_one_forward"
+            };
+            let binding = catalog::DECK_BINDINGS
+                .iter()
+                .find(|binding| binding.input == action)
+                .context("one-beat MOVE binding missing")?;
+            for _ in 0..delta.unsigned_abs() {
+                pulse(
+                    Address {
+                        channel: channel(*binding, self.decks[side], true),
+                        number: binding.number,
+                    },
+                    output,
+                );
+            }
+            return Ok(());
+        }
+        for (binding, channel) in self.routes(name)? {
+            if binding.kind == Kind::Relative {
+                relative(
+                    Address {
+                        channel,
+                        number: binding.number,
+                    },
+                    delta,
+                    output,
+                )?;
             }
         }
         Ok(())
@@ -450,6 +514,14 @@ impl Translator {
         let mut routes = Vec::new();
         if let Some((side, suffix)) = side_name(name) {
             let deck = self.decks[side];
+            let suffix = if suffix == "move_encoder"
+                && !self.shifted[side]
+                && self.move_selecting[usize::from(deck.channel())]
+            {
+                "move_size"
+            } else {
+                suffix
+            };
             if let Some(index) = suffix.strip_prefix("pad_") {
                 let index = index
                     .parse::<u8>()?
@@ -625,24 +697,51 @@ impl Translator {
             let value = (payload[17] >> shift) & 3;
             ensure!(value <= 2, "invalid crossfader assignment state {value}");
             let index = usize::from(deck.channel());
-            if self.switches[index] != Some(value) {
-                self.switches[index] = Some(value);
-                let number = catalog::assignment_binding(deck.channel().saturating_add(1), value)
-                    .context("crossfader assignment binding missing")?
-                    .number;
-                pulse(Address { channel: 4, number }, output);
-            }
+            self.switches[index] = Some(value);
         }
         let curve = payload[18] & 3;
-        let value = match curve {
-            0 => 127,
-            1 => 64,
-            2 => 0,
+        match curve {
+            0..=2 => {}
             _ => bail!("invalid crossfader curve state {curve}"),
-        };
-        if self.switches[4] != Some(curve) {
-            self.switches[4] = Some(curve);
-            output.push([0xb4, catalog::CURVE_BINDING.number, value]);
+        }
+        self.switches[4] = Some(curve);
+        self.emit_front_panel(output)
+    }
+
+    fn sync_front_panel(
+        &mut self,
+        feedback: &feedback::FeedbackState,
+        output: &mut Vec<[u8; 3]>,
+    ) -> anyhow::Result<()> {
+        if !self.front_panel_ready && feedback.playback_received {
+            self.front_panel_ready = true;
+            info!(
+                "CROSSFADER_FEEDBACK_RECEIVED: applying physical switches once; restart bridge after mapping reconnect"
+            );
+        }
+        self.emit_front_panel(output)
+    }
+
+    fn emit_front_panel(&mut self, output: &mut Vec<[u8; 3]>) -> anyhow::Result<()> {
+        if !self.front_panel_ready {
+            return Ok(());
+        }
+        for index in 0..5 {
+            if let Some(value) = self.switches[index]
+                && self.delivered_switches[index] != Some(value)
+            {
+                if index < 4 {
+                    let deck = u8::try_from(index)?.saturating_add(1);
+                    let number = catalog::assignment_binding(deck, value)
+                        .context("crossfader assignment binding missing")?
+                        .number;
+                    pulse(Address { channel: 4, number }, output);
+                } else {
+                    let value = [127, 64, 0][usize::from(value)];
+                    output.push([0xb4, catalog::CURVE_BINDING.number, value]);
+                }
+                self.delivered_switches[index] = Some(value);
+            }
         }
         Ok(())
     }
@@ -759,6 +858,106 @@ mod tests {
                         }
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn captured_encoders_route_rotation_and_press_to_the_physical_knob() -> anyhow::Result<()> {
+        use encdr::core::descriptor::InputItemDesc;
+        use encdr::device::encoder::EncoderState;
+        use encdr::device::loader::DescriptorRegistry;
+
+        // Given independently captured physical fields, not descriptor names.
+        for shifted in [false, true] {
+            for (byte, increment, press_byte, mask, cc, note, deck) in [
+                (19, 1, 6, 0x04, 2, 5, 0),   // Left MOVE
+                (19, 16, 6, 0x20, 1, 6, 0),  // Left LOOP
+                (20, 16, 15, 0x20, 2, 5, 1), // Right MOVE
+                (21, 1, 15, 0x04, 1, 6, 1),  // Right LOOP
+            ] {
+                let mut registry = DescriptorRegistry::new();
+                registry.load_builtins()?;
+                let original = registry
+                    .find(crate::S4_VENDOR_ID, crate::S4_PRODUCT_ID)
+                    .context("S4 descriptor missing")?;
+                let descriptor = crate::full_control_descriptor(original)?;
+                let names = registry.intern_descriptor_names(&descriptor);
+                let encoder = descriptor
+                    .input_packets
+                    .iter()
+                    .flat_map(|packet| &packet.items)
+                    .find_map(|item| match item {
+                        InputItemDesc::Encoder(item)
+                            if item.byte == byte
+                                && item.bit_offset == if increment == 1 { 0 } else { 4 } =>
+                        {
+                            Some(item)
+                        }
+                        _ => None,
+                    })
+                    .context("captured encoder field missing")?;
+                let encoder_name = *names.get(&encoder.name).context("encoder name missing")?;
+                let press = descriptor
+                    .input_packets
+                    .iter()
+                    .flat_map(|packet| &packet.items)
+                    .find_map(|item| match item {
+                        InputItemDesc::Button(item)
+                            if item.byte == press_byte && item.mask.0 == u16::from(mask) =>
+                        {
+                            Some(item)
+                        }
+                        _ => None,
+                    })
+                    .context("captured press field missing")?;
+                let press_name = *names.get(&press.name).context("press name missing")?;
+                let mut state = Translator::default();
+                let mut payload = [0_u8; 22];
+                if shifted {
+                    let shift = if deck == 0 {
+                        "left_shift"
+                    } else {
+                        "right_shift"
+                    };
+                    state.translate(&[Control::Button(shift, true)], None, &mut Vec::new())?;
+                }
+                let mut decoder = EncoderState::default();
+                assert_eq!(
+                    decoder.update_wrap16((payload[byte] >> encoder.bit_offset) & 15),
+                    None
+                );
+
+                // When the knob moves forward/backward and is pressed/released.
+                let mut output = Vec::new();
+                for action in 0..4 {
+                    match action {
+                        0 => payload[byte] = payload[byte].wrapping_add(increment),
+                        1 => payload[byte] = payload[byte].wrapping_sub(increment),
+                        2 => payload[press_byte] |= mask,
+                        _ => payload[press_byte] &= !mask,
+                    }
+                    let control = if action < 2 {
+                        Control::Encoder(
+                            encoder_name,
+                            decoder
+                                .update_wrap16((payload[byte] >> encoder.bit_offset) & 15)
+                                .context("captured rotation produced no delta")?,
+                        )
+                    } else {
+                        Control::Button(press_name, payload[press_byte] & mask != 0)
+                    };
+                    state.translate(&[control], None, &mut output)?;
+                }
+
+                // Then the actual MIDI destinations retain physical semantics.
+                assert_eq!(
+                    output,
+                    captured_encoder_midi(cc, note, deck, shifted),
+                    "physical field {byte} increment {increment}, shifted={shifted}"
+                );
+                assert_eq!(state.move_selecting[usize::from(deck)], note == 5);
             }
         }
         Ok(())
@@ -898,6 +1097,134 @@ mod tests {
         Ok(())
     }
 
+    fn captured_encoder_midi(cc: u8, note: u8, deck: u8, shifted: bool) -> Vec<[u8; 3]> {
+        let channel = if shifted { deck + 8 } else { deck };
+        match (note, shifted) {
+            (5, false) => vec![[0xb0 | deck, cc, 65], [0xb0 | deck, cc, 63]],
+            (5, true) => vec![
+                [0x90 | channel, 5, 127],
+                [0x80 | channel, 5, 0],
+                [0x90 | channel, 14, 127],
+                [0x80 | channel, 14, 0],
+            ],
+            _ => vec![
+                [0xb0 | channel, cc, 65],
+                [0xb0 | channel, cc, 63],
+                [0x90 | channel, note, 127],
+                [0x80 | channel, note, 0],
+            ],
+        }
+    }
+
+    #[test]
+    fn move_selection_is_per_deck_and_duplicate_presses_do_not_toggle() -> anyhow::Result<()> {
+        // Given A selecting size, including a duplicate press and a deck switch while held.
+        let mut state = Translator::default();
+        assert!(
+            run(
+                &mut state,
+                &[Control::Button("left_move_encoder_press", true)]
+            )?
+            .is_empty()
+        );
+        run(
+            &mut state,
+            &[Control::Button("left_move_encoder_press", true)],
+        )?;
+        run(&mut state, &[Control::Button("left_deck_switch_c", true)])?;
+        run(
+            &mut state,
+            &[Control::Button("left_move_encoder_press", false)],
+        )?;
+        assert_eq!(
+            run(&mut state, &[Control::Encoder("left_move_encoder", 1)])?,
+            [[0xb2, 2, 65]]
+        );
+        run(
+            &mut state,
+            &[Control::Button("left_move_encoder_press", true)],
+        )?;
+        run(
+            &mut state,
+            &[Control::Button("left_move_encoder_press", false)],
+        )?;
+        run(&mut state, &[Control::Button("left_deck_switch_a", true)])?;
+        // When A's knob turns again, its selection mode is retained without a timeout.
+        assert_eq!(
+            run(&mut state, &[Control::Encoder("left_move_encoder", -2)])?,
+            [[0xb0, 7, 62]]
+        );
+        assert_eq!(
+            state.local_led_state().move_selecting,
+            [true, false, true, false]
+        );
+        // Then finishing selection restores jumping, independently of C.
+        run(
+            &mut state,
+            &[Control::Button("left_move_encoder_press", true)],
+        )?;
+        run(
+            &mut state,
+            &[Control::Button("left_move_encoder_press", false)],
+        )?;
+        assert_eq!(
+            run(&mut state, &[Control::Encoder("left_move_encoder", 1)])?,
+            [[0xb0, 2, 65]]
+        );
+        assert!(state.move_selecting[2]);
+        Ok(())
+    }
+
+    #[test]
+    fn shifted_move_preserves_selection_and_emits_one_beat_per_detent() -> anyhow::Result<()> {
+        for deck in [Deck::A, Deck::B, Deck::C, Deck::D] {
+            for selecting in [false, true] {
+                // Given the deck on the left with Shift held, in either local mode.
+                let mut state = Translator {
+                    decks: [deck, Deck::B],
+                    shifted: [true, false],
+                    ..Translator::default()
+                };
+                state.move_selecting[usize::from(deck.channel())] = selecting;
+                // When both directions turn through multiple detents.
+                for (delta, note) in [(2_i32, 5), (-3, 14), (0, 5)] {
+                    let output = run(&mut state, &[Control::Encoder("left_move_encoder", delta)])?;
+                    // Then fixed-size pulses preserve every detent, without size-changing CCs.
+                    let address = Address {
+                        channel: deck.channel() + 8,
+                        number: note,
+                    };
+                    assert_eq!(
+                        output,
+                        [address.press(), address.release()]
+                            .repeat(usize::try_from(delta.unsigned_abs())?)
+                    );
+                }
+                assert_eq!(state.move_selecting[usize::from(deck.channel())], selecting);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn move_selection_precedes_rotation_regardless_of_descriptor_order() -> anyhow::Result<()> {
+        // Given a size-mode toggle simultaneous with rotation and a right-side D selector.
+        let mut state = Translator::default();
+        let output = run(
+            &mut state,
+            &[
+                Control::Encoder("right_move_encoder", 1),
+                Control::Button("right_move_encoder_press", true),
+                Control::Button("right_deck_switch_d", true),
+            ],
+        )?;
+        // Then the movement changes D's size, never jumps B or D.
+        assert!(output.contains(&[0xb3, 7, 65]));
+        assert!(!output.iter().any(|m| m[0] & 0xf0 == 0xb0 && m[1] == 2));
+        assert_eq!(state.move_selecting, [false, false, false, true]);
+        Ok(())
+    }
+
     #[test]
     fn changing_untouched_jog_mode_does_not_leak_old_fractional_motion() -> anyhow::Result<()> {
         // Given an incomplete grid step.
@@ -940,7 +1267,10 @@ mod tests {
     #[test]
     fn front_panel_assignment_changes_are_atomic() -> anyhow::Result<()> {
         // Given all selectors initially Through and an established snapshot.
-        let mut state = Translator::default();
+        let mut state = Translator {
+            front_panel_ready: true,
+            ..Translator::default()
+        };
         let mut payload = [0_u8; 22];
         payload[17] = 0x55;
         let mut ignored = Vec::new();
@@ -951,6 +1281,109 @@ mod tests {
         state.translate(&[], Some(&payload), &mut output)?;
         // Then one Left action fires, with no transient Through/Right action.
         assert_eq!(output, [[0x94, 88, 127], [0x84, 88, 0]]);
+        Ok(())
+    }
+
+    #[test]
+    fn startup_crossfader_waits_for_mapping_feedback_and_uses_latest_snapshot() -> anyhow::Result<()>
+    {
+        // Given two physical snapshots before Djay's mapping sends playback state.
+        let mut state = Translator::default();
+        let mut feedback = feedback::FeedbackState::default();
+        let mut decoder = feedback::Decoder::default();
+        let mut payload = [0_u8; 22];
+        payload[17] = 0x55;
+        assert!(run_front_snapshot(&mut state, &payload)?.is_empty());
+        payload[17] = 0x26; // A left, B through, C right, D left.
+        payload[18] = 2;
+        assert!(run_front_snapshot(&mut state, &payload)?.is_empty());
+        let mut output = Vec::new();
+        decoder.feed(&[0x90, 0, 127, 0xb6, 0, 0], |message| {
+            feedback.apply(message, Duration::ZERO);
+        });
+        state.sync_front_panel(&feedback, &mut output)?;
+        assert!(output.is_empty()); // Lamps/meters are not the playback gate.
+        // When real playback feedback arrives, even paused followed by track-unloaded.
+        decoder.feed(&[0xb6, 4, 0, 0x96, 0, 0], |message| {
+            feedback.apply(message, Duration::ZERO);
+        });
+        state.sync_front_panel(&feedback, &mut output)?;
+        // Then the latest four assignments and curve emit exactly once.
+        assert_eq!(
+            output,
+            [
+                [0x94, 82, 127],
+                [0x84, 82, 0],
+                [0x94, 84, 127],
+                [0x84, 84, 0],
+                [0x94, 86, 127],
+                [0x84, 86, 0],
+                [0x94, 91, 127],
+                [0x84, 91, 0],
+                [0xb4, 25, 0],
+            ]
+        );
+        output.clear();
+        decoder.feed(&[0xb6, 4, 127], |message| {
+            feedback.apply(message, Duration::ZERO);
+        });
+        state.sync_front_panel(&feedback, &mut output)?;
+        assert!(output.is_empty()); // Later UI/playback changes cannot replay selectors.
+        assert!(run_front_snapshot(&mut state, &payload)?.is_empty());
+        Ok(())
+    }
+
+    fn run_front_snapshot(
+        state: &mut Translator,
+        payload: &[u8; 22],
+    ) -> anyhow::Result<Vec<[u8; 3]>> {
+        let mut output = Vec::new();
+        state.translate(&[], Some(payload), &mut output)?;
+        Ok(output)
+    }
+
+    #[test]
+    fn startup_crossfader_handles_both_launch_orders_and_all_selector_positions()
+    -> anyhow::Result<()> {
+        for feedback_first in [false, true] {
+            for (packed, assignments) in [
+                (0x00, [0_u8; 4]),
+                (0x55, [1; 4]),
+                (0xaa, [2; 4]),
+                (0x26, [2, 1, 0, 2]),
+            ] {
+                for (curve, cc) in [(0, 127), (1, 64), (2, 0)] {
+                    // Given a fresh bridge with the physical switches already set.
+                    let mut state = Translator::default();
+                    let mut feedback = feedback::FeedbackState::default();
+                    let mut decoder = feedback::Decoder::default();
+                    decoder.feed(&[0xb6, 7, 0], |message| {
+                        feedback.apply(message, Duration::ZERO);
+                    });
+                    let mut payload = [0_u8; 22];
+                    payload[17] = packed;
+                    payload[18] = curve;
+                    let mut output = Vec::new();
+                    // When playback feedback and the snapshot arrive in either order.
+                    if feedback_first {
+                        state.sync_front_panel(&feedback, &mut output)?;
+                    }
+                    state.translate(&[], Some(&payload), &mut output)?;
+                    if !feedback_first {
+                        state.sync_front_panel(&feedback, &mut output)?;
+                    }
+                    // Then every assignment and curve is applied once, without moving hardware.
+                    let mut expected = Vec::new();
+                    for (deck, assignment) in assignments.into_iter().enumerate() {
+                        let note = 80 + 3 * u8::try_from(deck)? + assignment;
+                        expected.extend([[0x94, note, 127], [0x84, note, 0]]);
+                    }
+                    expected.push([0xb4, 25, cc]);
+                    assert_eq!(output, expected);
+                    assert!(run_front_snapshot(&mut state, &payload)?.is_empty());
+                }
+            }
+        }
         Ok(())
     }
 
@@ -967,6 +1400,61 @@ mod tests {
         // Then exactly one release is emitted.
         assert_eq!(output, [[0x80, 0, 0]]);
         assert!(state.held.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn reverse_hold_releases_original_deck_after_selector_changes_or_shutdown() -> anyhow::Result<()>
+    {
+        for deck in [Deck::A, Deck::B, Deck::C, Deck::D] {
+            for shutdown in [false, true] {
+                // Given REV held on each deck with a duplicate input edge.
+                let side = usize::from(deck.channel() % 2);
+                let name = if side == 0 {
+                    "left_reverse"
+                } else {
+                    "right_reverse"
+                };
+                let mut state = Translator::default();
+                state.decks[side] = deck;
+                assert_eq!(
+                    run(&mut state, &[Control::Button(name, true)])?,
+                    [[0x90 | deck.channel(), 3, 127]]
+                );
+                assert!(run(&mut state, &[Control::Button(name, true)])?.is_empty());
+                run(
+                    &mut state,
+                    &[
+                        Control::Button(
+                            if side == 0 {
+                                "left_deck_switch_c"
+                            } else {
+                                "right_deck_switch_d"
+                            },
+                            true,
+                        ),
+                        Control::Button(
+                            if side == 0 {
+                                "left_shift"
+                            } else {
+                                "right_shift"
+                            },
+                            true,
+                        ),
+                    ],
+                )?;
+                // When the physical button releases or the bridge shuts down.
+                let mut output = Vec::new();
+                if shutdown {
+                    state.release_all(&mut output);
+                } else {
+                    state.translate(&[Control::Button(name, false)], None, &mut output)?;
+                }
+                // Then only its original deck receives release, including with Shift now held.
+                assert_eq!(output, [[0x80 | deck.channel(), 3, 0]]);
+                assert!(!state.held.contains_key(name));
+            }
+        }
         Ok(())
     }
 

@@ -61,7 +61,7 @@ impl<'a> LedOutput<'a> {
     ) -> anyhow::Result<usize> {
         let mut writes = 0;
         if due(self.button_written, now, BUTTON_INTERVAL) {
-            let report = render_buttons(config, feedback, local);
+            let report = render_button_frame(config, feedback, local, now);
             if self.buttons != Some(report) {
                 self.write(&report)?;
                 self.buttons = Some(report);
@@ -135,6 +135,35 @@ fn due(last: Option<Duration>, now: Duration, interval: Duration) -> bool {
     last.is_none_or(|last| now.saturating_sub(last) >= interval)
 }
 
+fn render_button_frame(
+    config: &LedConfig,
+    feedback: &FeedbackState,
+    local: &LocalState,
+    now: Duration,
+) -> [u8; 95] {
+    let mut report = render_buttons(config, feedback, local);
+    // A 1.2-second palette pulse, including a fully dark trough, remains
+    // distinguishable even when inactive-display preferences are dark.
+    let intensity = match (now.as_millis() / 200) % 6 {
+        0 => 3,
+        1 | 5 => 2,
+        2 | 4 => 1,
+        _ => 0,
+    };
+    for side in 0..2 {
+        let deck = local.decks[side];
+        if local.move_selecting[deck] {
+            let slot = deck / 2;
+            report[[[13, 14], [36, 37]][side][slot]] = if intensity == 0 {
+                0
+            } else {
+                config.deck_colors[deck].base() + config.palette_active_intensity * intensity / 3
+            };
+        }
+    }
+    report
+}
+
 fn render_ring(
     config: &LedConfig,
     feedback: &FeedbackState,
@@ -199,6 +228,42 @@ fn render_meters(config: &LedConfig, feedback: &FeedbackState, now: Duration) ->
 mod tests {
     use super::super::leds::Color;
     use super::*;
+
+    #[test]
+    fn jump_selection_pulses_only_the_visible_selected_deck_without_expiring() {
+        // Given A and D selecting jump size, with D visible on the right.
+        let config = LedConfig::default();
+        let feedback = FeedbackState::default();
+        let mut local = LocalState {
+            decks: [0, 3],
+            move_selecting: [true, false, false, true],
+            ..LocalState::default()
+        };
+        let steady = render_buttons(&config, &feedback, &local);
+        // When the pulse reaches its trough at 600 ms, and much later.
+        for now in [Duration::from_millis(600), Duration::from_millis(120_600)] {
+            let report = render_button_frame(&config, &feedback, &local, now);
+            let mut expected = steady;
+            expected[13] = 0;
+            expected[37] = 0;
+            assert_eq!(report, expected);
+        }
+        assert_eq!(
+            render_button_frame(&config, &feedback, &local, Duration::ZERO),
+            steady
+        );
+        local.decks = [2, 1];
+        assert_eq!(
+            render_button_frame(&config, &feedback, &local, Duration::from_millis(600)),
+            render_buttons(&config, &feedback, &local)
+        );
+        local.move_selecting.fill(false);
+        local.decks = [0, 3];
+        assert_eq!(
+            render_button_frame(&config, &feedback, &local, Duration::from_millis(600)),
+            steady
+        );
+    }
 
     #[test]
     fn ring_uses_physical_side_and_selected_deck_color_without_motors() {

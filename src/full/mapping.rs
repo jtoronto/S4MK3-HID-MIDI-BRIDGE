@@ -367,6 +367,84 @@ mod tests {
     }
 
     #[test]
+    fn encoder_actions_match_runtime_addresses_on_every_deck() -> anyhow::Result<()> {
+        // Given the serialized native mapping, not a separate mock catalog.
+        let controls = generated_controls()?;
+        // When each normal, selection, and fixed one-beat route is resolved.
+        for deck in 0_u8..4 {
+            for (channel, kind, data, action) in [
+                (deck, 3, 2, "skipRotary"),
+                (deck, 3, 7, "skipDurationRotary"),
+                (deck + 8, 1, 5, "skipForward1Beat"),
+                (deck + 8, 1, 14, "skipBackward1Beat"),
+                (deck, 1, 6, "autoLoopOnOff"),
+                (deck + 8, 1, 6, "reloop"),
+                (deck, 1, 3, "reverseHold"),
+            ] {
+                let key = format!("turntable{}.{action}", deck + 1);
+                // Then exactly that endpoint/channel/type/data address has that action.
+                assert!(controls.iter().any(|control| {
+                    field(control, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                        && field(control, "midiChannel").and_then(Value::as_unsigned_integer)
+                            == Some(u64::from(channel))
+                        && field(control, "midiMessageType").and_then(Value::as_unsigned_integer)
+                            == Some(kind)
+                        && field(control, "midiData").and_then(Value::as_unsigned_integer)
+                            == Some(data)
+                }));
+            }
+        }
+        assert!(!controls.iter().any(|control| {
+            field(control, "keyPath")
+                .and_then(Value::as_string)
+                .is_some_and(|key| {
+                    [".loopIn", ".loopOut", ".loopInOut"]
+                        .iter()
+                        .any(|action| key.ends_with(action))
+                })
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn browse_polarity_is_flipped_once_on_both_layers() -> anyhow::Result<()> {
+        // Given the real generated mapping for both Browse actions.
+        let controls = generated_controls()?;
+        // When every deck and modifier address is examined.
+        for channel in [0_u64, 1, 2, 3, 8, 9, 10, 11] {
+            let control = controls
+                .iter()
+                .find(|control| {
+                    field(control, "midiChannel").and_then(Value::as_unsigned_integer)
+                        == Some(channel)
+                        && field(control, "midiMessageType").and_then(Value::as_unsigned_integer)
+                            == Some(3)
+                        && field(control, "midiData").and_then(Value::as_unsigned_integer)
+                            == Some(3)
+                })
+                .context("Browse mapping missing")?;
+            // Then Djay performs the single inversion; the wire remains rotary-64.
+            assert_eq!(
+                field(control, "flipped").and_then(Value::as_boolean),
+                Some(true)
+            );
+            assert_eq!(
+                field(control, "controlType").and_then(Value::as_string),
+                Some("rotary-64")
+            );
+            assert_eq!(
+                field(control, "keyPath").and_then(Value::as_string),
+                Some(if channel < 8 {
+                    "musicLibrary.libraryRotary"
+                } else {
+                    "musicLibrary.sectionRotary"
+                })
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn generated_controls_keep_relative_and_sampler_address_semantics() -> anyhow::Result<()> {
         let controls = generated_controls()?;
         assert!(controls.iter().any(|control| {

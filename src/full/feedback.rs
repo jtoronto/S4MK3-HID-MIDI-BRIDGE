@@ -28,6 +28,8 @@ pub struct FeedbackState {
     pub meter_updated: [Option<Duration>; 4],
     pub loaded: [Option<bool>; 4],
     pub playing: [Option<bool>; 4],
+    /// A playback output arrived from the mapping during this bridge session.
+    pub playback_received: bool,
 }
 
 impl Default for FeedbackState {
@@ -38,6 +40,7 @@ impl Default for FeedbackState {
             meter_updated: [None; 4],
             loaded: [None; 4],
             playing: [None; 4],
+            playback_received: false,
         }
     }
 }
@@ -48,6 +51,7 @@ impl FeedbackState {
         let kind = message.status & 0xf0;
         let number = usize::from(message.number);
         if channel == 6 && kind == 0xb0 && (4..8).contains(&number) {
+            self.playback_received = true;
             let deck = number - 4;
             let playing = message.value != 0;
             let changed = self.playing[deck] != Some(playing);

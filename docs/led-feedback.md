@@ -1,10 +1,11 @@
 # LED feedback setup and verification
 
 The full bridge now has a virtual MIDI destination as well as its existing
-source, both named `S4 MK3 MIDI Full`. Input messages are unchanged. The minimal
+source, both named `S4 MK3 MIDI Full`. The encoder increment changes input
+routing as described below. The minimal
 `--midi` profile retains its original behavior.
 
-The implementation passes software checks. Live testing confirms actual Djay
+Earlier software and live-test records below cover actual Djay
 feedback, both decks' Play/Cue lamps, channel level meters, and the colors of
 the user's current hotcues. The user also confirmed deck-colored segments
 across A/C and B/D, green whole-ring loop flashing and exit, preserved hardware
@@ -12,6 +13,32 @@ master meters, and smooth jog response with feedback active.
 **Remaining controls, complete palette calibration, and master clip indication
 still need confirmation.**
 Successful HID writes alone do not prove those behaviors.
+
+## Current MOVE selection indicator
+
+In the full profile, MOVE press toggles a local size-select flag for the
+logical deck and emits no MIDI. There is no timeout or deferred save:
+unshifted MOVE immediately changes native jump size through CC 7 on
+channels 1-4 (`skipDurationRotary`). Outside selection it sends CC 2
+(`skipRotary`). Shift+MOVE always jumps one beat per detent via note 5
+forward / note 14 backward on channels 9-12, even while selecting,
+preserving the chosen size.
+
+Only the currently selected deck selector pulses, on a 1.2-second
+palette-brightness cycle with a dark trough. A hidden deck keeps its mode
+without flashing its inactive selector. Exiting restores ordinary selector
+lighting; bridge restart initializes every mode flag off. Native A/B/C/D
+jump and loop values remain independent Djay values, not bridge counters
+or shared resets. LOOP retains its independent native size and existing
+shifted actions. This local pulse isn't software-state feedback or the
+green jog-ring loop flash. No screen or motor traffic is added.
+
+Physical pulse, hidden-deck restoration, and fresh MIDI/native-action checks
+are pending. The user's mouse check established beat jump moving an active
+loop, not this LED behavior. Follow the focused
+[encoder live check](full-midi-test.md#encoder-layout-live-check), including
+both sides, all four decks, duplicate press/release, Shift while selecting,
+mode exit, and stop/restart.
 
 The user's Windows USBPcap capture is analyzed in `traktor-ring-capture.md`.
 After mode 5 also failed with the captured initialization, the user chose a
@@ -32,7 +59,9 @@ master meters remained normal with the moving chase active.
 
 ## Start and select the feedback mapping
 
-Generate a new file rather than overwriting a working mapping:
+Reinstall the newly generated encoder mapping under a new filename, preserving
+custom maps under their existing names. Generate a new file rather than
+overwriting a working mapping:
 
 ```sh
 cargo run --locked -- --generate-mapping "S4 MK3 MIDI Full LEDs.djayMidiMapping"
@@ -51,7 +80,8 @@ mapping and establishing real feedback remain part of the live check.
 
 Chase requires a newly generated mapping: raw playing outputs were added on
 human MIDI channel 7, CC 4-7 for A-D. The earlier LED mapping lacks these outputs
-and will leave the chase stationary. Existing input addresses are unchanged.
+and will leave the chase stationary. That chase addition didn't change input
+addresses; the subsequent encoder layout does require the new mapping.
 
 If Djay shows only a blank `S4 MK3` configuration while the bridge's virtual
 ports are live, restart Djay with the bridge already running. In the live
@@ -175,7 +205,10 @@ This publishes paired virtual ports and logs raw Djay output without opening
 HID. Do not run it alongside the normal full bridge: duplicate endpoint names
 would make association ambiguous.
 
-## Software evidence
+## Historical software and live evidence
+
+These records predate MOVE size selection and its selector pulse. They don't
+establish a fresh MIDI/native or physical LED pass for the encoder increment.
 
 An isolated live probe established `turntable1.playing`: CC values 127/0 tracked
 mouse playback/pause repeatedly. `turntable1.isPlaying` did not track transitions

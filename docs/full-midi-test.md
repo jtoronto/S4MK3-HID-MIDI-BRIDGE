@@ -20,21 +20,28 @@ then select it for `S4 MK3 MIDI Full`. The mapping entries are generated from
 the same catalog used by the bridge, rather than individually learned.
 Use Djay's four-deck layout and keep S4 audio selected.
 
+The encoder layout below requires a newly generated mapping to be reinstalled
+and selected, not just a bridge restart. Save it under a new filename and keep
+user-edited mappings under their existing names. An older app bundle must also
+be replaced with a build containing this layout; this document doesn't establish
+that an existing bundle has been rebuilt.
+
 ## Layout
 
 | Area | Default behavior |
 | --- | --- |
 | A/C and B/D | Select the left/right deck and route subsequent controls to it |
-| Play, Cue, Sync, Master, Reverse, Flux | Native transport, sync/master, reverse, and Slip equivalents |
+| Play, Cue, Sync, Master, Reverse, Flux | Native transport and sync/master; REV uses `reverseHold` only while held, Flux controls Slip independently |
 | Tempo | Absolute speed with pickup; Shift uses relative-speed action |
 | Touch jog | Touch scratches; untouched rotation nudges; Shift seeks |
 | Jog / Turntable buttons | Choose CD/nudge or vinyl/touch-scratch behavior; no motor command |
 | GRID + jog | Move the selected deck's beatgrid left/right |
-| Loop encoder | Loop length; Shift moves the loop |
-| Loop encoder press | Auto loop; Shift uses Loop In/Out |
-| Move encoder | Move loop; Shift beat-jumps |
-| Move encoder press | Loop In/Out |
-| Browse encoder / press | Browse / load active deck; Shift selects a section / goes back |
+| LOOP encoder | Independent native loop size (`autoLoopDurationRotary`); Shift retains `autoLoopMoveRotary` |
+| LOOP encoder press | `autoLoopOnOff`; Shift uses `reloop` to reactivate the stored loop range; manual loop in/out is unmapped |
+| MOVE encoder | Native jump by chosen jump size (`skipRotary`), with or without an active loop; selection mode changes jump size immediately (`skipDurationRotary`) |
+| MOVE encoder press | Local per-logical-deck size-select toggle, no MIDI, no timeout; second press exits |
+| Shift+MOVE turn | Fixed one-beat jump per detent in either direction, even while selecting; preserves chosen jump size |
+| Browse encoder / press | Browse / load active deck; Shift selects a section / goes back; both rotation layers use one native mapping inversion to correct reported direction |
 | Library buttons | Show library, queue, mark selection, and preview |
 | HOTCUE pads | Hotcues 1-8; Shift clears them |
 | SAMPLES pads | Play samples; Shift stops them |
@@ -61,6 +68,21 @@ depends on the track and Djay's Neural Mix support. The eight physical pad masks
 are corrected to the S4 order 5, 4, 7, 6, 3, 2, 1, 0.
 
 ## Routing guarantees
+
+Encoder naming is corrected for all rotations and only left presses in the
+full profile. Right presses and the minimal profile are unchanged.
+Normal MOVE uses CC 2 on channels 1-4; unshifted size selection uses CC 7 on
+those channels. Shift+MOVE emits note 5 forward or note 14 backward on
+channels 9-12 only. The native catalog also provides base-channel aliases
+for the fixed-jump actions, but runtime Shift routing doesn't use them.
+
+Each logical deck A/B/C/D retains independent native Djay jump and loop
+values. There are no bridge-owned size counters or shared-size resets.
+Selection changes the native jump value immediately, not on exit.
+Local selection-mode flags persist across deck switches without a timeout,
+and all initialize off on bridge restart. While selecting, only the selected
+deck selector pulses through a 1.2-second palette-brightness cycle with a
+dark trough. Hidden decks retain mode without flashing inactive buttons.
 
 Notes retain the deck, modifier, and pad/FX destination that owned their press.
 Releasing a held control after changing decks or modes still releases that
@@ -107,6 +129,30 @@ need real testing rather than inference from successful message delivery.
 
 ## Verify
 
+### REV, Browse, and crossfader startup live check
+
+Install this build's mapping under a new name, preserving existing custom
+mappings. The crossfader gate requires its raw playback outputs on channel 7,
+CC 4-7; an older mapping without those outputs cannot initialize selectors.
+
+- Hold and release REV on every deck. Reverse must end on release and on
+  bridge Stop, even if deck or Shift changes while held. Slip remains
+  independent.
+- Check clockwise/down-list and counterclockwise/up-list Browse movement
+  on both sides, including Shift's section navigation. The mapping alone
+  inverts direction; physical counts and transmitted CC values are unchanged.
+- Preset all physical assignments and curve without moving them. Check
+  Djay-first and bridge-first startup, including Through positions and
+  empty/paused decks. Diagnostics should show `CROSSFADER_FEEDBACK_RECEIVED`;
+  the latest switch snapshot should apply without touching switches.
+- After initial synchronization, change a Djay UI assignment and leave the
+  physical switch still. Ordinary playback/LED updates must not overwrite
+  the UI choice. Moving the physical switch should apply its new position.
+- After mapping reselection or Djay reconnect, Stop/Start the bridge to
+  initialize a fresh feedback session. Automatic same-process reconnect
+  detection is not implemented. These checks remain live-test requirements,
+  not results established by software regressions.
+
 Run the independent receiver alongside the full bridge:
 
 ```sh
@@ -128,7 +174,50 @@ cargo build --locked --all-targets
 Native actions and encoding conventions were checked against the installed
 Djay Pro 5.6.9 MIDI menu/metadata and its NI S3 and DDJ-SX2 presets. The latter
 are references for file/action syntax, not controller emulation.
+
+### Encoder layout live check
+
+These checks are pending. The user verified with the mouse that beat jump
+moves an active loop; this isn't evidence of fresh MIDI/native routing or
+physical selector-LED behavior.
+
+1. Install and select the new mapping, then monitor MIDI while using both
+   physical encoder pairs. Confirm corrected LOOP/MOVE pairing and both
+   directions, with and without Shift.
+2. On A, press MOVE once, hold, then release. Expect one local mode toggle
+   and no MIDI from press/release. Check repeated identical pressed and
+   released input reports don't toggle again. Turn unshifted MOVE: expect
+   CC 7 on channel 1 and an immediate native jump-size change. The next
+   distinct press exits; subsequent rotation sends CC 2, not CC 7.
+3. Repeat on C, B, and D, using channels 3, 2, and 4 respectively. Give
+   decks different native jump values and mode states. Switch A/C and B/D
+   away and back: values and flags must remain independent, without a
+   timeout or shared reset.
+4. While selecting, hold Shift and turn both directions. Expect one-beat
+   jumps per detent via note 5 forward / note 14 backward on channels
+   9/10/11/12 for A/B/C/D, never their base-channel aliases. Release Shift:
+   selection resumes with the chosen jump size intact. Repeat outside
+   selection mode.
+5. Exit selection and check normal MOVE in both directions without a loop,
+   then with an active loop. The jump and active-loop movement must use
+   the chosen jump size. Change LOOP size and toggle LOOP on/off: its
+   native size must remain independent of MOVE's value. Exit a loop, move its
+   inactive region with Shift+LOOP turn, then press Shift+LOOP to reloop.
+   Check restoration of its position and length on each deck. Reloop requires
+   a stored loop range; no fallback creates a new loop when none exists.
+6. Observe each selected selector's 1.2-second palette-brightness pulse
+   and dark trough. Hide a selecting deck: its inactive button must not
+   flash. Return to it and confirm the pulse resumes; exit selection and
+   confirm ordinary selector lighting is restored.
+7. Stop and restart the bridge with some modes on. All four mode flags
+   must be off, normal MOVE must jump, and selector lighting must be
+   restored. Confirm the bridge hasn't reset native Djay sizes. No screen
+   or motor traffic belongs in this check.
+
 # Validation record
+
+The records below describe earlier revisions, not a validation pass for the
+current encoder layout or its selector pulse.
 
 The full profile generated a native mapping on October 5, 2026. Djay Pro
 accepted its installation and saved the separate configuration at
