@@ -57,6 +57,10 @@ struct Args {
     /// Maximum probe duration; stop earlier with Ctrl-C.
     #[arg(long, default_value = "30")]
     seconds: NonZeroU64,
+
+    /// Run until Ctrl-C instead of stopping after a fixed duration.
+    #[arg(long, conflicts_with = "seconds")]
+    until_stopped: bool,
 }
 
 #[derive(Debug, Default)]
@@ -191,14 +195,14 @@ fn run_probe(
         .transpose()?;
     info!(
         seconds = args.seconds.get(),
+        until_stopped = args.until_stopped,
         "Press/release left Play; move a fader and jog."
     );
     let started = Instant::now();
-    let duration = Duration::from_secs(args.seconds.get());
     let mut counts = ProbeCounts::default();
     let mut buffers = [[0_u8; 128]; 3];
     let mut events = Vec::with_capacity(128);
-    while started.elapsed() < duration {
+    while args.until_stopped || started.elapsed() < Duration::from_secs(args.seconds.get()) {
         match stop_rx.try_recv() {
             Ok(()) => break,
             Err(crossbeam_channel::TryRecvError::Empty) => {}
@@ -295,6 +299,10 @@ fn report_probe_counts(args: &Args, counts: &ProbeCounts) -> anyhow::Result<()> 
         feedback_messages = counts.feedback_messages,
         "Probe ended; LED visibility and audio coexistence need physical confirmation"
     );
+    // Continuous service use may be idle; bounded probes still require activity.
+    if args.until_stopped {
+        return Ok(());
+    }
     ensure!(
         counts.input_events > 0,
         "no decoded S4 input received during the probe"
@@ -584,6 +592,26 @@ mod tests {
             // Then raw logging is enabled only by the flag.
             assert_eq!(args.raw, expected);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn continuous_run_is_explicit_and_conflicts_with_a_duration() -> anyhow::Result<()> {
+        assert!(!Args::try_parse_from(["probe"])?.until_stopped);
+        assert!(
+            Args::try_parse_from(["probe", "--midi", "full", "--until-stopped"])?.until_stopped
+        );
+        assert!(Args::try_parse_from(["probe", "--until-stopped", "--seconds", "60"]).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn continuous_stop_accepts_idle_counts_but_bounded_probe_requires_activity()
+    -> anyhow::Result<()> {
+        let continuous = Args::try_parse_from(["probe", "--midi", "full", "--until-stopped"])?;
+        assert!(report_probe_counts(&continuous, &ProbeCounts::default()).is_ok());
+        let bounded = Args::try_parse_from(["probe", "--midi", "full", "--seconds", "60"])?;
+        assert!(report_probe_counts(&bounded, &ProbeCounts::default()).is_err());
         Ok(())
     }
 

@@ -1,2 +1,6 @@
 /target/
 .DS_Store
+*.pcapng
+/dist/
+/macos/.build/
+.omo/*
