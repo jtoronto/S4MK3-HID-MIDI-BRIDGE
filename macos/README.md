@@ -113,6 +113,12 @@ visible and do not silently replace saved preferences.
 
 ### Jog mapping preferences
 
+The generated mapping assigns **Shift+Sync** on either side to Djay's
+tempo-range cycle. **This is global: it changes the tempo-fader range for all
+decks, not just the selected deck.** Normal Sync remains deck-specific.
+Install and select the new mapping to apply this binding; existing custom
+mappings are preserved. The user confirmed this works on October 6, 2026.
+
 The **Jog** tab configures native Djay **Speed** and **Reaction**, globally
 for decks A-D. Defaults match the user's calibration:
 

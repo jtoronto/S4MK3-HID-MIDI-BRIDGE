@@ -580,6 +580,38 @@ mod tests {
     }
 
     #[test]
+    fn sync_layers_resolve_to_deck_sync_and_global_range_cycle() -> anyhow::Result<()> {
+        // Given the serialized generated mapping.
+        let controls = generated_controls()?;
+        // When both Sync layers are resolved on all four decks.
+        for deck in 0_u64..4 {
+            for (channel, key) in [
+                (deck, format!("turntable{}.bpmSync", deck + 1)),
+                (deck + 8, String::from("application.tempoSliderRangeNext")),
+            ] {
+                let control = controls
+                    .iter()
+                    .find(|control| {
+                        field(control, "midiChannel").and_then(Value::as_unsigned_integer)
+                            == Some(channel)
+                            && field(control, "midiMessageType")
+                                .and_then(Value::as_unsigned_integer)
+                                == Some(1)
+                            && field(control, "midiData").and_then(Value::as_unsigned_integer)
+                                == Some(2)
+                    })
+                    .context("Sync mapping missing")?;
+                // Then normal Sync remains deck-specific and Shift cycles the shared range.
+                assert_eq!(
+                    field(control, "keyPath").and_then(Value::as_string),
+                    Some(key.as_str())
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn generated_controls_keep_relative_and_sampler_address_semantics() -> anyhow::Result<()> {
         let controls = generated_controls()?;
         assert!(controls.iter().any(|control| {

@@ -1005,6 +1005,51 @@ mod tests {
     }
 
     #[test]
+    fn shifted_sync_emits_once_and_releases_original_layer_after_deck_change() -> anyhow::Result<()>
+    {
+        // Given either physical side and either selected deck on that side.
+        for (sync, shift, switch, channel) in [
+            ("left_sync", "left_shift", "left_deck_switch_c", 0_u8),
+            ("right_sync", "right_shift", "right_deck_switch_d", 1),
+        ] {
+            for alternate in [false, true] {
+                let mut state = Translator::default();
+                if alternate {
+                    run(&mut state, &[Control::Button(switch, true)])?;
+                }
+                let deck = channel + if alternate { 2 } else { 0 };
+                assert_eq!(
+                    run(&mut state, &[Control::Button(sync, true)])?,
+                    [[0x90 + deck, 2, 127]]
+                );
+                run(&mut state, &[Control::Button(sync, false)])?;
+                // When Shift and Sync arrive together, even with Sync first.
+                assert_eq!(
+                    run(
+                        &mut state,
+                        &[Control::Button(sync, true), Control::Button(shift, true)]
+                    )?,
+                    [[0x98 + deck, 2, 127]]
+                );
+                assert!(run(&mut state, &[Control::Button(sync, true)])?.is_empty());
+                run(
+                    &mut state,
+                    &[
+                        Control::Button(shift, false),
+                        Control::Button(switch, !alternate),
+                    ],
+                )?;
+                // Then release stays on the shifted address that owned the press.
+                assert_eq!(
+                    run(&mut state, &[Control::Button(sync, false)])?,
+                    [[0x88 + deck, 2, 0]]
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn simultaneous_shift_and_pad_press_do_not_depend_on_descriptor_order() -> anyhow::Result<()> {
         // Given equivalent HID reports with opposite event ordering.
         for inputs in [

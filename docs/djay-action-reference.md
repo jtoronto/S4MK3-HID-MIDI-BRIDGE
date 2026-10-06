@@ -39,6 +39,12 @@ Current jog defaults also supersede the historical usage cells: scratch
 are configurable in the app; CC5 scratch, CC4 nudge, and CC6 seek addresses
 are unchanged. The native UI labels them Speed and Reaction respectively.
 
+Shift+Sync now uses global `application.tempoSliderRangeNext` on Note 2,
+channels 9-12. Normal Sync remains `turntableN.bpmSync` on Note 2, channels
+1-4. The user observed that changing range in one deck's UI changes all decks.
+Djay owns the choices and wrap order; the user confirmed the new hardware
+binding works on October 6, 2026.
+
 The audited generated mapping is `dist/S4 MK3 Bridge.app/Contents/Resources/S4 MK3 Bridge.djayMidiMapping`, generated from `src/full/catalog.rs` and `src/full/mapping.rs`. Its root reports `schemeVersion=1`, `version=0`; it contains **474** controls, **361** distinct concrete input key paths, **164** embedded output dictionaries, and **12** top-level outputs.
 
 The generic `turntable{deck}` catalog expands to decks A-D as `turntable1`–`turntable4` on MIDI channels 1-4. A shifted target uses internal channels 8-11, shown to hardware tools as MIDI channels 9-12. The sampler's `{bank}` expansion is bank 1 for odd-numbered physical decks (A/C) and bank 2 for even decks (B/D). These are bridge/controller choices, not Djay-wide MIDI defaults.

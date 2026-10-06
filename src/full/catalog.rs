@@ -85,7 +85,12 @@ pub const DECK_BINDINGS: &[Binding] = &[
         "turntable{deck}.cuePositionOrJumpConsideringPlayState1",
         None,
     ),
-    note("sync", 2, "turntable{deck}.bpmSync", None),
+    note(
+        "sync",
+        2,
+        "turntable{deck}.bpmSync",
+        Some("application.tempoSliderRangeNext"),
+    ),
     note("reverse", 3, "turntable{deck}.reverseHold", None),
     note("flux", 4, "turntable{deck}.deckSlipToggle", None),
     note(
