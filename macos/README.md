@@ -111,6 +111,33 @@ current JSON setting; import/export accepts a full or partial LED JSON object.
 **Save and restart** applies edits to an active bridge. Invalid settings remain
 visible and do not silently replace saved preferences.
 
+### Jog mapping preferences
+
+The **Jog** tab configures native Djay **Speed** and **Reaction**, globally
+for decks A-D. Defaults match the user's calibration:
+
+| Action | Speed | Reaction |
+| --- | ---: | ---: |
+| Scratch while touching | 2.7% | 150% |
+| Pitch bend without touch | 2.7% | 17% |
+
+Speed is the mapping's `rotarySensitivity`; Reaction is `rotaryAcceleration`.
+Seek remains unchanged. Save persists these values separately in
+`~/Library/Application Support/S4 MK3 Bridge/jog-config.json`.
+An older installation without this file uses the bundled defaults.
+
+Use **Install Djay mapping...** to generate a mapping from the current jog
+editor values, save under a new name, and select that configuration in Djay.
+The bundled generator handles export without opening HID or MIDI, even while
+the bridge is running. Export replaces the chosen destination atomically
+after the native save dialog's overwrite confirmation. Preserve existing
+custom mappings, including **S4 MK3 Bridge 2**, under their existing names.
+Saving or restarting the bridge alone does not apply mapping changes in Djay.
+
+The user tested these values in Djay. This increment packages/configures those
+parameters; it does not fix backspin termination on touch release, add haptic
+tension control, or claim a fresh physical pass for every deck.
+
 **Stop bridge** and **Quit S4 MK3 Bridge** send the bridge its normal Ctrl-C
 signal and wait for it to exit. Quitting the settings window does not stop it.
 Diagnostics shows the actual launch arguments, exit status, and a bounded log.

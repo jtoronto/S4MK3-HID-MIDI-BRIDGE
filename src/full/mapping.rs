@@ -1,8 +1,11 @@
 //! Generates a native Djay MIDI mapping plist from the shared catalog.
 
 use std::collections::BTreeSet;
+use std::fs::OpenOptions;
+use std::io::Write as _;
+use std::path::Path;
 
-use anyhow::{Result, ensure};
+use anyhow::{Context as _, Result, ensure};
 use plist::{Dictionary, Value};
 
 use super::catalog::{
@@ -10,19 +13,48 @@ use super::catalog::{
     QUICK_BINDINGS, pad_binding,
 };
 use super::feedback::{PAD_COLOR_TOKENS, PAD_WHITE_TOKEN};
+use super::jog;
 
 pub const PORT_NAME: &str = "S4 MK3 MIDI Full";
 const DECK_MARKER: &str = "{deck}";
 
+pub fn write(path: &Path, config_path: Option<&Path>) -> Result<()> {
+    let mapping = match config_path {
+        Some(path) => generate_with_jog(&jog::Config::load(Some(path))?)?,
+        None => generate()?,
+    };
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .with_context(|| format!("create mapping {}; choose a new file path", path.display()))?;
+    mapping
+        .to_writer_xml(&mut output)
+        .context("serialize Djay mapping")?;
+    output.flush().context("flush Djay mapping")?;
+    Ok(())
+}
+
 pub fn generate() -> Result<Value> {
+    generate_with_jog(&jog::Config::default())
+}
+
+pub fn generate_with_jog(jog: &jog::Config) -> Result<Value> {
+    jog.validate()?;
     let mut controls = Vec::new();
     let mut addresses = BTreeSet::new();
     let mut outputs = Vec::new();
     let mut output_addresses = BTreeSet::new();
 
     for binding in DECK_BINDINGS {
+        let mut binding = *binding;
+        (binding.sensitivity, binding.acceleration) = match binding.input {
+            "jog_scratch" => (Some(jog.scratch_speed), Some(jog.scratch_reaction)),
+            "jog_bend" => (Some(jog.pitch_bend_speed), Some(jog.pitch_bend_reaction)),
+            _ => (binding.sensitivity, binding.acceleration),
+        };
         for deck in 1_u8..=4 {
-            push_deck(&mut controls, &mut addresses, *binding, deck)?;
+            push_deck(&mut controls, &mut addresses, binding, deck)?;
         }
     }
     for bindings in [FX_LEFT_BINDINGS, FX_RIGHT_BINDINGS, QUICK_BINDINGS] {
@@ -250,6 +282,12 @@ fn push_control(
     if let Some(sensitivity) = binding.sensitivity {
         control.insert(String::from("rotarySensitivity"), Value::Real(sensitivity));
     }
+    if let Some(acceleration) = binding.acceleration {
+        control.insert(
+            String::from("rotaryAcceleration"),
+            Value::Integer(i64::from(acceleration).into()),
+        );
+    }
     let has_feedback = binding.kind == Kind::Note
         && ((channel < 4 && matches!(binding.number, 0..=4 | 6 | 8 | 15..=19 | 32..=35 | 40..=63))
             || (channel == 4 && binding.number < 4));
@@ -268,7 +306,6 @@ fn push_control(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Context as _;
     use std::io::Cursor;
 
     fn field<'a>(control: &'a Value, key: &str) -> Option<&'a Value> {
@@ -364,6 +401,104 @@ mod tests {
             assert!(addresses.insert((channel, message_type, data)));
         }
         Ok(())
+    }
+
+    #[test]
+    fn jog_overrides_change_only_native_speed_and_reaction_fields() -> anyhow::Result<()> {
+        // Given defaults and a user configuration distinct from them.
+        let defaults = generated_controls()?;
+        let config = jog::Config {
+            scratch_speed: 4.5,
+            scratch_reaction: 60,
+            pitch_bend_speed: 1.6,
+            pitch_bend_reaction: 25,
+        };
+        // When the real generated mapping is serialized and read back.
+        let mapping = generate_with_jog(&config)?;
+        let mut bytes = Vec::new();
+        mapping.to_writer_xml(&mut bytes)?;
+        let parsed = Value::from_reader(Cursor::new(bytes))?;
+        let controls = field(&parsed, "controls")
+            .and_then(Value::as_array)
+            .context("generated controls missing")?;
+        assert_eq!(controls.len(), defaults.len());
+        let mut changed = 0;
+        // Then all four decks use the overrides, without changing other controls or addresses.
+        for (control, baseline) in controls.iter().zip(&defaults) {
+            let key = field(control, "keyPath")
+                .and_then(Value::as_string)
+                .context("control key missing")?;
+            let settings = if key.ends_with(".scratchingMove") {
+                Some((config.scratch_speed, config.scratch_reaction))
+            } else if key.ends_with(".pitchBendMove") {
+                Some((config.pitch_bend_speed, config.pitch_bend_reaction))
+            } else {
+                None
+            };
+            if let Some((speed, reaction)) = settings {
+                let actual = field(control, "rotarySensitivity")
+                    .and_then(Value::as_real)
+                    .context("jog speed missing")?;
+                assert!((actual - speed).abs() < f64::EPSILON);
+                assert_eq!(
+                    field(control, "rotaryAcceleration").and_then(Value::as_unsigned_integer),
+                    Some(u64::from(reaction))
+                );
+                let mut restored = control
+                    .as_dictionary()
+                    .context("control dictionary")?
+                    .clone();
+                for name in ["rotarySensitivity", "rotaryAcceleration"] {
+                    restored.insert(
+                        name.to_owned(),
+                        field(baseline, name).context("default jog field")?.clone(),
+                    );
+                }
+                assert_eq!(Value::Dictionary(restored), *baseline);
+                changed += 1;
+            } else {
+                assert_eq!(control, baseline);
+            }
+        }
+        assert_eq!(changed, 8);
+        let base = generate()?;
+        assert_eq!(field(&parsed, "outputs"), field(&base, "outputs"));
+        assert_eq!(field(&parsed, "userInfo"), field(&base, "userInfo"));
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_jog_parameters_cannot_generate_native_controls() {
+        // Given invalid speed/reaction values at the export boundary.
+        for config in [
+            jog::Config {
+                scratch_speed: 0.0,
+                ..jog::DEFAULT
+            },
+            jog::Config {
+                pitch_bend_speed: -1.0,
+                ..jog::DEFAULT
+            },
+            jog::Config {
+                scratch_speed: f64::NAN,
+                ..jog::DEFAULT
+            },
+            jog::Config {
+                pitch_bend_speed: f64::INFINITY,
+                ..jog::DEFAULT
+            },
+            jog::Config {
+                scratch_reaction: 151,
+                ..jog::DEFAULT
+            },
+            jog::Config {
+                pitch_bend_reaction: 255,
+                ..jog::DEFAULT
+            },
+        ] {
+            // When export is requested, then no mapping is returned.
+            assert!(generate_with_jog(&config).is_err());
+        }
     }
 
     #[test]

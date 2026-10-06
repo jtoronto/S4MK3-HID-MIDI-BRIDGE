@@ -1,5 +1,7 @@
 //! Shared physical-input catalog for the full S4 MK3 mapping profile.
 
+use super::jog;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadMode {
     Hotcue,
@@ -24,6 +26,7 @@ pub struct Binding {
     pub pickup: bool,
     pub flipped: bool,
     pub sensitivity: Option<f64>,
+    pub acceleration: Option<u8>,
 }
 
 const fn binding(
@@ -42,6 +45,7 @@ const fn binding(
         pickup: false,
         flipped: false,
         sensitivity: None,
+        acceleration: None,
     }
 }
 
@@ -137,11 +141,13 @@ pub const DECK_BINDINGS: &[Binding] = &[
         )
     },
     Binding {
-        sensitivity: Some(7.0),
+        sensitivity: Some(jog::DEFAULT.pitch_bend_speed),
+        acceleration: Some(jog::DEFAULT.pitch_bend_reaction),
         ..relative("jog_bend", 4, "turntable{deck}.pitchBendMove", None)
     },
     Binding {
-        sensitivity: Some(25.0),
+        sensitivity: Some(jog::DEFAULT.scratch_speed),
+        acceleration: Some(jog::DEFAULT.scratch_reaction),
         ..relative("jog_scratch", 5, "turntable{deck}.scratchingMove", None)
     },
     Binding {
@@ -315,6 +321,7 @@ pub const CURVE_BINDING: Binding = Binding {
     pickup: false,
     flipped: false,
     sensitivity: None,
+    acceleration: None,
 };
 
 pub fn assignment_binding(deck: u8, state: u8) -> Option<Binding> {
@@ -446,6 +453,7 @@ pub const fn pad_binding(mode: PadMode, index: u8) -> Option<Binding> {
         pickup: false,
         flipped: false,
         sensitivity: None,
+        acceleration: None,
     })
 }
 

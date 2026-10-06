@@ -29,6 +29,7 @@ done
 
 [[ -f "$SWIFT_SOURCE" ]] || fail "missing Swift app source: $SWIFT_SOURCE"
 [[ -f "$ROOT/examples/led-config.json" ]] || fail "missing default LED config"
+[[ -f "$ROOT/examples/jog-config.json" ]] || fail "missing default jog config"
 [[ -f "$ROOT/macos/Info.plist" ]] || fail "missing app Info.plist"
 
 CARGO_VERSION="$(awk -F '"' '/^version = / { print $2; exit }' "$ROOT/Cargo.toml")"
@@ -57,6 +58,7 @@ swiftc \
 cp "$ROOT/macos/Info.plist" "$STAGED_APP/Contents/Info.plist"
 cp "$BRIDGE" "$STAGED_APP/Contents/Resources/s4-connectivity-probe"
 cp "$ROOT/examples/led-config.json" "$STAGED_APP/Contents/Resources/default-led-config.json"
+cp "$ROOT/examples/jog-config.json" "$STAGED_APP/Contents/Resources/default-jog-config.json"
 
 check_linked_libraries() {
     local binary="$1"
@@ -77,7 +79,8 @@ check_linked_libraries "$STAGED_APP/Contents/MacOS/S4Bridge"
 check_linked_libraries "$STAGED_APP/Contents/Resources/s4-connectivity-probe"
 
 "$STAGED_APP/Contents/Resources/s4-connectivity-probe" \
-    --generate-mapping "$STAGED_APP/Contents/Resources/S4 MK3 Bridge.djayMidiMapping"
+    --generate-mapping "$STAGED_APP/Contents/Resources/S4 MK3 Bridge.djayMidiMapping" \
+    --jog-config "$STAGED_APP/Contents/Resources/default-jog-config.json"
 
 codesign --force --sign - "$STAGED_APP/Contents/Resources/s4-connectivity-probe"
 codesign --force --sign - "$STAGED_APP"

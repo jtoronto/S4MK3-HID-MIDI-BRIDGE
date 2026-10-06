@@ -2,6 +2,7 @@
 
 pub mod catalog;
 pub mod feedback;
+pub mod jog;
 pub mod leds;
 pub mod mapping;
 pub mod output;

@@ -1,8 +1,8 @@
 # Bridge settings and control-tuning candidates
 
-The menu-bar app exposes existing operating flags and all LED preferences.
-It does not change the verified MIDI input mapping or add unimplemented
-control-tuning switches.
+The menu-bar app exposes operating flags, LED preferences, and native Djay
+jog mapping preferences. Mapping preferences change exported parameters,
+not the bridge's HID counts, MIDI addresses, or touch ownership.
 
 ## Available now
 
@@ -10,6 +10,9 @@ control-tuning switches.
   controller enumeration, raw HID logging, and log detail.
 - Mapping installation/export. The installed file contains the same fixed
   input addresses and verified feedback outputs as the CLI generator.
+- Jog-tab scratch and pitch-bend Speed/Reaction settings. Defaults are
+  scratch 2.7% / 150% and pitch bend 2.7% / 17%, applied to decks A-D.
+  Speed becomes `rotarySensitivity`; Reaction becomes `rotaryAcceleration`.
 - Every setting in `examples/led-config.json`: deck/stem/hotcue palettes,
   cue-color policy, lamp/palette brightness, inactive display, mute meaning,
   quantize mixed state, calibrated tempo-center indicator, loop color/enabling,
@@ -18,14 +21,34 @@ control-tuning switches.
 LED edits only need a bridge restart, which the app performs on Save and
 restart. They do not require mapping regeneration or a Rust toolchain.
 
+Jog settings are different: save preferences, install the newly generated
+mapping under a new filename, then select it in Djay. Export uses the current
+editor values and the bundled generator; it can run while the source bridge
+is running. A bridge restart alone cannot change Djay's selected mapping.
+Preferences live in `~/Library/Application Support/S4 MK3 Bridge/jog-config.json`;
+bundled defaults come from `examples/jog-config.json`. Existing LED/run files
+and user-edited mappings remain separate.
+
+For CLI export:
+
+```sh
+cargo run --locked -- --generate-mapping "S4 Jog Custom.djayMidiMapping" --jog-config examples/jog-config.json
+```
+
+The exporter refuses an existing output path. Jog configuration is accepted
+only for mapping export, not live MIDI/probe commands. Speeds must be finite
+and positive; reactions are integers from 0 to 150. Shift-seek stays at its
+existing sensitivity 20 and is not exposed by this increment.
+
+These parameters do not implement released-platter scratch continuation or
+haptic tension control. See [the jog investigation](jog-wheel-investigation.md).
+
 ## Useful future control settings
 
 These are candidates, not options silently applied by this release.
 
 | Candidate | Current value/location | How a setting would apply |
 | --- | --- | --- |
-| Jog pitch-bend sensitivity | `7.0`, `src/full/catalog.rs` | Generate/install a new Djay mapping; preserve the wire address |
-| Jog scratch sensitivity | `25.0`, same catalog | Generate/install a new mapping; test touch ownership and both directions |
 | Shift-jog seek sensitivity | `20.0`, same catalog | Generate/install a new mapping; test seeking independently of scratching |
 | Grid-edit precision | `0.125` count multiplier, `Translator::jog` in `src/full/mod.rs` | Runtime preference; test fractional residuals and mode changes |
 | Fader pickup | Tempo binding has `pickup=true`, same catalog | Mapping-generation preference; test software/hardware mismatch |
@@ -33,10 +56,8 @@ These are candidates, not options silently applied by this release.
 | Initial jog/pad/FX targets | Vinyl, Hotcue, A/B FX targets, A instant-FX target in `Translator::default` | Runtime startup defaults, subsequently overridden by physical selectors |
 | Encoder actions/step behavior | Fixed catalog bindings and relative MIDI encoding | A separate mapping editor; larger scope than sensitivity preferences |
 
-Jog bend/scratch/seek sensitivity is the best first control-tuning addition:
-it is already represented explicitly by native `rotarySensitivity` values.
-Mapping-generation controls should be clearly separated from runtime settings,
-since restarting the bridge alone cannot apply them inside Djay.
+Mapping-generation controls are separate from runtime settings, since
+restarting the bridge alone cannot apply them inside Djay.
 
 ## Keep these as protocol invariants
 

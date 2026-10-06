@@ -4,6 +4,10 @@ October 6, 2026. The portable app worked on the user's DJ laptop. This audit
 addresses the subsequent control notes; it does not change the executable or
 installed mappings.
 
+The [issues checklist](issues.md) is the current status record. It includes
+the user's live-test confirmations and is updated as issues are completed.
+Pending notes and proposals below may describe older revisions.
+
 ## Master references
 
 - [Djay inputs, outputs, and assigned MIDI addresses](djay-action-reference.md):
@@ -22,6 +26,18 @@ Software input means a command sent **to Djay**. Software output means state
 sent **from Djay** to the bridge. Neither means an audio input/output.
 
 ## Findings and proposed changes
+
+### Calibrated jog mapping preferences
+
+The user's chosen defaults are scratch Speed 2.7% / Reaction 150% and
+pitch-bend Speed 2.7% / Reaction 17%. Speed is exported as
+`rotarySensitivity`, Reaction as `rotaryAcceleration`, on all four decks.
+The app's Jog tab saves a separate jog configuration and generates customized
+mapping exports; selecting that new mapping in Djay is required.
+Runtime counts, touch ownership, seek, and MIDI addresses are unchanged.
+Released-backspin behavior and haptic tension remain open.
+See [configurable controls](configurable-controls.md) and
+[the measured jog comparison](jog-wheel-investigation.md).
 
 ### Implemented LOOP/MOVE layout
 
@@ -129,6 +145,18 @@ an intended action exists. Existence of a key is not an end-to-end pass.
 | Crossfader switches THRU at startup | The bridge already sends each switch's first observed position, then caches it. A pulse sent before Djay attaches can be lost; restarting/reselecting a mapping has no explicit replay. User confirms toggling the hardware fixes it. | Reapply current assignments and curve when the mapping is ready/reconnected, or offer an explicit reapply operation if reliable readiness is unavailable. Test bridge-first, Djay-first, configuration change, reconnect, and pre-set THRU without moving switches. Avoid continuously replaying selectors or overriding subsequent user choices without policy. |
 | Browse reversed | Raw relative deltas are sent to `libraryRotary` and shifted `sectionRotary`; neither binding is flipped. The user reports inverted behavior. | Correct polarity once at the decoder or mapping layer. Verify clockwise/down-list and counterclockwise/up-list on both sides, including Shift; avoid two corrections cancelling each other. |
 | Leftmost FX button duplicates slot 1 | Leftmost is mapped to `fxActive`; adjacent button maps `fx1Enabled`. They have different keys, but the user observes the same effect. Different key names are not proof of independent bank enable in the selected Djay layout. | A master bypass for all three slots is the best proposed use. First verify native bank enable semantics. If it really aliases slot 1, use explicit multi-slot state/set semantics and restore prior slot choices; three blind toggles can leave a mixed bank mixed. Check both strips and independently selected target decks. |
+
+### Additional open issue: default Djay token colors
+
+The user added this as the ninth remaining issue after confirming the
+LOOP/MOVE, Reloop, REV, Browse, and crossfader startup fixes.
+Some Djay color-token correspondences were corrected in bridge Settings,
+but not all tokens have been checked. Verify the complete correspondence,
+then correct the bundled default LED palette in `examples/led-config.json`
+so fresh installations use the right colors. Preserve existing saved
+preferences; the partially corrected values are evidence to start from,
+not a fully calibrated replacement palette. This concerns token-to-LED
+color translation, not MIDI control addresses.
 
 ### Historical shared-length proposal, superseded for this increment
 

@@ -139,6 +139,49 @@ struct LedPreferences: Codable, Equatable {
     }
 }
 
+struct JogPreferences: Codable, Equatable {
+    var scratchSpeed = 2.7
+    var scratchReaction = 150
+    var pitchBendSpeed = 2.7
+    var pitchBendReaction = 17
+
+    static func decode(_ data: Data, defaults: Data) throws -> JogPreferences {
+        guard let base = try JSONSerialization.jsonObject(with: defaults) as? [String: Any],
+              let overrides = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw AppError.invalid("Jog preferences must be a JSON object.")
+        }
+        let unknown = Set(overrides.keys).subtracting(base.keys)
+        guard unknown.isEmpty else {
+            throw AppError.invalid("Unknown jog settings: \(unknown.sorted().joined(separator: ", ")).")
+        }
+        let merged = base.merging(overrides) { _, override in override }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let value = try decoder.decode(JogPreferences.self, from: JSONSerialization.data(withJSONObject: merged))
+        try value.validate()
+        return value
+    }
+
+    func encoded() throws -> Data {
+        try validate()
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(self)
+    }
+
+    func validate() throws {
+        for speed in [scratchSpeed, pitchBendSpeed] {
+            guard speed.isFinite, speed > 0 else {
+                throw AppError.invalid("Jog speeds must be finite and greater than 0.")
+            }
+        }
+        guard (0...150).contains(scratchReaction), (0...150).contains(pitchBendReaction) else {
+            throw AppError.invalid("Jog reactions must be integers from 0 to 150.")
+        }
+    }
+}
+
 enum BridgeState: String {
     case stopped = "Stopped"
     case starting = "Starting"
@@ -178,15 +221,18 @@ final class OutputBuffer: @unchecked Sendable {
 final class BridgeController: ObservableObject {
     @Published var run = RunPreferences()
     @Published var leds: LedPreferences
+    @Published var jog: JogPreferences
     @Published private(set) var state: BridgeState = .stopped
     @Published private(set) var log = ""
     @Published private(set) var message = ""
     @Published private(set) var errorMessage = ""
     @Published private(set) var requiresReset = false
+    @Published private(set) var isExporting = false
 
     let resourceURL: URL
     let supportURL: URL
     let defaults: Data
+    let jogDefaults: Data
     private var process: Process?
     private var isDiagnostic = false
     private var stopRequested = false
@@ -196,6 +242,7 @@ final class BridgeController: ObservableObject {
     var isBusy: Bool { process != nil }
     var canStop: Bool { isBusy && state != .stopping }
     var ledURL: URL { supportURL.appendingPathComponent("led-config.json") }
+    var jogURL: URL { supportURL.appendingPathComponent("jog-config.json") }
     var runURL: URL { supportURL.appendingPathComponent("run-settings.json") }
     var executableURL: URL { resourceURL.appendingPathComponent("s4-connectivity-probe") }
     var commandPreview: String {
@@ -209,6 +256,8 @@ final class BridgeController: ObservableObject {
         self.supportURL = supportURL
         defaults = try Data(contentsOf: resourceURL.appendingPathComponent("default-led-config.json"))
         leds = try LedPreferences.decode(defaults, defaults: defaults)
+        jogDefaults = try Data(contentsOf: resourceURL.appendingPathComponent("default-jog-config.json"))
+        jog = try JogPreferences.decode(jogDefaults, defaults: jogDefaults)
         do {
             if FileManager.default.fileExists(atPath: runURL.path) {
                 run = try JSONDecoder().decode(RunPreferences.self, from: Data(contentsOf: runURL))
@@ -217,9 +266,12 @@ final class BridgeController: ObservableObject {
             if FileManager.default.fileExists(atPath: ledURL.path) {
                 leds = try LedPreferences.decode(Data(contentsOf: ledURL), defaults: defaults)
             }
+            if FileManager.default.fileExists(atPath: jogURL.path) {
+                jog = try JogPreferences.decode(Data(contentsOf: jogURL), defaults: jogDefaults)
+            }
         } catch {
             requiresReset = true
-            errorMessage = "Saved preferences could not be loaded: \(error.localizedDescription). Import valid LED settings or reset preferences before saving."
+            errorMessage = "Saved preferences could not be loaded: \(error.localizedDescription). Import valid settings or reset preferences before saving."
         }
     }
 
@@ -238,11 +290,13 @@ final class BridgeController: ObservableObject {
         }
         try run.validate()
         let ledData = try leds.encoded()
+        let jogData = try jog.encoded()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let runData = try encoder.encode(run)
         try FileManager.default.createDirectory(at: supportURL, withIntermediateDirectories: true)
         try ledData.write(to: ledURL, options: .atomic)
+        try jogData.write(to: jogURL, options: .atomic)
         try runData.write(to: runURL, options: .atomic)
         errorMessage = ""
     }
@@ -386,6 +440,7 @@ final class BridgeController: ObservableObject {
     func resetPreferences() {
         do {
             leds = try LedPreferences.decode(defaults, defaults: defaults)
+            jog = try JogPreferences.decode(jogDefaults, defaults: jogDefaults)
             run = RunPreferences()
             requiresReset = false
             errorMessage = ""
@@ -429,6 +484,92 @@ final class BridgeController: ObservableObject {
         } catch { report(error) }
     }
 
+    /// Generates a Djay mapping from the current jog settings and installs it
+    /// at `destination`. The Rust generator refuses to overwrite, so output
+    /// always goes to an owned fresh temporary path first; `destination` may
+    /// already exist after the save-panel overwrite confirmation. Runs
+    /// asynchronously without blocking the main actor, never touches the
+    /// source bridge `process`, and cleans up its temporary directory.
+    func exportMapping(to destination: URL) async throws {
+        guard !isExporting else {
+            throw AppError.invalid("Mapping export already in progress.")
+        }
+        isExporting = true
+        defer { isExporting = false }
+        let config = try jog.encoded()
+        let temporary = FileManager.default.temporaryDirectory
+            .appendingPathComponent("S4BridgeMapping-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+        defer {
+            do { try FileManager.default.removeItem(at: temporary) }
+            catch { report(error) }
+        }
+        let configURL = temporary.appendingPathComponent("jog-config.json")
+        let outputURL = temporary.appendingPathComponent("S4 MK3 Bridge.djayMidiMapping")
+        try config.write(to: configURL, options: .atomic)
+        let status = try await runExportProcess(arguments: [
+            "--generate-mapping", outputURL.path, "--jog-config", configURL.path
+        ])
+        guard status == 0 else {
+            throw AppError.invalid("Mapping export failed with status \(status). See Diagnostics for the error.")
+        }
+        guard FileManager.default.fileExists(atPath: outputURL.path) else {
+            throw AppError.invalid("Mapping export produced no file. See Diagnostics for the error.")
+        }
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(contentsOf: outputURL).write(to: destination, options: .atomic)
+    }
+
+    private func runExportProcess(arguments: [String]) async throws -> Int32 {
+        let child = Process()
+        let pipe = Pipe()
+        child.executableURL = executableURL
+        child.arguments = arguments
+        child.standardInput = FileHandle.nullDevice
+        child.standardOutput = pipe.fileHandleForWriting
+        child.standardError = pipe.fileHandleForWriting
+        appendLog("EXPORT: \(arguments.joined(separator: " "))")
+        let output = OutputBuffer()
+        let deliver: @Sendable () -> Void = { [weak self] in
+            DispatchQueue.main.async { self?.flush(output) }
+        }
+        let reportReadError: @Sendable (Error) -> Void = { [weak self] error in
+            DispatchQueue.main.async { self?.report(error) }
+        }
+        return try await withCheckedThrowingContinuation { continuation in
+            let reader = Task.detached {
+                do {
+                    for try await line in pipe.fileHandleForReading.bytes.lines {
+                        if output.append(line) { deliver() }
+                    }
+                    try pipe.fileHandleForReading.close()
+                } catch { reportReadError(error) }
+            }
+            child.terminationHandler = { [weak self] completed in
+                Task { @MainActor in
+                    await reader.value
+                    self?.flush(output)
+                    self?.appendLog("EXPORT_EXIT: \(completed.terminationStatus)")
+                    continuation.resume(returning: completed.terminationStatus)
+                }
+            }
+            do {
+                try child.run()
+                try pipe.fileHandleForWriting.close()
+            } catch {
+                child.terminationHandler = nil
+                let launchError = error
+                do { try pipe.fileHandleForWriting.close() }
+                catch { report(error) }
+                Task { @MainActor in
+                    await reader.value
+                    self.flush(output)
+                    continuation.resume(throwing: launchError)
+                }
+            }
+        }
+    }
+
     func installMapping() {
         let panel = NSSavePanel()
         panel.title = "Install Djay mapping"
@@ -438,14 +579,15 @@ final class BridgeController: ObservableObject {
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Music/djay/MIDI Mappings", isDirectory: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let source = resourceURL.appendingPathComponent("S4 MK3 Bridge.djayMidiMapping")
-            try Data(contentsOf: source).write(to: url, options: .atomic)
-            message = "Mapping installed. Select S4 MK3 Bridge for S4 MK3 MIDI Full in Djay."
-            if !NSWorkspace.shared.open(url) {
-                throw AppError.invalid("Mapping saved, but macOS could not open it. Open \(url.path) in Djay.")
-            }
-        } catch { report(error) }
+        Task { @MainActor in
+            do {
+                try await exportMapping(to: url)
+                message = "Mapping installed. Select S4 MK3 Bridge for S4 MK3 MIDI Full in Djay."
+                if !NSWorkspace.shared.open(url) {
+                    throw AppError.invalid("Mapping saved, but macOS could not open it. Open \(url.path) in Djay.")
+                }
+            } catch { report(error) }
+        }
     }
 }
 
@@ -463,6 +605,24 @@ struct NumberRow: View {
                 .frame(width: 80).multilineTextAlignment(.trailing)
             if !unit.isEmpty { Text(unit).foregroundColor(.secondary) }
             Stepper(title, value: $value, in: range).labelsHidden().fixedSize()
+        }
+    }
+}
+
+struct DecimalRow: View {
+    let title: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var unit = ""
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            TextField(title, value: $value, format: .number.precision(.fractionLength(1)).grouping(.never))
+                .frame(width: 80).multilineTextAlignment(.trailing)
+            if !unit.isEmpty { Text(unit).foregroundColor(.secondary) }
+            Stepper(title, value: $value, in: range, step: 0.1).labelsHidden().fixedSize()
         }
     }
 }
@@ -519,6 +679,7 @@ struct BridgeSettingsView: View {
             }
             TabView {
                 bridgeTab.tabItem { Label("Bridge", systemImage: "slider.horizontal.3") }
+                jogTab.tabItem { Label("Jog", systemImage: "rotate.right") }
                 ledTab.tabItem { Label("LEDs", systemImage: "lightbulb") }
                 paletteTab.tabItem { Label("Palette", systemImage: "paintpalette") }
                 diagnosticsTab.tabItem { Label("Diagnostics", systemImage: "terminal") }
@@ -556,8 +717,11 @@ struct BridgeSettingsView: View {
                 section("Djay mapping") {
                     Text("Install once, then select S4 MK3 Bridge under MIDI > Configure S4 MK3 MIDI Full in Djay.")
                     HStack {
-                        Button("Install Djay mapping…") { controller.installMapping() }
+                        Button("Install Djay mapping…") { controller.installMapping() }.disabled(controller.isExporting)
                         Button("Check controller") { controller.checkController() }.disabled(controller.isBusy)
+                    }
+                    if controller.isExporting {
+                        Text("Generating mapping from the current jog settings…").font(.caption).foregroundColor(.secondary)
                     }
                     Text("Start the bridge before opening Djay. If Djay shows only a blank S4 MK3 configuration, restart Djay while the bridge stays running. Do not run another CLI bridge alongside this app.")
                         .font(.caption).foregroundColor(.secondary)
@@ -567,6 +731,32 @@ struct BridgeSettingsView: View {
                     Button("Show preferences in Finder") { controller.showPreferences() }
                     Text("The app bundles its own bridge. Rust and Cargo are not required on the DJ laptop.")
                         .font(.caption).foregroundColor(.secondary)
+                }
+            }.padding(20).frame(maxWidth: .infinity)
+        }
+    }
+
+    private var jogTab: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                section("Scratch (platter touch)") {
+                    DecimalRow(title: "Scratch speed", value: $controller.jog.scratchSpeed, range: 0.1...Double.greatestFiniteMagnitude, unit: "%")
+                    NumberRow(title: "Scratch reaction", value: $controller.jog.scratchReaction, range: 0...150, unit: "%")
+                }
+                section("Pitch bend (no touch)") {
+                    DecimalRow(title: "Pitch bend speed", value: $controller.jog.pitchBendSpeed, range: 0.1...Double.greatestFiniteMagnitude, unit: "%")
+                    NumberRow(title: "Pitch bend reaction", value: $controller.jog.pitchBendReaction, range: 0...150, unit: "%")
+                }
+                section("Applying jog changes") {
+                    Text("Jog changes affect the exported mapping only. Save preferences, then install a new mapping and select it in Djay; restarting the bridge is not required. Seek behavior is unchanged.")
+                        .font(.caption).foregroundColor(.secondary)
+                    HStack {
+                        Button("Install Djay mapping…") { controller.installMapping() }.disabled(controller.isExporting)
+                        if controller.isExporting {
+                            Text("Generating mapping…").font(.caption).foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
                 }
             }.padding(20).frame(maxWidth: .infinity)
         }

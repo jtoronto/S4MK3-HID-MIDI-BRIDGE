@@ -4,8 +4,6 @@ mod full;
 mod input;
 mod midi;
 
-use std::fs::OpenOptions;
-use std::io::Write as _;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -54,6 +52,10 @@ struct Args {
     #[arg(long, value_name = "PATH", conflicts_with_all = ["midi", "list", "raw"])]
     generate_mapping: Option<PathBuf>,
 
+    /// JSON jog preferences for mapping export; does not alter runtime counts.
+    #[arg(long, value_name = "PATH", requires = "generate_mapping", conflicts_with_all = ["midi", "list", "raw"])]
+    jog_config: Option<PathBuf>,
+
     /// Maximum probe duration; stop earlier with Ctrl-C.
     #[arg(long, default_value = "30")]
     seconds: NonZeroU64,
@@ -85,18 +87,7 @@ fn main() -> anyhow::Result<()> {
         .map_err(|error| anyhow::anyhow!("initialize logging: {error}"))?;
 
     if let Some(path) = &args.generate_mapping {
-        let mapping = full::mapping::generate()?;
-        let mut output = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-            .with_context(|| {
-                format!("create mapping {}; choose a new file path", path.display())
-            })?;
-        mapping
-            .to_writer_xml(&mut output)
-            .context("serialize Djay mapping")?;
-        output.flush().context("flush Djay mapping")?;
+        full::mapping::write(path, args.jog_config.as_deref())?;
         for control in full::catalog::LOCAL_CONTROLS {
             info!(
                 input = control.name,
@@ -624,6 +615,27 @@ mod tests {
             Args::try_parse_from(["probe", "--midi", "full", "--until-stopped"])?.until_stopped
         );
         assert!(Args::try_parse_from(["probe", "--until-stopped", "--seconds", "60"]).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn jog_preferences_are_only_accepted_for_mapping_export() -> anyhow::Result<()> {
+        // Given a jog configuration supplied to export and runtime commands.
+        let valid = [
+            "probe",
+            "--generate-mapping",
+            "new.plist",
+            "--jog-config",
+            "jog.json",
+        ];
+        // When the real argument parser accepts the supported invocation.
+        let args = Args::try_parse_from(valid)?;
+        // Then it retains the path and rejects live/profile-only use.
+        assert_eq!(args.jog_config, Some(PathBuf::from("jog.json")));
+        assert!(Args::try_parse_from(["probe", "--jog-config", "jog.json"]).is_err());
+        assert!(
+            Args::try_parse_from(["probe", "--midi", "full", "--jog-config", "jog.json"]).is_err()
+        );
         Ok(())
     }
 

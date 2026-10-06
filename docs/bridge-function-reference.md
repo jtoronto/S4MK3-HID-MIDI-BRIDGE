@@ -7,6 +7,12 @@ notes are tracked in [mapping-audit.md](mapping-audit.md).
 
 ## Logic implemented inside the bridge
 
+Jog Speed/Reaction are mapping-generation preferences, not count scaling in
+the translator. Calibrated defaults are scratch 2.7% / 150% and pitch bend
+2.7% / 17%, configurable through the app's Jog tab and CLI `--jog-config`
+mapping export. Installing/selecting the generated mapping in Djay applies
+them; restart alone does not. Seek and released-touch routing are unchanged.
+
 ### Current encoder overlay
 
 The encoder increment is full-profile only. Descriptor normalization corrects
