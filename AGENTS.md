@@ -63,6 +63,12 @@ Outputs:
 
 - `dist/S4 MK3 Bridge.app`
 - `dist/S4 MK3 Bridge-arm64.zip`
+- `dist/S4 MK3 Bridge-0.1.0-beta.1-arm64.dmg`
+
+Cargo package/executable: `s4mk3-hid-midi-bridge`, release `0.1.0-beta.1`.
+The bundle uses numeric version `0.1.0`, build `1`, and custom
+`S4BridgeReleaseVersion` for the complete prerelease identifier.
+`macos/Assets/AppIcon.png` generates the bundled `.icns` during packaging.
 
 The build script refuses to overwrite an existing app bundle. Preserve an
 owned previous build before rebuilding. Do not delete unrelated artifacts.
@@ -71,6 +77,7 @@ Verify a rebuilt package:
 
        codesign --verify --deep --strict "dist/S4 MK3 Bridge.app"
        unzip -tq "dist/S4 MK3 Bridge-arm64.zip"
+       hdiutil verify "dist/S4 MK3 Bridge-0.1.0-beta.1-arm64.dmg"
 
 Signing is currently ad-hoc, not Developer ID signing or notarization.
 
@@ -108,9 +115,11 @@ Clockwise is +1 and counterclockwise -1 modulo 16. Shift does not change these
 fields. The pinned upstream rotation names are reversed on both sides, but
 only the left press names are reversed. Do not blindly swap right presses.
 
-Required musical behavior: LOOP selects a shared beat length. Pressing LOOP
-activates that length; MOVE jumps that length without a loop and moves the loop
-when active. An encoder rename alone does not prove this software behavior.
+Current custom Djay behavior: LOOP selects loop length; pressing LOOP activates
+it. MOVE uses an independent jump length, jumping without a loop and moving
+the loop when active. MOVE press toggles per-deck jump-size selection, with
+Shift+MOVE always jumping one beat. The earlier shared-length proposal is
+superseded. An encoder rename alone does not prove software behavior.
 
 ## Hardware and verification boundaries
 

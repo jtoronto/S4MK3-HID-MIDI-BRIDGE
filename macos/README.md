@@ -10,14 +10,18 @@ available:
 bash macos/build-app.sh
 ```
 
-The results are `dist/S4 MK3 Bridge.app` and the transfer archive
-`dist/S4 MK3 Bridge-arm64.zip`. The script compiles
+The results are `dist/S4 MK3 Bridge.app`, the transfer archive
+`dist/S4 MK3 Bridge-arm64.zip`, and the versioned release disk image
+`dist/S4 MK3 Bridge-0.1.0-beta.1-arm64.dmg`. The script compiles
 `macos/S4BridgeApp.swift` against the installed Apple macOS SDK, builds
-`s4-connectivity-probe` with `cargo build --locked --release`, copies
+`s4mk3-hid-midi-bridge` with `cargo build --locked --release`, copies
 `examples/led-config.json` into the app resources, and creates
 `S4 MK3 Bridge.djayMidiMapping` by running that same release bridge with
-`--generate-mapping`. The app bundle's `0.1.0` version follows the Cargo
-package version; the script checks that these version values remain aligned.
+`--generate-mapping`. Cargo identifies this release as `0.1.0-beta.1`;
+the bundle uses numeric version `0.1.0`, build `1`, and records the complete
+release in `S4BridgeReleaseVersion`. The script checks alignment with Cargo.
+It generates `AppIcon.icns` from `macos/Assets/AppIcon.png` and includes an
+Applications shortcut in the compressed read-only DMG.
 If the app output already exists, move it aside before building again.
 
 The bridge and then the app bundle receive ad-hoc signatures for local transfer
@@ -34,8 +38,9 @@ library reference.
 
 ## Use on the DJ laptop
 
-Transfer `dist/S4 MK3 Bridge-arm64.zip`, unzip it, and move the app to the
-laptop's Applications folder, then open it.
+Download the DMG from GitHub Releases, open it, and drag the app to the
+Applications shortcut. Eject the disk image and launch the installed app.
+The ZIP is an alternative: unzip it and move the app to Applications.
 The app lives in the menu bar and does not require Rust, Cargo, or this repository.
 Its first launch opens Settings; closing that window leaves the menu-bar app
 running.

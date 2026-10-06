@@ -85,7 +85,7 @@ final class BridgeTests: XCTestCase {
     @MainActor
     func testDiagnosticProcessDrainsRealPipeBeforeReturningStopped() async throws {
         let fixture = try makeFixture()
-        let executable = fixture.appendingPathComponent("s4-connectivity-probe")
+        let executable = fixture.appendingPathComponent("s4mk3-hid-midi-bridge")
         try Data("#!/bin/sh\nprintf 'CHECK:%s\\n' \"$*\"\n".utf8).write(to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         let model = try BridgeController(resourceURL: fixture, supportURL: fixture.appendingPathComponent("support"))
@@ -112,7 +112,7 @@ final class BridgeTests: XCTestCase {
         let descriptor = Darwin.open(fifo.path, O_RDWR)
         guard descriptor >= 0 else { throw AppError.invalid("Could not open test FIFO.") }
         defer { XCTAssertEqual(Darwin.close(descriptor), 0) }
-        let executable = fixture.appendingPathComponent("s4-connectivity-probe")
+        let executable = fixture.appendingPathComponent("s4mk3-hid-midi-bridge")
         let script = """
         #!/bin/sh
         trap 'printf "STOP_ACK\\n"; exit 0' INT
@@ -217,7 +217,7 @@ final class BridgeTests: XCTestCase {
         let fixture = try makeFixture()
         let argsURL = fixture.appendingPathComponent("received-args.txt")
         let configURL = fixture.appendingPathComponent("received-config.json")
-        let executable = fixture.appendingPathComponent("s4-connectivity-probe")
+        let executable = fixture.appendingPathComponent("s4mk3-hid-midi-bridge")
         let script = """
         #!/bin/sh
         printf '%s' "$*" > '\(argsURL.path)'
@@ -259,7 +259,7 @@ final class BridgeTests: XCTestCase {
     @MainActor
     func testExportMappingReportsGeneratorFailureWithoutTouchingDestination() async throws {
         let fixture = try makeFixture()
-        let executable = fixture.appendingPathComponent("s4-connectivity-probe")
+        let executable = fixture.appendingPathComponent("s4mk3-hid-midi-bridge")
         try Data("#!/bin/sh\necho 'generator boom' >&2\nexit 3\n".utf8).write(to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         let model = try BridgeController(resourceURL: fixture, supportURL: fixture.appendingPathComponent("support"))
@@ -280,7 +280,7 @@ final class BridgeTests: XCTestCase {
     func testExportMappingPreservesDirectoryDestinationOnInstallationFailure() async throws {
         // Given an exporter and a destination directory containing user data.
         let fixture = try makeFixture()
-        let executable = fixture.appendingPathComponent("s4-connectivity-probe")
+        let executable = fixture.appendingPathComponent("s4mk3-hid-midi-bridge")
         try Data("#!/bin/sh\nprintf 'MAPPING-BYTES' > \"$2\"\n".utf8).write(to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         let model = try BridgeController(resourceURL: fixture, supportURL: fixture.appendingPathComponent("support"))

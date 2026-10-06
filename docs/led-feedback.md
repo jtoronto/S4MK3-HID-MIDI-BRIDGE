@@ -202,7 +202,7 @@ Available palette names: `red`, `carrot`, `orange`, `honey`, `yellow`, `lime`,
 Capture actual returned packets while the normal bridge runs:
 
 ```sh
-RUST_LOG=info,s4_connectivity_probe::full::feedback=debug \
+RUST_LOG=info,s4mk3_hid_midi_bridge::full::feedback=debug \
   cargo run --locked -- --midi full --led-config examples/led-config.json --seconds 600
 ```
 

@@ -1,9 +1,9 @@
 [package]
-name = "s4-connectivity-probe"
-version = "0.1.0"
+name = "s4mk3-hid-midi-bridge"
+version = "0.1.0-beta.1"
 edition = "2024"
 rust-version = "1.88"
-description = "S4 MK3 HID connectivity probe and minimal macOS MIDI bridge"
+description = "Native Instruments S4 MK3 HID-to-MIDI bridge for Djay Pro on macOS"
 publish = false
 
 [dependencies]

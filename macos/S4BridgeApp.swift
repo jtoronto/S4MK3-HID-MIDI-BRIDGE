@@ -244,7 +244,7 @@ final class BridgeController: ObservableObject {
     var ledURL: URL { supportURL.appendingPathComponent("led-config.json") }
     var jogURL: URL { supportURL.appendingPathComponent("jog-config.json") }
     var runURL: URL { supportURL.appendingPathComponent("run-settings.json") }
-    var executableURL: URL { resourceURL.appendingPathComponent("s4-connectivity-probe") }
+    var executableURL: URL { resourceURL.appendingPathComponent("s4mk3-hid-midi-bridge") }
     var commandPreview: String {
         ([executableURL.path] + run.arguments(ledURL: ledURL))
             .map { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }
