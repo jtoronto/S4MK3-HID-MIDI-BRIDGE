@@ -100,8 +100,10 @@ need real testing rather than inference from successful message delivery.
   has been established. They are not given an arbitrary software assignment.
 - Screens, motor rotation, controller emulation, and audio forwarding are not
   implemented by this input mapping.
-- Software-state LED feedback is not part of this profile. The existing probe
-  Play LED behavior is not a playback-state indicator.
+- Regenerated full mappings include software-state LED feedback and configurable
+  presentation. See [led-feedback.md](led-feedback.md) for setup and verification
+  limits. Older input-only mappings do not emit those states. Minimal/probe Play
+  mirroring remains separate and is not a playback-state indicator.
 
 ## Verify
 

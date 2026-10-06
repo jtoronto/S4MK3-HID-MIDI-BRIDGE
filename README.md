@@ -84,6 +84,17 @@ acceptable. DDJ-SX2 emulation can be explored later.
 
 ## Design record
 
+The full profile includes LED feedback, channel meters, and a decorative jog-ring
+chase while playing, with green loop flashing. These behaviors have been tested
+with Djay and the connected S4; full palette calibration and remaining control
+checks are documented separately. See
+[docs/led-feedback.md](docs/led-feedback.md) for setup, editable JSON preferences,
+verification steps, and current limits. Input-only mappings must be regenerated
+to include feedback. The minimal profile remains separate.
+
+See [docs/led-mapping-plan.md](docs/led-mapping-plan.md) for the approved LED
+design and its hardware/software evidence.
+
 See [docs/design.md](docs/design.md) for requirements, architecture options,
 controller comparisons, open questions, proposed validation stages, and sources.
 

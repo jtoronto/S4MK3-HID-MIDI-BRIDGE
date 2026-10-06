@@ -46,6 +46,10 @@ struct Args {
     #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "minimal", conflicts_with_all = ["list", "generate_mapping"])]
     midi: Option<MidiProfile>,
 
+    /// JSON LED preferences for the full profile; restart after editing.
+    #[arg(long, value_name = "PATH", requires = "midi", conflicts_with_all = ["list", "generate_mapping"])]
+    led_config: Option<PathBuf>,
+
     /// Export the full native Djay mapping without opening HID or MIDI.
     #[arg(long, value_name = "PATH", conflicts_with_all = ["midi", "list", "raw"])]
     generate_mapping: Option<PathBuf>,
@@ -60,10 +64,15 @@ struct ProbeCounts {
     input_events: u64,
     led_writes: u64,
     midi_messages: u64,
+    feedback_messages: u64,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    ensure!(
+        args.led_config.is_none() || matches!(args.midi, Some(MidiProfile::Full)),
+        "--led-config requires --midi full"
+    );
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?)
         .with_target(false)
@@ -166,18 +175,19 @@ fn run_probe(
     parser: &mut PacketParser,
     leds: &mut LedBuilder,
 ) -> anyhow::Result<()> {
-    let (stop_tx, stop_rx) = crossbeam_channel::bounded(1);
-    ctrlc::set_handler(move || {
-        if let Err(error) = stop_tx.try_send(()) {
-            warn!(%error, "could not enqueue stop signal");
-        }
-    })
-    .context("install Ctrl-C handler")?;
+    let led_config = matches!(args.midi, Some(MidiProfile::Full))
+        .then(|| full::leds::LedConfig::load(args.led_config.as_deref()))
+        .transpose()?;
+    let stop_rx = stop_signal()?;
     let mut midi = matches!(args.midi, Some(MidiProfile::Minimal))
         .then(midi::MidiBridge::new)
         .transpose()?;
     let mut full = matches!(args.midi, Some(MidiProfile::Full))
         .then(full::FullBridge::new)
+        .transpose()?;
+    let mut full_leds = full
+        .as_ref()
+        .map(|_| full::output::LedOutput::new(hid))
         .transpose()?;
     info!(
         seconds = args.seconds.get(),
@@ -212,7 +222,7 @@ fn run_probe(
             events.clear();
             parser.parse_from("control", payload, &mut events);
             for event in &events {
-                record_event(event, leds, &mut counts)?;
+                record_event(event, leds, &mut counts, full.is_none())?;
                 if let Some(bridge) = &mut midi
                     && bridge.send(event)?
                 {
@@ -232,7 +242,9 @@ fn run_probe(
                 let sent = bridge.send_report(&events, buttons)?;
                 counts.midi_messages = counts.midi_messages.saturating_add(u64::try_from(sent)?);
             }
-            if let Some(report) = leds.flush() {
+            if full.is_none()
+                && let Some(report) = leds.flush()
+            {
                 let written = hid.write(&report).context("write S4 button LED report")?;
                 ensure!(
                     written == report.len(),
@@ -245,11 +257,42 @@ fn run_probe(
                 );
             }
         }
+        if let (Some(bridge), Some(output), Some(config)) = (&mut full, &mut full_leds, &led_config)
+        {
+            let now = started.elapsed();
+            let received = bridge.drain_feedback(now)?;
+            counts.feedback_messages = counts
+                .feedback_messages
+                .saturating_add(u64::try_from(received)?);
+            let writes = output.tick(
+                config,
+                bridge.feedback_state(),
+                &bridge.local_led_state(),
+                now,
+            )?;
+            counts.led_writes = counts.led_writes.saturating_add(u64::try_from(writes)?);
+        }
     }
+    report_probe_counts(args, &counts)
+}
+
+fn stop_signal() -> anyhow::Result<crossbeam_channel::Receiver<()>> {
+    let (sender, receiver) = crossbeam_channel::bounded(1);
+    ctrlc::set_handler(move || {
+        if let Err(error) = sender.try_send(()) {
+            warn!(%error, "could not enqueue stop signal");
+        }
+    })
+    .context("install Ctrl-C handler")?;
+    Ok(receiver)
+}
+
+fn report_probe_counts(args: &Args, counts: &ProbeCounts) -> anyhow::Result<()> {
     info!(
         input_events = counts.input_events,
         led_writes = counts.led_writes,
         midi_messages = counts.midi_messages,
+        feedback_messages = counts.feedback_messages,
         "Probe ended; LED visibility and audio coexistence need physical confirmation"
     );
     ensure!(
@@ -257,7 +300,9 @@ fn run_probe(
         "no decoded S4 input received during the probe"
     );
     ensure!(
-        args.midi.is_none() || counts.midi_messages > 0,
+        args.midi.is_none()
+            || counts.midi_messages > 0
+            || (matches!(args.midi, Some(MidiProfile::Full)) && counts.feedback_messages > 0),
         "no mapped MIDI controls received; press Play/Cue or move a channel fader/crossfader"
     );
     Ok(())
@@ -267,6 +312,7 @@ fn record_event(
     event: &Event,
     leds: &mut LedBuilder,
     counts: &mut ProbeCounts,
+    mirror_play: bool,
 ) -> anyhow::Result<()> {
     match event {
         Event::DeviceConnected { id, .. } => {
@@ -278,7 +324,7 @@ fn record_event(
         }
         Event::Button { name, pressed, .. } => {
             info!(control = name, pressed, "BUTTON");
-            if *name == "left_play" {
+            if mirror_play && *name == "left_play" {
                 ensure!(
                     leds.set(
                         name,
@@ -366,6 +412,13 @@ fn input_payload(report: &[u8]) -> anyhow::Result<Option<&[u8]>> {
 
 fn full_control_descriptor(original: &DeviceDescriptor) -> anyhow::Result<DeviceDescriptor> {
     let mut descriptor = control_descriptor(original);
+    descriptor.leds.extend(
+        original
+            .leds
+            .iter()
+            .filter(|group| matches!(group.id.as_str(), "vu_meters" | "wheel_leds"))
+            .cloned(),
+    );
     for packet in &mut descriptor.input_packets {
         for item in &mut packet.items {
             match item {

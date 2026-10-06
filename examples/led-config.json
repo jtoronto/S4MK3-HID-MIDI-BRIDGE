@@ -1,0 +1,41 @@
+{
+  "deck_colors": ["red", "blue", "yellow", "purple"],
+  "stem_colors": ["red", "yellow", "green", "blue"],
+  "djay_pad_colors": [
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "cyan",
+    "blue",
+    "purple",
+    "white"
+  ],
+  "djay_white": "white",
+  "hotcue_colors": "djay",
+  "fixed_hotcue_colors": [
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "cyan",
+    "blue",
+    "purple",
+    "white"
+  ],
+  "active_brightness": 127,
+  "inactive_brightness": 16,
+  "inactive_display": "dim",
+  "palette_active_intensity": 2,
+  "palette_inactive_intensity": 0,
+  "stem_mute_bright": true,
+  "mute_color": "red",
+  "quantize_mixed": "dim",
+  "tempo_center_tolerance": null,
+  "loop_enabled": true,
+  "loop_color": "green",
+  "chase_period_ms": 2000,
+  "meter_brightness": 127,
+  "meter_gamma": 1.0,
+  "meter_stale_ms": 500
+}

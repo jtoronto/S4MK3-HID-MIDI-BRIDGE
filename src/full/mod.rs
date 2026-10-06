@@ -1,9 +1,13 @@
 //! Full input translation, isolated from the verified minimal MIDI profile.
 
 pub mod catalog;
+pub mod feedback;
+pub mod leds;
 pub mod mapping;
+pub mod output;
 
 use std::collections::HashMap;
+use std::time::Duration;
 
 use anyhow::{Context as _, bail, ensure};
 use encdr::Event;
@@ -90,6 +94,8 @@ struct Translator {
     residuals: [f64; 2],
     held: HashMap<&'static str, Vec<Address>>,
     switches: [Option<u8>; 5],
+    led_held: [bool; 11],
+    tempos: [Option<f32>; 2],
 }
 
 impl Default for Translator {
@@ -106,11 +112,15 @@ impl Default for Translator {
             residuals: [0.0; 2],
             held: HashMap::new(),
             switches: [None; 5],
+            led_held: [false; 11],
+            tempos: [None; 2],
         }
     }
 }
 
 pub struct FullBridge {
+    feedback_input: feedback::FeedbackInput,
+    feedback: feedback::FeedbackState,
     connection: MidiOutputConnection,
     translator: Translator,
     controls: Vec<Control>,
@@ -119,16 +129,32 @@ pub struct FullBridge {
 
 impl FullBridge {
     pub fn new() -> anyhow::Result<Self> {
+        // Djay can return initial state as soon as the source appears.
+        let feedback_input = feedback::FeedbackInput::new(mapping::PORT_NAME)?;
         let connection = MidiOutput::new("S4 MK3 full bridge")?
             .create_virtual(mapping::PORT_NAME)
             .map_err(|error| anyhow::anyhow!("create full MIDI source: {error}"))?;
         info!(port = mapping::PORT_NAME, "MIDI_FULL_READY");
         Ok(Self {
+            feedback_input,
+            feedback: feedback::FeedbackState::default(),
             connection,
             translator: Translator::default(),
             controls: Vec::with_capacity(160),
             messages: Vec::with_capacity(160),
         })
+    }
+
+    pub fn drain_feedback(&mut self, now: Duration) -> anyhow::Result<usize> {
+        self.feedback_input.drain(&mut self.feedback, now)
+    }
+
+    pub const fn feedback_state(&self) -> &feedback::FeedbackState {
+        &self.feedback
+    }
+
+    pub fn local_led_state(&self) -> leds::LocalState {
+        self.translator.local_led_state()
     }
 
     pub fn send_report(
@@ -167,12 +193,55 @@ impl Drop for FullBridge {
 }
 
 impl Translator {
+    fn local_led_state(&self) -> leds::LocalState {
+        leds::LocalState {
+            decks: self.decks.map(|deck| usize::from(deck.channel())),
+            shifted: self.shifted,
+            pads: self.pads,
+            fx: self.fx.map(|deck| usize::from(deck.channel())),
+            quick: usize::from(self.quick.channel()),
+            vinyl: self.vinyl,
+            grid: self.grid,
+            held: self.led_held,
+            tempo: self.tempos,
+        }
+    }
+
+    fn observe_led_inputs(&mut self, controls: &[Control]) {
+        const MOMENTARY: [&str; 11] = [
+            "left_record_mode",
+            "left_library_view",
+            "left_library_playlist",
+            "left_library_star",
+            "left_library_play",
+            "right_record_mode",
+            "right_library_view",
+            "right_library_playlist",
+            "right_library_star",
+            "right_library_play",
+            "mixer_fx_filter",
+        ];
+        for control in controls {
+            match *control {
+                Control::Button(name, held) => {
+                    if let Some(index) = MOMENTARY.iter().position(|expected| *expected == name) {
+                        self.led_held[index] = held;
+                    }
+                }
+                Control::Slider("left_tempo_fader", value) => self.tempos[0] = Some(value),
+                Control::Slider("right_tempo_fader", value) => self.tempos[1] = Some(value),
+                Control::Slider(_, _) | Control::Encoder(_, _) | Control::Jog(_, _) => {}
+            }
+        }
+    }
+
     fn translate(
         &mut self,
         controls: &[Control],
         buttons: Option<&[u8; 22]>,
         output: &mut Vec<[u8; 3]>,
     ) -> anyhow::Result<()> {
+        self.observe_led_inputs(controls);
         // All releases precede selectors; selectors precede new presses/movement.
         // Thus descriptor item order cannot choose a simultaneous Shift+Play route.
         for control in controls {
@@ -898,6 +967,39 @@ mod tests {
         // Then exactly one release is emitted.
         assert_eq!(output, [[0x80, 0, 0]]);
         assert!(state.held.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn led_routing_follows_current_selection_while_held_notes_keep_old_ownership()
+    -> anyhow::Result<()> {
+        // Given Cue held on A.
+        let mut state = Translator::default();
+        run(&mut state, &[Control::Button("left_cue", true)])?;
+        // When C becomes the visible deck.
+        run(&mut state, &[Control::Button("left_deck_switch_c", true)])?;
+        // Then lights show C while the held Cue still belongs to A.
+        assert_eq!(state.local_led_state().decks[0], 2);
+        assert_eq!(state.held["left_cue"][0].channel, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn momentary_led_release_survives_shift_and_deck_changes() -> anyhow::Result<()> {
+        // Given a held library preview after a deck/modifier change.
+        let mut state = Translator::default();
+        run(
+            &mut state,
+            &[
+                Control::Button("left_library_play", true),
+                Control::Button("left_deck_switch_c", true),
+                Control::Button("left_shift", true),
+            ],
+        )?;
+        // When the physical preview button releases.
+        run(&mut state, &[Control::Button("left_library_play", false)])?;
+        // Then the momentary light is not stranded on the old layer.
+        assert!(!state.local_led_state().held[4]);
         Ok(())
     }
 }
