@@ -27,6 +27,17 @@ sent **from Djay** to the bridge. Neither means an audio input/output.
 
 ## Findings and proposed changes
 
+### Global Shift+Sync tempo range
+
+The user confirmed the Djay UI shares tempo range across decks. The current
+catalog assigns Shift+Sync to native `application.tempoSliderRangeNext`,
+while normal Sync remains `turntableN.bpmSync`. Either physical side can
+cycle the shared range, using Note 2 on shifted channels 9-12.
+The bridge does not keep a guessed range index or hard-code choices.
+Press ownership survives Shift/deck changes, and repeated held snapshots
+do not emit extra presses. The user confirmed the newly installed binding
+works on October 6, 2026; the issue is complete.
+
 ### Calibrated jog mapping preferences
 
 The user's chosen defaults are scratch Speed 2.7% / Reaction 150% and
@@ -147,6 +158,13 @@ an intended action exists. Existence of a key is not an end-to-end pass.
 | Leftmost FX button duplicates slot 1 | Leftmost is mapped to `fxActive`; adjacent button maps `fx1Enabled`. They have different keys, but the user observes the same effect. Different key names are not proof of independent bank enable in the selected Djay layout. | A master bypass for all three slots is the best proposed use. First verify native bank enable semantics. If it really aliases slot 1, use explicit multi-slot state/set semantics and restore prior slot choices; three blind toggles can leave a mixed bank mixed. Check both strips and independently selected target decks. |
 
 ### Additional open issue: default Djay token colors
+
+**Resolved for all eight selectable hotcue colors, October 6, 2026.**
+The user confirmed the saved correspondence matches all eight physical
+colors. Defaults now map tokens 1-8 to red, orange, blue, yellow, green,
+azalea, cyan, purple. White is not offered in the hotcue picker; token 9
+retains an explicitly unverified white fallback. Saved preferences remain
+separate and unchanged. The partial-calibration notes below are historical.
 
 The user added this as the ninth remaining issue after confirming the
 LOOP/MOVE, Reloop, REV, Browse, and crossfader startup fixes.

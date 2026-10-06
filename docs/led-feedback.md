@@ -10,9 +10,43 @@ feedback, both decks' Play/Cue lamps, channel level meters, and the colors of
 the user's current hotcues. The user also confirmed deck-colored segments
 across A/C and B/D, green whole-ring loop flashing and exit, preserved hardware
 master meters, and smooth jog response with feedback active.
-**Remaining controls, complete palette calibration, and master clip indication
+**Remaining controls, white-token behavior, and master clip indication
 still need confirmation.**
 Successful HID writes alone do not prove those behaviors.
+
+## Verified hotcue palette
+
+On October 6, 2026, the user confirmed all eight selectable Djay hotcue
+colors match the physical pads with this correspondence:
+
+| Djay token | S4 palette color |
+| --- | --- |
+| 1 | red |
+| 2 | orange |
+| 3 | blue |
+| 4 | yellow |
+| 5 | green |
+| 6 | azalea |
+| 7 | cyan |
+| 8 | purple |
+
+These are now the Rust and bundled JSON defaults. Existing saved preferences
+are preserved; fixed-slot, stem, and deck palettes are unchanged.
+Djay's hotcue picker does not offer white. Token 9 retains the existing
+`djay_white=white` fallback, but its use and physical feedback remain
+unverified. White used by bridge-local lamps or fixed slots does not verify
+a Djay white hotcue token.
+
+The calibrated-default increment passed 81 Rust tests and 12 Swift tests,
+formatting, strict Clippy, locked all-target build, shell syntax, plist lint,
+and diff checks. A regression feeds all eight tokens through the real MIDI
+decoder, feedback cache, and pad renderer with both Rust and bundled JSON
+defaults, checking the calibrated physical report bytes.
+The rebuilt app passed deep strict signature and ZIP integrity checks;
+its bundled LED JSON is byte-identical to `examples/led-config.json`.
+Saved LED preferences and the user's `S4 MK3 Bridge 2` mapping retained
+their hashes. The previous bundle/archive are preserved at
+`/tmp/s4mk3-pre-palette.BZPApM`.
 
 ## Current MOVE selection indicator
 
@@ -116,7 +150,7 @@ For example:
 | --- | --- |
 | `deck_colors` | A/B/C/D colors shared by deck selectors and rings |
 | `hotcue_colors` | `djay` by default; `fixed_slots` only when explicitly chosen |
-| `djay_pad_colors`, `djay_white` | Color correspondence for returned palette tokens; current order is provisional |
+| `djay_pad_colors`, `djay_white` | Verified correspondence for tokens 1-8; token 9 retains an unverified white fallback |
 | `fixed_hotcue_colors` | Eight colors for the optional fixed-slot policy |
 | `stem_colors`, `mute_color` | Stem/solo colors and the engaged-mute color |
 | `stem_mute_bright` | True: bright means muted; false: bright means unmuted, not effective audibility under other solo states |
@@ -138,10 +172,9 @@ Available palette names: `red`, `carrot`, `orange`, `honey`, `yellow`, `lime`,
 ## Known limits, not simulated states
 
 - Djay-matched hotcue output uses native `padColorsActive` tokens 1-8 and white
-  token 9, off 0. The default token-to-color order is provisional until every
-  Djay color is captured. Unknown tokens stay dark; binary velocity 127 is not
-  silently interpreted as a cue color. Actual palette matching is not yet
-  verified.
+  token 9, off 0. Tokens 1-8 are user-verified; white is unavailable in the
+  hotcue picker and remains unverified. Unknown tokens stay dark; binary
+  velocity 127 is not silently interpreted as a cue color.
 - Channel meters use native `turntable1..4.monoMeter` CC output, fixed to decks
   A-D independently of deck selection. The 14 level-byte layout and curve need
   physical calibration. There is no verified per-deck clip output; the bridge

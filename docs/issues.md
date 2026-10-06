@@ -11,6 +11,13 @@ Keep completed items and add their completion date and a short evidence note.
 
 ## Completed
 
+- [x] **Default Djay color-token correspondence** - All eight selectable
+  hotcue colors physically matched the user's saved correspondence,
+  October 6, 2026. Rust and bundled JSON defaults now match it; saved
+  preferences are preserved. White is not an option in Djay's hotcue picker:
+  token 9 retains its existing unverified white fallback.
+  See [palette evidence](led-feedback.md#verified-hotcue-palette).
+
 - [x] **LOOP/MOVE layout and beat jump** - Correct physical encoder pairing;
   independent per-deck loop/jump sizes; MOVE press toggles jump-size selection
   with a visible selector pulse; Shift+MOVE jumps one beat. Implemented and
@@ -27,6 +34,11 @@ Keep completed items and add their completion date and a short evidence note.
   and curve after Djay playback feedback, then emit physical changes only.
   User confirmed the three-fix build tests good, October 6, 2026.
   Mapping reconnect/reselection still requires bridge Stop/Start.
+- [x] **Shift+Sync tempo-range cycling** - Either side cycles Djay's global
+  tempo-fader range for all decks via `application.tempoSliderRangeNext`;
+  normal Sync remains deck-specific. Djay owns the choices and cycling order.
+  Software routing/export checks passed and the user confirmed "Works,"
+  October 6, 2026. See [validation](shift-sync-validation.md).
 
 ## Open
 
@@ -45,8 +57,6 @@ Keep completed items and add their completion date and a short evidence note.
 - [ ] **Leftmost FX button duplicates slot 1** - Verify native bank-enable
   behavior and investigate a whole-bank bypass that preserves individual
   slot states.
-- [ ] **Shift+Sync tempo-range cycling** - Confirm whether the native action
-  is global or deck-specific, and establish supported ranges and wrap order.
 - [ ] **REC / Record Sample** - Establish the native action's recording
   source, destination/slot, and press/hold requirements.
 - [ ] **Preview encoder scrubbing** - Find a genuine preview-seek action and
@@ -58,11 +68,6 @@ Keep completed items and add their completion date and a short evidence note.
   reset-to-neutral and knob pickup. Currently resets only the selected deck.
 - [ ] **EXT / microphone / line inputs** - Establish S4 input channels and
   hardware source switching, then determine which routing Djay can support.
-- [ ] **Default Djay color-token correspondence** - Start from the user's
-  partial corrections in bridge Settings, verify all remaining tokens, and
-  correct the bundled defaults so fresh installations show the right colors.
-  Preserve saved preferences; partial calibration is not a verified complete
-  palette. This concerns token-to-LED colors, not MIDI control addresses.
 
 ## Deferred ideas
 

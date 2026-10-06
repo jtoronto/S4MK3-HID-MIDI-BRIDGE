@@ -113,17 +113,18 @@ impl Default for LedConfig {
         Self {
             deck_colors: [Color::Red, Color::Blue, Color::Yellow, Color::Purple],
             stem_colors: [Color::Red, Color::Yellow, Color::Green, Color::Blue],
-            // Provisional token order: capture Djay's emitted values before calibration.
+            // User-verified Djay hotcue correspondence, October 6, 2026.
             djay_pad_colors: [
                 Color::Red,
                 Color::Orange,
+                Color::Blue,
                 Color::Yellow,
                 Color::Green,
+                Color::Azalea,
                 Color::Cyan,
-                Color::Blue,
                 Color::Purple,
-                Color::White,
             ],
+            // Retained fallback; white is not offered by Djay's hotcue picker.
             djay_white: Color::White,
             hotcue_colors: HotcueColors::Djay,
             fixed_hotcue_colors: [
@@ -547,6 +548,29 @@ mod tests {
         assert_eq!(report[1], Color::Red.base() + 2);
         assert_eq!(report[2], Color::White.base() + 2);
         assert_eq!(report[3], 0);
+    }
+
+    #[test]
+    fn calibrated_hotcue_tokens_render_identically_with_builtin_and_bundled_defaults()
+    -> anyhow::Result<()> {
+        // Given the shipped JSON and the independent built-in defaults.
+        let bundled: LedConfig =
+            serde_json::from_str(include_str!("../../examples/led-config.json"))?;
+        bundled.validate()?;
+        // When Djay's eight selectable tokens pass through the real decoder and renderer.
+        for config in [config(), bundled] {
+            let mut feedback = feedback();
+            let mut decoder = super::super::feedback::Decoder::default();
+            for token in 1_u8..=8 {
+                decoder.feed(&[0x90, 39 + token, token], |message| {
+                    feedback.apply(message, std::time::Duration::ZERO);
+                });
+            }
+            let report = render_buttons(&config, &feedback, &LocalState::default());
+            // Then the physical pad bytes match the calibrated palette at active intensity 2.
+            assert_eq!(&report[1..=8], &[6, 14, 46, 22, 30, 62, 38, 50]);
+        }
+        Ok(())
     }
 
     #[test]

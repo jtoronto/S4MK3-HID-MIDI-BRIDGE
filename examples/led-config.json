@@ -4,12 +4,12 @@
   "djay_pad_colors": [
     "red",
     "orange",
+    "blue",
     "yellow",
     "green",
+    "azalea",
     "cyan",
-    "blue",
-    "purple",
-    "white"
+    "purple"
   ],
   "djay_white": "white",
   "hotcue_colors": "djay",

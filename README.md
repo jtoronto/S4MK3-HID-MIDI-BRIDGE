@@ -65,6 +65,10 @@ EQ, loops, library navigation, pad layers, jogs, and FX targeting without learni
 each control manually. See [docs/full-midi-test.md](docs/full-midi-test.md) for
 the layout, hardware-local controls, unsupported functions, and live test steps.
 
+**Shift+Sync cycles Djay's tempo-fader range globally:** pressing it on either
+side changes the range for all decks, not just the selected deck. Normal Sync
+remains deck-specific. Install/select the updated generated mapping to use it.
+
 ## Agreed initial direction
 
 - Start with a custom Djay MIDI mapping, not another controller's USB identity.
@@ -91,6 +95,11 @@ installation, complete LED preferences, and diagnostics.
 See [macos/README.md](macos/README.md) for installation and
 [docs/configurable-controls.md](docs/configurable-controls.md) for control-tuning
 candidates.
+
+Default Djay hotcue colors use the physically verified token order: red,
+orange, blue, yellow, green, azalea, cyan, purple. Saved LED preferences
+remain unchanged. White is not available in Djay's hotcue picker; its
+separate token retains an unverified fallback.
 
 ## Mapping reference and beta guide
 
