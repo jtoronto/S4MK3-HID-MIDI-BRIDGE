@@ -1,6 +1,6 @@
 # S4 MK3 bridge issues
 
-Current checklist as of October 25, 2026. This is the source of truth for issue
+Current checklist as of October 27, 2026. This is the source of truth for issue
 status; [the mapping audit](mapping-audit.md) retains detailed findings and
 historical snapshots.
 
@@ -120,6 +120,27 @@ Keep completed items and add their completion date and a short evidence note.
   regressions pass; the user verified `11A -> 2A -> --` on the physical S4.
   No mapping change is needed. See [diagnosis and verification](key-feedback-order-validation.md).
 
+## Current-source EXT support
+
+The full profile now provides fixed EXT1-4 switching for Djay decks 1-4,
+independent of deck/FX selection, with a newly generated matching mapping.
+Each new unshifted press selects Internal when actual THRU feedback is true,
+or Thru when false. Unknown feedback means no command and a dark lamp.
+Holds are consumed until release, including presses made with either Shift
+held or feedback missing; no deferred toggle is queued. Either Shift preserves
+hardware Shift+EXT input-type selection by suppressing software commands.
+Indicators use only actual per-deck THRU state, with false/unknown dark even
+when dim-idle lighting is enabled.
+
+The attended [EXT validation](ext-input-validation.md) confirms single-press
+switching and lamps on all four channels, independent mouse-driven feedback,
+and Shift suppression with no delayed toggle. This is not a new published
+release. DVS must be enabled manually and left on; input assignments remain
+GUI setup. The bridge doesn't detect global DVS enable.
+
+- [x] **EXT switching and indicators** - Confirmed on all four channels.
+  Broader external-audio validation remains separate below.
+
 ## Open
 
 - [ ] **Djay coalesces zero-delay jump bursts** - A paused-deck MIDI-only check
@@ -174,8 +195,17 @@ Keep completed items and add their completion date and a short evidence note.
   the action did not record a sample in their testing. Its actual behavior
   remains unknown; establish what it does before choosing a useful REC
   assignment rather than assuming it supports sample recording.
-- [ ] **EXT / microphone / line inputs** - Establish S4 input channels and
-  hardware source switching, then determine which routing Djay can support.
+- [ ] **Broader external-audio validation** -
+  The user has confirmed manually selected DVS THRU on channel 4 works with
+  the bridge active, including channel fader, FX and mix/cue. Input-channel
+  mixing is no longer a blocker. The user also confirmed the USB input map:
+  A 1-2, B 3-4, C 5-6, D 7-8, with PHONO/LINE on A/B and LINE/MIC on C/D.
+  Full mixer-control checks on the remaining channels, phono-stage behavior
+  and four-source operation remain unverified. The earlier stopped-bridge headphone result
+  remains unexplained, not a current fault. See the
+  [test record](external-input-routing-test.md),
+  [manual workflow](user-guide.md#external-audio-through-a-deck) and
+  [software comparison](external-input-software-comparison.md).
 
 ## Deferred ideas
 

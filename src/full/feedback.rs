@@ -12,7 +12,7 @@ use midir::os::unix::VirtualInput as _;
 use midir::{MidiInput, MidiInputConnection};
 use tracing::{debug, info, warn};
 
-use super::catalog::EQ_MODE_NOTE;
+use super::catalog::{EQ_MODE_NOTE, EXT_THRU_CC};
 
 const QUEUE_CAPACITY: usize = 4096;
 pub const PAD_COLOR_TOKENS: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -35,6 +35,8 @@ pub struct FeedbackState {
     pub playing: [Option<bool>; 4],
     /// Whether Djay's Neural Mix EQ mode is enabled, independently per deck.
     pub eq_mode: [Option<bool>; 4],
+    /// Confirmed per-deck THRU mode, not the global DVS-enable setting.
+    pub thru: [Option<bool>; 4],
     /// Canonical FX parameters 1-3, then independent slot wet/dry values.
     pub fx_values: [[Option<u8>; 6]; 4],
     instant_fx_order: [[Option<usize>; 4]; 4],
@@ -52,6 +54,7 @@ impl Default for FeedbackState {
             loaded: [None; 4],
             playing: [None; 4],
             eq_mode: [None; 4],
+            thru: [None; 4],
             fx_values: [[None; 6]; 4],
             instant_fx_order: [[None; 4]; 4],
             playback_received: false,
@@ -65,21 +68,31 @@ impl FeedbackState {
         self.instant_fx_order.get(deck)?.first().copied().flatten()
     }
 
+    fn apply_control(&mut self, message: Message) -> Option<bool> {
+        if message.status & 0xf0 != 0xb0 {
+            return None;
+        }
+        let deck = usize::from(message.status & 0x0f);
+        if deck < 4 && message.number == EXT_THRU_CC {
+            let thru = message.value != 0;
+            let changed = self.thru[deck] != Some(thru);
+            self.thru[deck] = Some(thru);
+            return Some(changed);
+        }
+        if deck < 4 && (32..38).contains(&message.number) {
+            let value = &mut self.fx_values[deck][usize::from(message.number - 32)];
+            let changed = *value != Some(message.value);
+            *value = Some(message.value);
+            return Some(changed);
+        }
+        let changed = self.info.apply(message);
+        (deck < 4 && (80..=112).contains(&message.number) || deck == 6 && message.number == 8)
+            .then_some(changed)
+    }
+
     pub fn apply(&mut self, message: Message, now: Duration) -> bool {
-        if message.status & 0xf0 == 0xb0 {
-            let deck = usize::from(message.status & 0x0f);
-            if deck < 4 && (32..38).contains(&message.number) {
-                let value = &mut self.fx_values[deck][usize::from(message.number - 32)];
-                let changed = *value != Some(message.value);
-                *value = Some(message.value);
-                return changed;
-            }
-            let changed = self.info.apply(message);
-            if message.status & 0x0f < 4 && (80..=112).contains(&message.number)
-                || message.status & 0x0f == 6 && message.number == 8
-            {
-                return changed;
-            }
+        if let Some(changed) = self.apply_control(message) {
+            return changed;
         }
         let channel = usize::from(message.status & 0x0f);
         let kind = message.status & 0xf0;
@@ -274,6 +287,54 @@ impl FeedbackInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thru_feedback_is_per_deck_and_independent_of_track_loading() {
+        // Given unknown mode state and the real MIDI stream decoder.
+        let mut state = FeedbackState::default();
+        let mut decoder = Decoder::default();
+        assert_eq!(state.thru, [None; 4]);
+        // When every deck reports a flag, with running status and realtime.
+        for deck in 0_u8..4 {
+            decoder.feed(&[0xb0 | deck, EXT_THRU_CC, 0], |message| {
+                state.apply(message, Duration::ZERO);
+            });
+            assert_eq!(state.thru[usize::from(deck)], Some(false));
+            decoder.feed(&[EXT_THRU_CC, 0xf8, 127], |message| {
+                state.apply(message, Duration::ZERO);
+            });
+            assert_eq!(state.thru[usize::from(deck)], Some(true));
+        }
+        // Then input notes, shifted channels, mixer CCs and unload do not
+        // masquerade as deck-mode feedback or invalidate an independent mode.
+        decoder.feed(
+            &[
+                0x90,
+                27,
+                0,
+                0xb8,
+                EXT_THRU_CC,
+                0,
+                0xb4,
+                EXT_THRU_CC,
+                0,
+                0x86,
+                3,
+                0,
+            ],
+            |message| {
+                state.apply(message, Duration::ZERO);
+            },
+        );
+        assert_eq!(state.thru, [Some(true); 4]);
+        decoder.feed(&[0xb2, EXT_THRU_CC, 0], |message| {
+            state.apply(message, Duration::ZERO);
+        });
+        assert_eq!(
+            state.thru,
+            [Some(true), Some(true), Some(false), Some(true)]
+        );
+    }
 
     #[test]
     fn fx_value_feedback_is_independent_per_deck_and_excludes_input_aliases() {

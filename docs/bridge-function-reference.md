@@ -41,6 +41,34 @@ Existing bounded assist event logs include selected strength, requested release
 torque and the latest decoded sample/age at a motion-stop cancellation. Requested
 torque and accepted native writes do not establish physical force or feel.
 
+### Current-source EXT switching and feedback
+
+Full profile only: physical mixer EXT1-4 always address Djay decks 1-4,
+regardless of deck focus or FX targets. A new unshifted press selects explicit
+`turntableN.controlModeInternal` if the latest actual THRU flag is true, or
+`turntableN.controlModeThru` if false. Unknown feedback sends nothing.
+Every press is consumed until EXT release, including presses suppressed by
+either Shift or missing feedback. Repeated snapshots, Shift release or later
+feedback cannot replay a held press. There is no guessed mode or queued toggle.
+
+On **S4 MK3 MIDI Full**, bridge-to-Djay Note 27 selects Thru and Note 28 selects
+Internal on deck channels 1-4. Djay-to-bridge CC 21 on those same channels
+carries `turntableN.controlModeIsThru`. Channels here are one-based.
+EXT lamps light only for actual true THRU feedback; false/unknown stay dark
+regardless of dim-idle settings.
+
+Either Shift suppresses software EXT commands so hardware Shift+EXT can select
+the input type. DVS enable remains manual and must stay on; no global DVS-enabled
+detection is provided. Input assignment stays in Djay's GUI: A 1-2 PHONO/LINE,
+B 3-4 PHONO/LINE, C 5-6 LINE/MIC C, D 7-8 LINE/MIC D.
+These are USB audio pairs, not MIDI channels.
+
+Install a newly generated matching mapping. This is current-source support,
+not a newly published release. Physical EXT LED payload offsets 80/84/88/92
+are confirmed for A-D; integrated acceptance is tracked in the
+[EXT validation record](ext-input-validation.md). Broader audio validation is separate.
+This overlay supersedes the historical base snapshot's EXT-unassigned claim.
+
 ### Current encoder overlay
 
 Preview uses a complete `musicLibrary.togglePreview` pulse on press and another
@@ -217,12 +245,12 @@ ultimately controls playback, Djay still performs the audio operation.
 | Headphone level and mix | S4 audio hardware | Decode where available, but do not assign duplicate software controls. |
 | Master meter bars | S4 audio hardware | Preserve hardware behavior; separate master clip validation remains open. |
 | Audio playback, sample recording, effects, Neural Mix | Djay and the selected CoreAudio device | HID/MIDI bridge controls operations but does not process, capture, or forward audio. |
-| Live mic/line routing | Djay/CoreAudio and potentially S4 firmware | EXT switching is not implemented; decoding a press is not an audio-routing command. |
+| Live external-input routing | Djay/CoreAudio and S4 hardware source selection | Full-profile EXT selects per-deck THRU/Internal using feedback. DVS enable and input assignments remain manual; the bridge doesn't forward audio. |
 
 ## Not implemented
 
 Playback-driven platter rotation, physical/playback-position ring tracking,
-an on-controller settings menu, live-input deck replacement, a latched Preview
+an on-controller settings menu, a latched Preview
 mode, and automatic same-process mapping-reconnect detection are not present.
 Whole-bank FX bypass and REC's end-to-end sample-recording behavior remain
 unresolved.

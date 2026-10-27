@@ -16,6 +16,26 @@ White-token behavior and master clip indication retain their historical
 unverified status; these are evidence limits, not observed LED defects or
 outstanding normal-use acceptance requirements.
 
+## Current-source EXT indicators
+
+In the full profile, EXT1-4 indicate actual THRU feedback for fixed decks 1-4,
+independent of deck focus and FX targets. Only known true lights the lamp.
+Known false and unknown remain dark regardless of the dim-idle preference;
+pressing EXT never supplies a guessed indicator state.
+
+The new generated mapping sends `turntable1..4.controlModeIsThru` from Djay
+to **S4 MK3 MIDI Full** on CC 21, deck channels 1-4 (one-based).
+Install and select that matching mapping under a new filename.
+This is current-source support, not a newly published release.
+An attended identification confirmed payload offsets 80, 84, 88 and 92 for
+EXT A-D. Integrated switching/indicator acceptance is tracked in the
+[EXT validation record](ext-input-validation.md); earlier LED acceptance
+records don't cover this addition.
+
+THRU feedback doesn't detect global DVS enable or confirm incoming audio.
+Enable DVS manually and leave it on; assign inputs in Djay's GUI as described
+in the [external-audio workflow](user-guide.md#external-audio-through-a-deck).
+
 ## Verified hotcue palette
 
 On October 6, 2026, the user confirmed all eight selectable Djay hotcue

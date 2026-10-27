@@ -475,6 +475,12 @@ impl ButtonRenderer<'_> {
                 79 + channel * 4,
                 self.palette(Color::White, self.local.fx[1] == channel),
             );
+            let ext = if self.feedback.thru[channel] == Some(true) {
+                self.state_raw(Some(127))
+            } else {
+                0
+            };
+            self.set(80 + channel * 4, ext);
             let quick = if let Some(effect) = self.feedback.active_instant_fx(channel) {
                 self.palette(
                     [Color::Red, Color::Green, Color::Blue, Color::Yellow][effect],
@@ -552,6 +558,45 @@ fn cue_color(config: &LedConfig, pad: usize, value: Option<u8>) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ext_lamps_follow_only_actual_thru_feedback_on_their_fixed_channels() {
+        for inactive in [InactiveDisplay::Dim, InactiveDisplay::Dark] {
+            // Given unrelated deck/FX selections and visible idle lamps.
+            let config = LedConfig {
+                active_brightness: 64,
+                inactive_brightness: 50,
+                inactive_display: inactive,
+                ..config()
+            };
+            let local = LocalState {
+                decks: [2, 3],
+                fx: [3, 2],
+                quick: 1,
+                ..LocalState::default()
+            };
+            let mut feedback = feedback();
+            let mut decoder = super::super::feedback::Decoder::default();
+            let mut expected = [0; 4];
+            let report = render_buttons(&config, &feedback, &local);
+            assert_eq!([report[81], report[85], report[89], report[93]], expected);
+            for deck in 0_u8..4 {
+                // When one deck receives real positive/negative THRU output.
+                for value in [127, 0] {
+                    decoder.feed(
+                        &[0xb0 | deck, super::super::catalog::EXT_THRU_CC, value],
+                        |message| {
+                            feedback.apply(message, std::time::Duration::ZERO);
+                        },
+                    );
+                    expected[usize::from(deck)] = if value == 0 { 0 } else { 0x46 };
+                    // Then only that physical EXT lamp changes; known-off stays dark.
+                    let report = render_buttons(&config, &feedback, &local);
+                    assert_eq!([report[81], report[85], report[89], report[93]], expected);
+                }
+            }
+        }
+    }
 
     #[test]
     fn fx_pickup_uses_actual_target_and_keeps_partial_wet_feedback_unknown() {

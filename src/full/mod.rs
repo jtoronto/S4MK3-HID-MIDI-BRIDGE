@@ -158,6 +158,7 @@ struct Translator {
     fx_pickup: [[FxPickup; 6]; 2],
     fx_browse_anchors: [[Option<u8>; 3]; 2],
     eq_selecting: bool,
+    thru: [Option<bool>; 4],
 }
 
 impl Default for Translator {
@@ -192,6 +193,7 @@ impl Default for Translator {
             fx_pickup: [[FxPickup::default(); 6]; 2],
             fx_browse_anchors: [[None; 3]; 2],
             eq_selecting: false,
+            thru: [None; 4],
         }
     }
 }
@@ -1032,6 +1034,35 @@ impl Translator {
         if self.held.contains_key(name) {
             return Ok(());
         }
+        if let Some(deck) = catalog::EXT_INPUTS.iter().position(|input| *input == name) {
+            // Consume even suppressed presses until release; later feedback or
+            // releasing Shift must not turn a held source-select into a switch.
+            self.held.insert(name, Vec::new());
+            if self.shifted.contains(&true) {
+                return Ok(());
+            }
+            let Some(thru) = self.thru[deck] else {
+                warn!(
+                    deck = deck + 1,
+                    "EXT_STATE_UNKNOWN: select the matching feedback mapping"
+                );
+                return Ok(());
+            };
+            let binding = catalog::EXT_BINDINGS[usize::from(thru)];
+            pulse(
+                Address {
+                    channel: u8::try_from(deck)?,
+                    number: binding.number,
+                },
+                output,
+            );
+            info!(
+                deck = deck + 1,
+                mode = if thru { "INT" } else { "THRU" },
+                "EXT_MODE_REQUEST"
+            );
+            return Ok(());
+        }
         let addresses: Vec<_> = self
             .routes(name)?
             .into_iter()
@@ -1179,6 +1210,7 @@ impl Translator {
         feedback: &feedback::FeedbackState,
         output: &mut Vec<[u8; 3]>,
     ) -> anyhow::Result<()> {
+        self.thru = feedback.thru;
         for side in 0..2 {
             let deck = usize::from(self.fx[side].channel());
             for slot in 0..6 {
@@ -1287,6 +1319,132 @@ mod tests {
         let mut output = Vec::new();
         state.translate(controls, None, &mut output)?;
         Ok(output)
+    }
+
+    #[test]
+    fn captured_ext_fields_use_confirmed_modes_on_fixed_decks() -> anyhow::Result<()> {
+        use encdr::core::descriptor::InputItemDesc;
+        use encdr::device::loader::DescriptorRegistry;
+
+        // Given captured EXT bits, the real descriptor and unrelated selectors.
+        let mut registry = DescriptorRegistry::new();
+        registry.load_builtins()?;
+        let original = registry
+            .find(crate::S4_VENDOR_ID, crate::S4_PRODUCT_ID)
+            .context("S4 descriptor missing")?;
+        let descriptor = crate::full_control_descriptor(original)?;
+        let names = registry.intern_descriptor_names(&descriptor);
+        for (deck, (byte, mask)) in
+            (0_u8..4).zip([(11, 0x01_u8), (11, 0x02), (2, 0x02), (11, 0x04)])
+        {
+            let button = descriptor
+                .input_packets
+                .iter()
+                .flat_map(|packet| &packet.items)
+                .find_map(|item| match item {
+                    InputItemDesc::Button(item)
+                        if item.byte == byte && item.mask.0 == u16::from(mask) =>
+                    {
+                        Some(item)
+                    }
+                    _ => None,
+                })
+                .context("captured EXT field missing")?;
+            let name = *names.get(&button.name).context("EXT name missing")?;
+            let mut state = Translator {
+                decks: [Deck::C, Deck::D],
+                fx: [Deck::D, Deck::C],
+                quick: Deck::B,
+                ..Translator::default()
+            };
+            let mut feedback = feedback::FeedbackState::default();
+            feedback::Decoder::default().feed(
+                &[
+                    0xb0 | deck,
+                    catalog::EXT_THRU_CC,
+                    if deck.is_multiple_of(2) { 0 } else { 127 },
+                ],
+                |message| {
+                    feedback.apply(message, Duration::ZERO);
+                },
+            );
+            state.sync_front_panel(&feedback, &mut Vec::new())?;
+            let mut payload = [0_u8; 22];
+            payload[byte] = mask;
+            // When the physical channel's EXT is pressed.
+            let output = run(
+                &mut state,
+                &[Control::Button(name, payload[byte] & mask != 0)],
+            )?;
+            // Then confirmed THRU chooses INT, otherwise THRU, on that fixed deck.
+            let note = if deck.is_multiple_of(2) { 27 } else { 28 };
+            assert_eq!(output, [[0x90 | deck, note, 127], [0x80 | deck, note, 0]]);
+            assert_eq!(state.thru, feedback.thru);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn ext_waits_for_feedback_and_consumes_each_press_until_release() -> anyhow::Result<()> {
+        // Given an unknown mode and a physical EXT hold.
+        let mut state = Translator::default();
+        let mut feedback = feedback::FeedbackState::default();
+        let name = "mixer_ch1_ext";
+        assert!(run(&mut state, &[Control::Button(name, true)])?.is_empty());
+        // When feedback arrives, a held snapshot cannot become a new press.
+        for thru in [false, true] {
+            feedback::Decoder::default().feed(
+                &[0xb0, catalog::EXT_THRU_CC, if thru { 127 } else { 0 }],
+                |message| {
+                    feedback.apply(message, Duration::ZERO);
+                },
+            );
+            state.sync_front_panel(&feedback, &mut Vec::new())?;
+            assert!(run(&mut state, &[Control::Button(name, true)])?.is_empty());
+            assert!(run(&mut state, &[Control::Button(name, false)])?.is_empty());
+            // Then only a fresh press selects the mode; it never guesses the echo.
+            let note = if thru { 28 } else { 27 };
+            assert_eq!(
+                run(&mut state, &[Control::Button(name, true)])?,
+                [[0x90, note, 127], [0x80, note, 0]]
+            );
+            assert_eq!(state.thru, feedback.thru);
+        }
+        let mut released = Vec::new();
+        state.release_all(&mut released);
+        assert!(released.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn either_shift_consumes_ext_without_a_later_unshifted_switch() -> anyhow::Result<()> {
+        for shift in ["left_shift", "right_shift"] {
+            for name in catalog::EXT_INPUTS {
+                // Given known Internal modes on all decks.
+                let mut state = Translator {
+                    thru: [Some(false); 4],
+                    ..Translator::default()
+                };
+                // When EXT precedes Shift in the same snapshot, then it is still suppressed.
+                assert!(
+                    run(
+                        &mut state,
+                        &[Control::Button(name, true), Control::Button(shift, true)]
+                    )?
+                    .is_empty()
+                );
+                assert!(
+                    run(
+                        &mut state,
+                        &[Control::Button(shift, false), Control::Button(name, true)]
+                    )?
+                    .is_empty()
+                );
+                assert!(run(&mut state, &[Control::Button(name, false)])?.is_empty());
+                assert_eq!(run(&mut state, &[Control::Button(name, true)])?.len(), 2);
+            }
+        }
+        Ok(())
     }
 
     #[test]

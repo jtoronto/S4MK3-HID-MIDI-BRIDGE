@@ -12,6 +12,11 @@ and Shift + effect-knob browsing are new since 0.2.0-beta.1. Install the
 0.2.1-beta.1 mapping under a new name,
 preserving custom maps, for Shift + effect-knob browsing.
 
+EXT switching below is a **current-source, full-profile addition**, not a new
+published release. It requires a newly generated matching mapping, installed
+under a new name. EXT lamp locations are confirmed; integrated control
+acceptance is tracked in the [validation record](ext-input-validation.md).
+
 The DJ laptop needs the standalone app, not Rust, Cargo or this repository.
 
 ## Contents
@@ -227,6 +232,82 @@ Filter no longer resets the software filter.
 ON is white for normal EQ and cyan for Neural Mix EQ, brighter on the selected
 Instant FX target. An active Instant FX temporarily takes over its color.
 Dark/unknown feedback is not proof the deck is muted.
+
+### External audio through a deck
+
+Djay can mix an S4 audio input through a deck in **DVS THRU** mode. The
+channel 4 route has been confirmed with the bridge running, including its
+channel fader, FX and mix/cue.
+
+#### Required Djay DVS setup
+
+**Turn on DVS before using EXT.** The bridge cannot enable it for you.
+
+1. Open Djay **Settings > DVS** and check **Enable Digital Vinyl Control**.
+2. Under **Input Sources**, select **Traktor Kontrol S4 MK3** for each deck
+   you want to use with an external source, using the stereo pairs below.
+3. Click **Apply** after changing the assignments. Leave DVS enabled, even
+   when playing normal tracks in **Internal / INT** mode.
+
+For all four channels, configure:
+
+| S4 input | Available source types | USB input channels |
+| --- | --- | --- |
+| A | PHONO / LINE | 1-2 |
+| B | PHONO / LINE | 3-4 |
+| C | LINE / MIC C | 5-6 |
+| D | LINE / MIC D | 7-8 |
+
+![Djay DVS settings with Enable Digital Vinyl Control checked and S4 inputs 1-2, 3-4, 5-6 and 7-8 assigned to Decks 1-4](images/djay-dvs-settings.png)
+
+_Djay Settings > DVS configured for all four S4 inputs. Apply is disabled
+once the assignments have already been applied._
+
+These are audio input channels, not MIDI channels. Selecting another source
+type on the same S4 input does not give it a separate USB pair.
+
+For input D, including the front MIC D socket:
+
+1. Select the appropriate S4 input type with **Shift+EXT**: LINE for rear
+   input D or MIC D for the front microphone. Keep listening levels down
+   while selecting or connecting a source.
+2. Start the full-controller bridge with its matching mapping selected in
+   Djay, after completing the DVS setup above.
+3. With the current-source full profile and matching mapping, press **EXT 4**
+   without Shift to switch Deck 4 from Internal to **Thru** once its mode
+   feedback is available. You can also select Thru in Deck 4's **DVS control-mode
+   menu beside Play**. This is different from the crossfader's THRU assignment.
+4. Set channel level and cue/mix normally. If the same input is also selected
+   as Djay's global Microphone, leave that microphone route off to avoid
+   mixing it through a second path.
+5. Once Djay reports THRU, press **EXT 4** again to choose **Internal / INT**
+   and return to normal track playback, or choose Internal in the same menu.
+
+**Leave Enable Digital Vinyl Control checked** when using external inputs.
+You can leave it on while playing normal tracks in Internal mode. A MIDI
+THRU command does not enable this setting for you, and the available deck-mode
+feedback cannot reliably tell the bridge whether it is off. If an external
+input will not activate, first check this checkbox and the deck's input
+assignment in **Settings > DVS**.
+
+**EXT 1-4 always address decks 1-4**, regardless of A/C, B/D or FX selection.
+Each new unshifted press uses the latest actual THRU feedback: THRU selects
+Internal, and not-THRU selects Thru. Missing feedback means no switch and a
+dark lamp; the bridge doesn't guess or queue a toggle. Release EXT before
+trying again. Holding it cannot repeat a command, even if feedback arrives
+or Shift is released during the hold.
+
+Holding **either Shift** suppresses software EXT commands, leaving
+**Shift+EXT** for hardware input-type selection. The EXT lamp lights only
+when Djay reports THRU for that deck. Not-THRU and unknown state stay dark,
+even with dim idle lamps enabled. A lit lamp doesn't confirm global DVS is
+enabled or that audio is arriving.
+
+The input-pair map and physical EXT lamp locations are confirmed. Integrated
+switching/indicator acceptance is tracked in the
+[validation record](ext-input-validation.md). Complete mixer-control behavior
+on the other channels, phono-stage behavior and four simultaneous external
+sources still need separate validation.
 
 ## Manual FX strips
 
@@ -480,8 +561,12 @@ Copy relevant Diagnostics output and check it for private information.
 - Channel FX1/FX2 choose manual control targets, not shared audio buses.
 - Filter then ON chooses an EQ-mode change; ordinary ON targets Instant FX.
 - MUTE selects the STEMS layer rather than acting as a held modifier.
-- The main FX ON, REC and external-input/EXT routing have
-  the limitations described above; do not assume factory Traktor behavior.
+- The main FX ON and REC have the limitations described above.
+- Current-source full-profile EXT switches fixed decks between THRU and Internal
+  using actual feedback and a new matching mapping. DVS enable and input
+  assignments remain manual. Switching and lamps are confirmed on all four
+  channels; broader audio checks remain separate. Don't assume factory
+  Traktor behavior.
 - Djay can coalesce very rapid separate jump commands. This is distinct from
   the confirmed-size restoration fix.
 

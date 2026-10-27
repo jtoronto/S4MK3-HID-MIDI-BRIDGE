@@ -223,14 +223,21 @@ presses, or the front-panel crossfader switches in the button descriptor.
 Mixer FX offsets 50-54 come from Mixxx and are missing in the pinned descriptor.
 FX1/FX2 selector lights mean **control targeting**, not shared audio-FX routing.
 
-Payload bytes **80,84,88,92** have no named mapping in the inspected descriptor.
-Do not assign these to EXT lights by pattern alone. Keep them zero as in the
-current output buffer until their physical purpose is established. EXT has no
-verified Djay live-input action, so no truthful external-input status is planned.
+Payload bytes **80,84,88,92** were initially unnamed in the inspected descriptor.
+On October 27, 2026, an attended LED-only identification confirmed these are
+the EXT indicators for channels 1/A, 2/B, 3/C and 4/D respectively: one
+`0x80` button report at a time set only the candidate byte to `0x47`, and the
+user identified each corresponding EXT lamp. The probe sent no MIDI, motor,
+screen or ring-initialization commands.
+
+Current-source rendering uses those four bytes for actual per-deck
+`controlModeIsThru` feedback. Known THRU uses the configured active fixed-color
+brightness; known non-THRU and unknown state are dark, regardless of dim-idle
+preferences. See [EXT implementation validation](ext-input-validation.md).
 
 This accounts for all 94 payload positions: 83 named descriptor items,
 two reference tempo indicators, five reference mixer FX lights, and four
-unresolved bytes.
+physically identified EXT indicators.
 
 ## Pads
 

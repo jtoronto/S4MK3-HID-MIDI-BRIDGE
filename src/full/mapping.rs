@@ -9,8 +9,8 @@ use anyhow::{Context as _, Result, ensure};
 use plist::{Dictionary, Value};
 
 use super::catalog::{
-    Binding, DECK_BINDINGS, EQ_MODE_NOTE, FX_LEFT_BINDINGS, FX_RIGHT_BINDINGS, Kind,
-    MIXER_BINDINGS, PadMode, QUICK_BINDINGS, pad_binding,
+    Binding, DECK_BINDINGS, EQ_MODE_NOTE, EXT_BINDINGS, EXT_THRU_CC, FX_LEFT_BINDINGS,
+    FX_RIGHT_BINDINGS, Kind, MIXER_BINDINGS, PadMode, QUICK_BINDINGS, pad_binding,
 };
 use super::feedback::{PAD_COLOR_TOKENS, PAD_WHITE_TOKEN};
 use super::jog;
@@ -46,7 +46,7 @@ pub fn generate_with_jog(jog: &jog::Config) -> Result<Value> {
     let mut outputs = Vec::new();
     let mut output_addresses = BTreeSet::new();
 
-    for binding in DECK_BINDINGS {
+    for binding in DECK_BINDINGS.iter().chain(&EXT_BINDINGS) {
         let mut binding = *binding;
         (binding.sensitivity, binding.acceleration) = match binding.input {
             "jog_scratch" => (Some(jog.scratch_speed), Some(jog.scratch_reaction)),
@@ -75,6 +75,7 @@ pub fn generate_with_jog(jog: &jog::Config) -> Result<Value> {
         push_control(&mut controls, &mut addresses, *binding, binding.target, 4)?;
     }
     push_fx_outputs(&mut outputs, &mut output_addresses)?;
+    push_ext_outputs(&mut outputs, &mut output_addresses)?;
     for deck in 1_u8..=4 {
         for (suffix, data, message_type, meter) in [
             ("monoMeter", deck - 1, 3, true),
@@ -177,6 +178,26 @@ fn push_jump_restores(
         let binding = super::catalog::jump_restore_binding(index)
             .context("jump restoration binding missing")?;
         push_deck_bindings(std::slice::from_ref(&binding), controls, addresses)?;
+    }
+    Ok(())
+}
+
+fn push_ext_outputs(
+    outputs: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+) -> Result<()> {
+    for deck in 1_u8..=4 {
+        push_output(
+            outputs,
+            addresses,
+            OutputSpec {
+                key_path: &format!("turntable{deck}.controlModeIsThru"),
+                channel: deck - 1,
+                data: EXT_THRU_CC,
+                message_type: 3,
+                meter: false,
+            },
+        )?;
     }
     Ok(())
 }
@@ -536,6 +557,86 @@ mod tests {
                     .and_then(Value::as_dictionary)
                     .is_some()
             );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn ext_actions_use_only_their_normal_deck_note_addresses() -> anyhow::Result<()> {
+        let controls = generated_controls()?;
+        let expected = [(27_u64, "controlModeThru"), (28_u64, "controlModeInternal")];
+        for deck in 1_u8..=4 {
+            let channel = u64::from(deck - 1);
+            for (data, action) in expected {
+                let key = format!("turntable{deck}.{action}");
+                let matches: Vec<_> = controls
+                    .iter()
+                    .filter(|control| {
+                        field(control, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                    })
+                    .collect();
+                assert_eq!(matches.len(), 1);
+                let control = matches[0];
+                assert_eq!(
+                    field(control, "midiChannel").and_then(Value::as_unsigned_integer),
+                    Some(channel)
+                );
+                assert_eq!(
+                    field(control, "midiMessageType").and_then(Value::as_unsigned_integer),
+                    Some(1)
+                );
+                assert_eq!(
+                    field(control, "midiData").and_then(Value::as_unsigned_integer),
+                    Some(data)
+                );
+            }
+        }
+        for control in &controls {
+            let data = field(control, "midiData").and_then(Value::as_unsigned_integer);
+            let channel = field(control, "midiChannel").and_then(Value::as_unsigned_integer);
+            if field(control, "midiMessageType").and_then(Value::as_unsigned_integer) == Some(1)
+                && matches!(data, Some(27 | 28))
+            {
+                assert!(matches!(channel, Some(0..=3)));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn ext_thru_feedback_is_boolean_and_deck_addressed() -> anyhow::Result<()> {
+        let outputs = generated_outputs()?;
+        for deck in 1_u8..=4 {
+            let key = format!("turntable{deck}.controlModeIsThru");
+            let matches: Vec<_> = outputs
+                .iter()
+                .filter(|output| {
+                    field(output, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                })
+                .collect();
+            assert_eq!(matches.len(), 1);
+            let output = matches[0];
+            assert_eq!(
+                field(output, "midiChannel").and_then(Value::as_unsigned_integer),
+                Some(u64::from(deck - 1))
+            );
+            assert_eq!(
+                field(output, "midiMessageType").and_then(Value::as_unsigned_integer),
+                Some(3)
+            );
+            assert_eq!(
+                field(output, "midiData").and_then(Value::as_unsigned_integer),
+                Some(u64::from(EXT_THRU_CC))
+            );
+            assert_eq!(
+                field(output, "midiMinValue").and_then(Value::as_unsigned_integer),
+                Some(0)
+            );
+            assert_eq!(
+                field(output, "midiMaxValue").and_then(Value::as_unsigned_integer),
+                Some(127)
+            );
+            assert!(field(output, "controlType").is_none());
         }
         Ok(())
     }

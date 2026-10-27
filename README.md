@@ -58,6 +58,12 @@ to disable Gatekeeper.
    Main and Pre-cue outputs for the speakers and headphones. Audio goes directly
    between Djay and the S4, not through the bridge. Master, booth, headphone
    level, and headphone mix controls remain hardware-local.
+7. **EXT external inputs require DVS to be turned on in Djay.** Open
+   **Settings > DVS**, check **Enable Digital Vinyl Control**, and assign
+   the S4 inputs to the decks: Deck 1 **1-2**, Deck 2 **3-4**, Deck 3 **5-6**,
+   Deck 4 **7-8**. Apply the assignments and leave DVS enabled.
+   EXT does not turn it on automatically. See the
+   [illustrated DVS setup](docs/user-guide.md#required-djay-dvs-setup).
 
 **Expected THRU warning:** when a crossfader assignment switch is set to
 **THRU**, Djay may show a warning triangle. Clicking it opens **"Crossfader
@@ -92,6 +98,12 @@ _Bridge controls and mapping installation._
 This section and the [user guide](docs/user-guide.md) describe the current
 0.2.1-beta.1 build. Backspin continuation, Shift + FX knob browsing and the latest
 lamp/FX-warning corrections are not included in 0.2.0-beta.1.
+
+**Current-source addition:** the full profile supports mixer EXT buttons for
+per-deck THRU/Internal switching and indicators from Djay's actual THRU state.
+Install a newly generated matching mapping. This addition is not a newly
+published release. EXT lamp locations are confirmed; integrated switching
+acceptance is tracked in the [EXT validation record](docs/ext-input-validation.md).
 
 The mapping covers four-deck transport, touch scratching and pitch bending,
 mixing, EQ, headphone cue, loops, browsing, hotcues, samples, Neural Mix, and
@@ -248,8 +260,15 @@ Open bugs and unresolved behavior:
   aren't established.
 - **MUTE/STEMS:** the current alias works as described above, but a possible
   held modifier and final pad behavior are undecided.
-- **EXT, microphone, and line inputs:** S4 input channels, hardware source
-  switching, and supported Djay routing remain unresolved.
+- **EXT and external inputs:** current-source full-profile EXT1-4 switch fixed
+  decks 1-4 between THRU and Internal using actual deck feedback. Missing
+  feedback means no switch and a dark lamp. Either Shift suppresses the software
+  command, preserving hardware Shift+EXT input-type selection. Enable DVS
+  manually, leave it on, and assign inputs in Djay's settings. Channel 4's
+  route is confirmed, including fader, FX and mix/cue. EXT switching and lamps
+  are confirmed on all four channels; remaining mixer-control coverage,
+  phono and four-source audio operation still need validation. See the
+  [external-audio workflow](docs/user-guide.md#external-audio-through-a-deck).
 - **Mapping reconnect/reselection:** automatic detection isn't implemented.
   Stop and start the bridge after either event.
 - **Jog-ring position:** the decorative chase continues while a platter is held

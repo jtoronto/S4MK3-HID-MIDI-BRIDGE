@@ -52,6 +52,7 @@ that an existing bundle has been rebuilt.
 | Shift STEMS pads 1-4 | Exclusive stem solo |
 | REC | Native Record Sample action |
 | Channel strips | Fixed deck 1-4 gain, EQ, volume, filter, and headphone cue |
+| EXT1-4 | Current-source full profile: fixed deck 1-4 THRU/Internal selection from actual feedback; either Shift suppresses software commands for hardware input-type selection |
 | Channel FX1 / FX2 | Select the left/right hardware FX section's deck target |
 | Deck FX buttons | Enable three effects; Shift selects the next effect |
 | FX ON | Current native binding duplicates slot 1; true whole-bank bypass remains unresolved |
@@ -71,6 +72,18 @@ depends on the track and Djay's Neural Mix support. The eight physical pad masks
 are corrected to the S4 order 5, 4, 7, 6, 3, 2, 1, 0.
 
 ## Routing guarantees
+
+Current-source EXT requires a newly generated matching mapping; it is not a
+newly published release. On **S4 MK3 MIDI Full**, bridge-to-Djay Notes 27/28
+select `turntableN.controlModeThru` / `controlModeInternal`; Djay-to-bridge
+CC21 carries `turntableN.controlModeIsThru`, on deck channels 1-4 (one-based).
+Physical mixer EXT1-4 always address decks 1-4, regardless of deck/FX selection.
+Each new unshifted press selects Internal if the latest actual THRU flag is
+true, or Thru if false. Unknown feedback sends nothing and leaves the lamp dark.
+Either Shift suppresses software EXT commands. Every press is consumed until
+release, including presses made with Shift held or feedback missing, so later
+snapshots cannot repeat or queue a switch. EXT lamps light only for actual
+true THRU feedback; false/unknown stay dark regardless of dim-idle preferences.
 
 Encoder naming is corrected for all rotations and only left presses in the
 full profile. Right presses and the minimal profile are unchanged.
@@ -125,8 +138,13 @@ need real testing rather than inference from successful message delivery.
 
 - Master, booth, headphone level, and headphone mix remain hardware-local when
   using the S4's outputs, avoiding duplicate software attenuation.
-- EXT presses are decoded, but no equivalent Djay live-input-selector action
-  has been established. They are not given an arbitrary software assignment.
+- EXT uses Djay's DVS deck mode, not bridge-owned audio forwarding. Enable DVS
+  manually and leave it on; global DVS enable isn't detected. Assign inputs in
+  Djay's GUI: A 1-2 PHONO/LINE, B 3-4 PHONO/LINE, C 5-6 LINE/MIC C,
+  D 7-8 LINE/MIC D. [EXT validation](ext-input-validation.md) confirms the
+  indicator locations and integrated switching. Broader mixer-control,
+  phono and four-simultaneous-source audio checks remain separate. See the
+  [external-audio workflow](user-guide.md#external-audio-through-a-deck).
 - The input mapping does not implement controller emulation, audio forwarding,
   or playback-driven motor rotation. The full runtime separately supports
   optional [screens](screens.md) and saved [jog tension](jog-tension-integration.md).

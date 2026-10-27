@@ -46,6 +46,10 @@ bridge's pinned descriptor labels its fields:
 
 ## Controls compared, historical snapshot
 
+The EXT row below predates current-source support. The
+[EXT overlay](#current-source-ext-overlay) supersedes its unassigned status,
+not its historical evidence.
+
 The table retains the original comparison. Its encoder mapping is superseded
 by the current overlay below; source identifiers in this snapshot aren't a
 description of the corrected full-profile physical naming.
@@ -159,6 +163,31 @@ native key paths:
   browser preview plays through the pre-cue/headphone path. It does not document
   a MIDI seek action for a held preview.
 
+## Current-source EXT overlay
+
+The full profile maps physical mixer EXT1-4 to fixed Djay decks 1-4,
+independent of deck focus and FX selection. Each new unshifted press selects
+Internal if actual THRU feedback is true, or Thru if false. With unknown
+feedback there is no switch and the lamp stays dark. Either Shift suppresses
+software switching, preserving hardware Shift+EXT input-type selection.
+A held press is consumed until release, even if Shift is released or feedback
+arrives later. The lamp lights only from true per-deck THRU feedback;
+false/unknown stay dark regardless of dim-idle settings.
+
+This uses Djay's deck DVS THRU route, not bridge-owned audio forwarding.
+Enable DVS manually and leave it on; input assignments remain GUI setup.
+The confirmed USB pairs are A 1-2 PHONO/LINE, B 3-4 PHONO/LINE,
+C 5-6 LINE/MIC C and D 7-8 LINE/MIC D. THRU feedback doesn't establish
+global DVS enable or audible input.
+
+Install a newly generated matching mapping for this current-source addition;
+it is not a newly published release. [EXT validation](ext-input-validation.md)
+confirms all four indicator addresses, physical switching, mouse-driven
+feedback and Shift suppression. Channel 4's manually selected
+route is confirmed, but remaining mixer-control coverage, phono-stage behavior
+and four simultaneous sources still need validation. See the
+[external-audio workflow](user-guide.md#external-audio-through-a-deck).
+
 ## Explicitly deferred
 
 - **Additional on-device pages and settings:** current source implements Info
@@ -182,7 +211,8 @@ native key paths:
   confirmed-size restoration are implemented. Musical-key feedback ordering
   is fixed and physically verified for replacement/eject. Reconnection still
   requires an explicit bridge restart.
-- **Remaining differences:** EXT routing, REC's end-to-end recording semantics,
+- **Remaining differences:** broader external-audio validation remains pending
+  as above; EXT switching and indicator acceptance are complete. REC's end-to-end recording semantics,
   automatic Reverse+Slip linking, Traktor-style tempo lock and true shared
   FX-bus routing are not established equivalents. Shift+Sync changes the
   global range; channel FX1/FX2 choose control targets rather than audio buses.

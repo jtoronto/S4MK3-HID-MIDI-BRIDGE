@@ -3,6 +3,23 @@
 This stage tests the real S4 MK3 control connection on macOS. It does not implement
 MIDI, a Djay mapping, audio forwarding, screen rendering, or powered jog behavior.
 
+**Current-source EXT overlay:** this stage and its deferred-control notes are
+historical. The full profile now uses physical mixer EXT1-4 for fixed Djay
+decks 1-4, regardless of deck/FX selection. A new unshifted press selects
+Internal when actual THRU feedback is true, or Thru when false. Missing
+feedback means no command and a dark lamp; either Shift suppresses software
+commands for hardware Shift+EXT input-type selection. Each press is consumed
+until release, even if initially suppressed. Lamps light only from true THRU
+feedback, with false/unknown dark regardless of dim-idle settings.
+
+This requires a newly generated matching mapping and manual DVS enable left on;
+input assignments stay in Djay's GUI. It is current-source work, not a newly
+published release. Separate [EXT validation](ext-input-validation.md)
+confirms the LED addresses and integrated switching/indicator behavior.
+The historical input-bit capture below doesn't itself establish LED
+addresses or audio behavior. See the
+[current external-audio workflow](user-guide.md#external-audio-through-a-deck).
+
 ## Dependency and access boundaries
 
 Encdr 0.7.0 is pinned to commit

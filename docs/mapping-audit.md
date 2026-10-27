@@ -27,6 +27,30 @@ sent **from Djay** to the bridge. Neither means an audio input/output.
 
 ## Findings and proposed changes
 
+### Current-source EXT overlay
+
+This supersedes the historical EXT-unassigned row below without changing its
+audit evidence. Full-profile EXT1-4 now address fixed decks 1-4 regardless of
+deck/FX selection. A new unshifted press selects explicit Internal when actual
+THRU feedback is true, or Thru when false. Unknown feedback sends nothing;
+either Shift suppresses the software command for hardware input-type selection.
+All presses are consumed until release, including suppressed presses.
+
+The new generated mapping uses bridge-to-Djay Notes 27/28 for
+`turntableN.controlModeThru` / `controlModeInternal`, and Djay-to-bridge CC21
+for `turntableN.controlModeIsThru`, on deck channels 1-4 (one-based).
+EXT lamps use only actual THRU feedback; false/unknown stay dark even with
+dim-idle lighting. No mode is guessed and no toggle is queued.
+
+Enable DVS manually and leave it on; the bridge doesn't detect global DVS
+enable. Assign inputs in the GUI: A 1-2 PHONO/LINE, B 3-4 PHONO/LINE,
+C 5-6 LINE/MIC C, D 7-8 LINE/MIC D. Install a newly generated matching
+mapping under a new filename. This is current-source work, not a new release.
+All four EXT indicator addresses and integrated switching are confirmed in
+[EXT validation](ext-input-validation.md); remaining mixer-control, phono
+and four-source audio checks are separate.
+See the [current workflow](user-guide.md#external-audio-through-a-deck).
+
 ### Global Shift+Sync tempo range
 
 The user confirmed the Djay UI shares tempo range across decks. The current
@@ -285,7 +309,9 @@ seek command and, for toggle-based preview, reliable preview state.
    Traktor shared audio buses.
 5. Use the implemented encoder layout above and its pending live checks.
    Backspin, REV hold, THRU startup, and Browse direction remain beta issues
-   in the historical findings table. EXT and screens are not implemented.
+   in the historical findings table. Current-source EXT support is described
+   in the overlay above, with live acceptance recorded separately. For current screen
+   support, see the [user guide](user-guide.md#screens-and-feedback).
 6. Change LED appearance in Settings, Save, then restart the bridge. Ring chase
    is decorative; green flash indicates a returned loop state. Local mode
    lamps do not prove the software changed its visible pad panel.

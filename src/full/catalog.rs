@@ -3,6 +3,24 @@
 use super::jog;
 
 pub const EQ_MODE_NOTE: u8 = 20;
+pub const EXT_THRU_CC: u8 = 21;
+
+pub const EXT_INPUTS: [&str; 4] = [
+    "mixer_ch1_ext",
+    "mixer_ch2_ext",
+    "mixer_ch3_ext",
+    "mixer_ch4_ext",
+];
+
+pub const EXT_BINDINGS: [Binding; 2] = [
+    note("ext_thru", 27, "turntable{deck}.controlModeThru", None),
+    note(
+        "ext_internal",
+        28,
+        "turntable{deck}.controlModeInternal",
+        None,
+    ),
+];
 
 pub fn jump_restore_binding(index: usize) -> Option<Binding> {
     let target = *[
@@ -592,7 +610,4 @@ pub const LOCAL_CONTROLS: &[ControlNote] = &[
 ];
 
 /// Controls with no established equivalent native Djay mapping action.
-pub const UNSUPPORTED_CONTROLS: &[ControlNote] = &[ControlNote {
-    name: "EXT",
-    reason: "no verified live-input selector action",
-}];
+pub const UNSUPPORTED_CONTROLS: &[ControlNote] = &[];

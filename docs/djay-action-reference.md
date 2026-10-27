@@ -21,6 +21,36 @@ All channel labels in this document are **MIDI channels 1-based**, as requested.
 
 ## Generated S4 mapping shape
 
+### Current-source EXT overlay
+
+The version-scoped audit counts, tables and S4 usage cells below remain
+historical evidence. Current full-profile source adds these assignments on
+**S4 MK3 MIDI Full**; channel numbers are one-based:
+
+| Direction | Deck channels | Message | Djay key |
+| --- | --- | --- | --- |
+| Bridge to Djay | 1-4 | Note 27 | `turntableN.controlModeThru` |
+| Bridge to Djay | 1-4 | Note 28 | `turntableN.controlModeInternal` |
+| Djay to bridge | 1-4 | CC 21 | `turntableN.controlModeIsThru` |
+
+Here N is the fixed physical mixer channel/deck 1-4, not the selected deck or
+FX target. A new unshifted EXT press selects Internal when actual THRU feedback
+is true, or Thru when false. Unknown feedback sends nothing. Either Shift
+suppresses software commands, preserving hardware Shift+EXT source selection.
+All presses are consumed until release, including those suppressed by Shift
+or missing feedback; no guessed mode or queued toggle is used.
+Only actual true THRU feedback lights EXT; false/unknown stay dark even with
+dim-idle lighting.
+
+Install a newly generated matching mapping. DVS enable remains manual and must
+stay on; this feedback isn't a global DVS-enabled signal. Input assignments
+remain in Djay's GUI. This is current-source support, not a newly published
+release. LED byte locations and integrated switching/indicator behavior
+are confirmed in [EXT validation](ext-input-validation.md). See the
+[input setup and validation limits](user-guide.md#external-audio-through-a-deck).
+
+### Earlier current-source overlays and audited shape
+
 Current source builds add explicit FX model-value outputs on deck-channel
 CC 32-37 (`turntableN.fx1/2/3.parameterValue` and `.wetDryValue`, control type).
 Embedded absolute feedback produced misleading zero snapshots in native testing
