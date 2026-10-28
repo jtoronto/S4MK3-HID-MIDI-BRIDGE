@@ -4,7 +4,7 @@ use anyhow::{Context as _, bail};
 use crossbeam_channel::{Receiver, TryRecvError, select_biased};
 use s4mk3_hid_midi_bridge::{
     jog::decode::FRESHNESS_US,
-    tension::{Engine, neutral_report},
+    tension::{Engine, PlaybackState, neutral_report},
 };
 use std::time::Duration;
 use tracing::{info, warn};
@@ -15,6 +15,7 @@ pub enum Action<'a> {
     Initialize,
     Motor([u8; 11]),
     Frame(&'a Frame, &'a mut [bool; 2]),
+    Playback(u64, &'a mut PlaybackState),
     Feedback(u64),
     Screens,
 }
@@ -66,7 +67,12 @@ impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
         Ok(())
     }
 
-    fn sample(&mut self, engine: &mut Engine, frame: &Frame, now_us: u64) -> anyhow::Result<()> {
+    pub(super) fn sample(
+        &mut self,
+        engine: &mut Engine,
+        frame: &Frame,
+        now_us: u64,
+    ) -> anyhow::Result<()> {
         self.expire_tension(engine, now_us)?;
         if self.recovery_since_us.is_none_or(|suspended_us| {
             frame.host_us > suspended_us && now_us.saturating_sub(frame.host_us) <= FRESHNESS_US
@@ -88,7 +94,33 @@ impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
         if let Some(report) = engine.set_backspin(backspin) {
             (self.service)(Action::Motor(report))?;
         }
+        self.playback(engine, now_us)?;
         self.input_seen = true;
+        Ok(())
+    }
+
+    fn playback(&mut self, engine: &mut Engine, now_us: u64) -> anyhow::Result<()> {
+        let mut state = PlaybackState::default();
+        (self.service)(Action::Playback(now_us, &mut state))?;
+        if let Some(report) = engine.set_playback(state) {
+            (self.service)(Action::Motor(report))?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn tick(&mut self, engine: &mut Engine, tick_us: u64) -> anyhow::Result<()> {
+        self.expire_tension(engine, tick_us)?;
+        self.playback(engine, tick_us)?;
+        let report = if self.recovery_since_us.is_some() {
+            neutral_report()
+        } else {
+            engine.tick(tick_us)?
+        };
+        (self.service)(Action::Motor(report))?;
+        (self.service)(Action::Feedback(tick_us))?;
+        if self.input_seen {
+            (self.service)(Action::Screens)?;
+        }
         Ok(())
     }
 }
@@ -138,18 +170,7 @@ where
                 return Ok(());
             }
             let tick_us = clock()?;
-            output.expire_tension(engine, tick_us)?;
-            let report = if output.recovery_since_us.is_some() {
-                neutral_report()
-            } else {
-                engine.tick(tick_us)?
-            };
-            (output.service)(Action::Motor(report))?;
-            (output.service)(Action::Feedback(tick_us))?;
-            if output.input_seen {
-                // Screen USB starts only after input and a complete native LED tick.
-                (output.service)(Action::Screens)?;
-            }
+            output.tick(engine, tick_us)?;
             // No bursts to catch up slots consumed by MIDI, logging or native I/O.
             next_tick_us = tick_us.saturating_add(INTERVAL_US);
             continue;

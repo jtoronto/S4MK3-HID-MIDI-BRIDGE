@@ -33,13 +33,21 @@ enum MidiProfile {
     Full,
 }
 
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum ReplayFixture {
+    Playback,
+}
+
 #[derive(Debug, Parser)]
 #[command(
     version,
     about,
-    group(clap::ArgGroup::new("jog_context").args(["generate_mapping", "midi"]))
+    group(clap::ArgGroup::new("jog_context").args(["generate_mapping", "midi", "replay_motor_fixture"]))
 )]
 struct Args {
+    /// Replay the built-in motor playback fixture without opening HID or MIDI.
+    #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "playback", conflicts_with_all = ["midi", "list", "generate_mapping", "generate_screen_previews", "raw"])]
+    replay_motor_fixture: Option<ReplayFixture>,
     /// List attached S4 MK3 devices without opening their USB interfaces.
     #[arg(long)]
     list: bool,
@@ -112,6 +120,7 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     ensure!(
         args.jog_config.is_none()
+            || args.replay_motor_fixture.is_some()
             || args.generate_mapping.is_some()
             || matches!(args.midi, Some(MidiProfile::Full)),
         "--jog-config requires mapping export or --midi full"
@@ -141,8 +150,13 @@ fn main() -> anyhow::Result<()> {
         .with_env_filter(EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?)
         .with_target(false)
         .with_ansi(false)
+        .with_writer(std::io::stderr)
         .try_init()
         .map_err(|error| anyhow::anyhow!("initialize logging: {error}"))?;
+
+    if args.replay_motor_fixture.is_some() {
+        return bridge_runtime::replay::run(full::jog::Config::load(args.jog_config.as_deref())?);
+    }
 
     if let Some(path) = &args.generate_mapping {
         full::mapping::write(path, args.jog_config.as_deref())?;
@@ -174,10 +188,8 @@ fn main() -> anyhow::Result<()> {
     if let Some(jog) = jog {
         jog.validate()?;
     }
-    let tension = tension.or_else(|| {
-        jog.filter(full::jog::Config::motor_assist_enabled)
-            .map(|_| s4mk3_hid_midi_bridge::tension::Config::default())
-    });
+    let tension =
+        tension.or_else(|| jog.map(|_| s4mk3_hid_midi_bridge::tension::Config::default()));
     open_and_run(&args, tension, jog)
 }
 

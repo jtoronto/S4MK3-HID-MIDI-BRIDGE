@@ -7,5 +7,16 @@
   "backspin_assist_enabled": true,
   "backspin_assist_strength": 100,
   "backspin_acceleration": 150000.0,
-  "backspin_speed_increase": 5.6
+  "backspin_speed_increase": 5.6,
+  "vinyl_enabled_at_startup": true,
+  "platter_target_rpm": 33,
+  "platter_max_force": 20000,
+  "platter_base_force": 1650,
+  "platter_force_per_rpm": 110,
+  "platter_kp": 4000,
+  "platter_ki": 3000,
+  "platter_force_rise_per_second": 200000,
+  "platter_startup_ms": 200,
+  "platter_startup_force_rise_per_second": 0,
+  "platter_overspeed_limit_rpm": 0
 }

@@ -29,7 +29,7 @@ fn recovery_skips_snapshots_that_aged_during_the_neutral_write() -> anyhow::Resu
                     stop_tx.send(())?;
                 }
             }
-            Action::Initialize | Action::Screens => {}
+            Action::Initialize | Action::Screens | Action::Playback(..) => {}
         }
         Ok(())
     })?;
@@ -100,7 +100,7 @@ fn repeated_gaps_require_new_movement_and_keep_each_wheels_touch_gate() -> anyho
                     stop_tx.send(())?;
                 }
             }
-            Action::Initialize | Action::Screens => {}
+            Action::Initialize | Action::Screens | Action::Playback(..) => {}
         }
         Ok(())
     })?;

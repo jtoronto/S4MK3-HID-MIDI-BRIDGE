@@ -199,6 +199,17 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(base.backspinSpeedIncrease, 5.6)
         XCTAssertTrue(base.backspinAssistEnabled)
         XCTAssertEqual(base.backspinAssistStrength, 100)
+        XCTAssertTrue(base.vinylEnabledAtStartup)
+        XCTAssertEqual(base.platterTargetRpm, 33)
+        XCTAssertEqual(base.platterMaxForce, 20000)
+        XCTAssertEqual(base.platterBaseForce, 1650)
+        XCTAssertEqual(base.platterForcePerRpm, 110)
+        XCTAssertEqual(base.platterKp, 4000)
+        XCTAssertEqual(base.platterKi, 3000)
+        XCTAssertEqual(base.platterForceRisePerSecond, 200000)
+        XCTAssertEqual(base.platterStartupForceRisePerSecond, 0)
+        XCTAssertEqual(base.platterStartupMs, 200)
+        XCTAssertEqual(base.platterOverspeedLimitRpm, 0)
         XCTAssertEqual(base, JogPreferences())
         XCTAssertEqual(base, try JogPreferences.decode(base.encoded(), defaults: defaults))
         let fourFieldSaved = Data(#"{"scratch_speed":3.5,"scratch_reaction":140,"pitch_bend_speed":2.2,"pitch_bend_reaction":42}"#.utf8)
@@ -211,6 +222,9 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(mergedFourField.backspinAcceleration, 150000.0)
         XCTAssertEqual(mergedFourField.backspinSpeedIncrease, 5.6)
         XCTAssertTrue(mergedFourField.backspinAssistEnabled)
+        XCTAssertTrue(mergedFourField.vinylEnabledAtStartup)
+        XCTAssertEqual(mergedFourField.platterTargetRpm, 33)
+        XCTAssertEqual(mergedFourField.platterMaxForce, 20000)
         let sevenFieldSaved = Data(#"{"scratch_speed":2.7,"scratch_reaction":150,"pitch_bend_speed":2.7,"pitch_bend_reaction":17,"backspin_enabled":true,"backspin_acceleration":150000.0,"backspin_speed_increase":5.2}"#.utf8)
         let mergedSevenField = try JogPreferences.decode(sevenFieldSaved, defaults: defaults)
         XCTAssertEqual(mergedSevenField.scratchSpeed, 2.7)
@@ -222,13 +236,29 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(mergedSevenField.backspinSpeedIncrease, 5.2)
         XCTAssertTrue(mergedSevenField.backspinAssistEnabled)
         XCTAssertEqual(mergedSevenField.backspinAssistStrength, 100)
+        XCTAssertTrue(mergedSevenField.vinylEnabledAtStartup)
+        XCTAssertEqual(mergedSevenField.platterTargetRpm, 33)
+        let nineFieldLegacy = Data(#"{"scratch_speed":2.7,"scratch_reaction":150,"pitch_bend_speed":2.7,"pitch_bend_reaction":17,"backspin_enabled":true,"backspin_assist_enabled":true,"backspin_assist_strength":80,"backspin_acceleration":150000.0,"backspin_speed_increase":5.6}"#.utf8)
+        let mergedNineField = try JogPreferences.decode(nineFieldLegacy, defaults: nineFieldLegacy)
+        XCTAssertEqual(mergedNineField.backspinAssistStrength, 80)
+        XCTAssertTrue(mergedNineField.vinylEnabledAtStartup)
+        XCTAssertEqual(mergedNineField.platterTargetRpm, 33)
+        XCTAssertEqual(mergedNineField.platterMaxForce, 20000)
+        XCTAssertEqual(mergedNineField.platterBaseForce, 1650)
+        XCTAssertEqual(mergedNineField.platterForcePerRpm, 110)
+        XCTAssertEqual(mergedNineField.platterKp, 4000)
+        XCTAssertEqual(mergedNineField.platterKi, 3000)
+        XCTAssertEqual(mergedNineField.platterForceRisePerSecond, 200000)
+        XCTAssertEqual(mergedNineField.platterStartupForceRisePerSecond, 0)
+        XCTAssertEqual(mergedNineField.platterStartupMs, 200)
+        XCTAssertEqual(mergedNineField.platterOverspeedLimitRpm, 0)
         let savedOff = Data(#"{"backspin_speed_increase":0.0,"backspin_assist_enabled":false,"backspin_assist_strength":37}"#.utf8)
         let keptOff = try JogPreferences.decode(savedOff, defaults: defaults)
         XCTAssertEqual(keptOff.backspinSpeedIncrease, 0.0)
         XCTAssertFalse(keptOff.backspinAssistEnabled)
         XCTAssertEqual(keptOff.backspinAssistStrength, 37)
         XCTAssertEqual(keptOff, try JogPreferences.decode(keptOff.encoded(), defaults: defaults))
-        let override = Data(#"{"scratch_speed":3.5,"pitch_bend_reaction":42,"backspin_enabled":false,"backspin_acceleration":200000.0,"backspin_speed_increase":5.2,"backspin_assist_enabled":true,"backspin_assist_strength":37}"#.utf8)
+        let override = Data(#"{"scratch_speed":3.5,"pitch_bend_reaction":42,"backspin_enabled":false,"backspin_acceleration":200000.0,"backspin_speed_increase":5.2,"backspin_assist_enabled":true,"backspin_assist_strength":37,"vinyl_enabled_at_startup":false,"platter_target_rpm":45,"platter_max_force":18000,"platter_base_force":1500,"platter_force_per_rpm":120,"platter_kp":4500,"platter_ki":2500,"platter_force_rise_per_second":250000,"platter_startup_force_rise_per_second":50000,"platter_startup_ms":300,"platter_overspeed_limit_rpm":90}"#.utf8)
         let changed = try JogPreferences.decode(override, defaults: defaults)
         XCTAssertEqual(changed.scratchSpeed, 3.5)
         XCTAssertEqual(changed.pitchBendReaction, 42)
@@ -237,8 +267,20 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(changed.backspinSpeedIncrease, 5.2)
         XCTAssertTrue(changed.backspinAssistEnabled)
         XCTAssertEqual(changed.backspinAssistStrength, 37)
+        XCTAssertFalse(changed.vinylEnabledAtStartup)
+        XCTAssertEqual(changed.platterTargetRpm, 45)
+        XCTAssertEqual(changed.platterMaxForce, 18000)
+        XCTAssertEqual(changed.platterBaseForce, 1500)
+        XCTAssertEqual(changed.platterForcePerRpm, 120)
+        XCTAssertEqual(changed.platterKp, 4500)
+        XCTAssertEqual(changed.platterKi, 2500)
+        XCTAssertEqual(changed.platterForceRisePerSecond, 250000)
+        XCTAssertEqual(changed.platterStartupForceRisePerSecond, 50000)
+        XCTAssertEqual(changed.platterStartupMs, 300)
+        XCTAssertEqual(changed.platterOverspeedLimitRpm, 90)
         XCTAssertEqual(changed.scratchReaction, base.scratchReaction)
         XCTAssertEqual(changed.pitchBendSpeed, base.pitchBendSpeed)
+        XCTAssertEqual(changed, try JogPreferences.decode(changed.encoded(), defaults: defaults))
         let keys = try XCTUnwrap(JSONSerialization.jsonObject(with: base.encoded()) as? [String: Any])
         XCTAssertNotNil(keys["scratch_speed"])
         XCTAssertNotNil(keys["pitch_bend_reaction"])
@@ -247,10 +289,32 @@ final class BridgeTests: XCTestCase {
         XCTAssertNotNil(keys["backspin_speed_increase"])
         XCTAssertNotNil(keys["backspin_assist_enabled"])
         XCTAssertEqual(keys["backspin_assist_strength"] as? Int, 100)
+        XCTAssertEqual(keys["vinyl_enabled_at_startup"] as? Bool, true)
+        XCTAssertEqual(keys["platter_target_rpm"] as? Int, 33)
+        XCTAssertEqual(keys["platter_max_force"] as? Int, 20000)
+        XCTAssertEqual(keys["platter_base_force"] as? Int, 1650)
+        XCTAssertEqual(keys["platter_force_per_rpm"] as? Int, 110)
+        XCTAssertEqual(keys["platter_kp"] as? Int, 4000)
+        XCTAssertEqual(keys["platter_ki"] as? Int, 3000)
+        XCTAssertEqual(keys["platter_force_rise_per_second"] as? Int, 200000)
+        XCTAssertEqual(keys["platter_startup_force_rise_per_second"] as? Int, 0)
+        XCTAssertEqual(keys["platter_startup_ms"] as? Int, 200)
+        XCTAssertEqual(keys["platter_overspeed_limit_rpm"] as? Int, 0)
         XCTAssertNil(keys["scratchSpeed"])
         XCTAssertNil(keys["backspinEnabled"])
         XCTAssertNil(keys["backspinAssistEnabled"])
         XCTAssertNil(keys["backspinAssistStrength"])
+        XCTAssertNil(keys["vinylEnabledAtStartup"])
+        XCTAssertNil(keys["platterTargetRpm"])
+        XCTAssertNil(keys["platterMaxForce"])
+        XCTAssertNil(keys["platterBaseForce"])
+        XCTAssertNil(keys["platterForcePerRpm"])
+        XCTAssertNil(keys["platterKp"])
+        XCTAssertNil(keys["platterKi"])
+        XCTAssertNil(keys["platterForceRisePerSecond"])
+        XCTAssertNil(keys["platterStartupForceRisePerSecond"])
+        XCTAssertNil(keys["platterStartupMs"])
+        XCTAssertNil(keys["platterOverspeedLimitRpm"])
         for input in [
             #"{"scratch_speed":0}"#, #"{"scratch_speed":-2.5}"#,
             #"{"pitch_bend_speed":0}"#, #"{"scratch_reaction":-1}"#,
@@ -265,7 +329,29 @@ final class BridgeTests: XCTestCase {
             #"{"backspin_assist_strength":1.5}"#, #"{"backspin_assist_strength":1.0}"#,
             #"{"backspin_assist_strength":1e2}"#, #"{"backspin_assist_strength":true}"#,
             #"{"backspin_assist_strength":false}"#, #"{"backspin_assist_strength":"50"}"#,
-            #"{"backspin_assist_strength":null}"#
+            #"{"backspin_assist_strength":null}"#,
+            #"{"vinyl_enabled_at_startup":1}"#, #"{"vinyl_enabled_at_startup":"true"}"#,
+            #"{"vinyl_enabled_at_startup":null}"#,
+            #"{"platter_target_rpm":0}"#, #"{"platter_target_rpm":46}"#,
+            #"{"platter_target_rpm":33.0}"#, #"{"platter_target_rpm":true}"#,
+            #"{"platter_max_force":0}"#, #"{"platter_max_force":25001}"#,
+            #"{"platter_max_force":20000.0}"#, #"{"platter_max_force":false}"#,
+            #"{"platter_base_force":-1}"#, #"{"platter_base_force":25001}"#,
+            #"{"platter_base_force":1650.0}"#,
+            #"{"platter_force_per_rpm":-1}"#, #"{"platter_force_per_rpm":25001}"#,
+            #"{"platter_force_per_rpm":110.5}"#,
+            #"{"platter_kp":-1}"#, #"{"platter_kp":25001}"#,
+            #"{"platter_kp":4000.0}"#,
+            #"{"platter_ki":-1}"#, #"{"platter_ki":25001}"#,
+            #"{"platter_ki":3000.0}"#,
+            #"{"platter_force_rise_per_second":-1}"#, #"{"platter_force_rise_per_second":1000001}"#,
+            #"{"platter_force_rise_per_second":1e5}"#,
+            #"{"platter_startup_force_rise_per_second":-1}"#, #"{"platter_startup_force_rise_per_second":1000001}"#,
+            #"{"platter_startup_force_rise_per_second":0.0}"#,
+            #"{"platter_startup_ms":-1}"#, #"{"platter_startup_ms":2001}"#,
+            #"{"platter_startup_ms":200.0}"#,
+            #"{"platter_overspeed_limit_rpm":-1}"#, #"{"platter_overspeed_limit_rpm":251}"#,
+            #"{"platter_overspeed_limit_rpm":71.0}"#
         ] {
             XCTAssertThrowsError(try JogPreferences.decode(Data(input.utf8), defaults: defaults), input)
         }
@@ -279,6 +365,77 @@ final class BridgeTests: XCTestCase {
         var nonFiniteIncrease = base
         nonFiniteIncrease.backspinSpeedIncrease = .nan
         XCTAssertThrowsError(try nonFiniteIncrease.validate())
+    }
+
+    func testMotorizedPlatterBoundsAndIntegerJSONTypes() throws {
+        let defaults = try jogDefaultsData()
+        let fields: [(String, WritableKeyPath<JogPreferences, Int>, ClosedRange<Int>)] = [
+            ("platter_target_rpm", \.platterTargetRpm, 1...45),
+            ("platter_max_force", \.platterMaxForce, 1...25000),
+            ("platter_base_force", \.platterBaseForce, 0...25000),
+            ("platter_force_per_rpm", \.platterForcePerRpm, 0...25000),
+            ("platter_kp", \.platterKp, 0...25000),
+            ("platter_ki", \.platterKi, 0...25000),
+            ("platter_force_rise_per_second", \.platterForceRisePerSecond, 0...1000000),
+            ("platter_startup_force_rise_per_second", \.platterStartupForceRisePerSecond, 0...1000000),
+            ("platter_startup_ms", \.platterStartupMs, 0...2000),
+            ("platter_overspeed_limit_rpm", \.platterOverspeedLimitRpm, 0...250)
+        ]
+        for (key, path, range) in fields {
+            for bound in [range.lowerBound, range.upperBound] {
+                var value = JogPreferences()
+                value[keyPath: path] = bound
+                XCTAssertEqual(try JogPreferences.decode(value.encoded(), defaults: defaults), value, key)
+                let partial = Data("{\"\(key)\":\(bound)}".utf8)
+                XCTAssertEqual(try JogPreferences.decode(partial, defaults: defaults)[keyPath: path], bound, key)
+            }
+            for invalid in [range.lowerBound - 1, range.upperBound + 1] {
+                var value = JogPreferences()
+                value[keyPath: path] = invalid
+                XCTAssertThrowsError(try value.encoded(), key)
+            }
+            for token in ["true", "false", "null", "\"33\"", "[]", "{}", "1.0", "1e0", "1.5"] {
+                let invalid = Data("{\"\(key)\":\(token)}".utf8)
+                XCTAssertThrowsError(try JogPreferences.decode(invalid, defaults: defaults), "\(key): \(token)")
+            }
+        }
+    }
+
+    @MainActor
+    func testInvalidMotorizedPlatterPreferencesPreserveSavedFiles() throws {
+        let fixture = try makeFixture()
+        let support = fixture.appendingPathComponent("support")
+        let model = try testController(resourceURL: fixture, supportURL: support)
+        model.leds.loopColor = "blue"
+        model.tension.tension = 42
+        model.run.logLevel = "debug"
+        model.jog.scratchSpeed = 3.5
+        try model.save()
+        let urls = [model.jogURL, model.ledURL, model.tensionURL, model.runURL]
+        let saved = try urls.map { try Data(contentsOf: $0) }
+        model.jog.platterTargetRpm = 46
+        model.apply()
+        XCTAssertFalse(model.errorMessage.isEmpty)
+        XCTAssertEqual(model.state, .stopped)
+        XCTAssertFalse(model.hasChildProcess)
+        XCTAssertEqual(try urls.map { try Data(contentsOf: $0) }, saved)
+
+        let invalid = Data(#"{"platter_max_force":25001}"#.utf8)
+        try invalid.write(to: model.jogURL)
+        let broken = try testController(resourceURL: fixture, supportURL: support)
+        XCTAssertTrue(broken.requiresReset)
+        XCTAssertEqual(broken.leds, model.leds)
+        XCTAssertEqual(broken.tension, model.tension)
+        XCTAssertEqual(broken.run, model.run)
+        XCTAssertThrowsError(try broken.save())
+        XCTAssertEqual(try Data(contentsOf: broken.jogURL), invalid)
+        broken.resetPreferences()
+        XCTAssertEqual(broken.jog, JogPreferences())
+        XCTAssertEqual(try Data(contentsOf: broken.jogURL), invalid)
+        try broken.save()
+        let restored = try testController(resourceURL: fixture, supportURL: support)
+        XCTAssertFalse(restored.requiresReset)
+        XCTAssertEqual(restored.jog, JogPreferences())
     }
 
     @MainActor
@@ -303,9 +460,31 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(persisted.jog.backspinSpeedIncrease, 5.2)
         XCTAssertTrue(persisted.jog.backspinAssistEnabled)
         XCTAssertEqual(persisted.jog.backspinAssistStrength, 100)
+        XCTAssertTrue(persisted.jog.vinylEnabledAtStartup)
+        XCTAssertEqual(persisted.jog.platterTargetRpm, 33)
+        XCTAssertEqual(persisted.jog.platterMaxForce, 20000)
+        XCTAssertEqual(persisted.jog.platterBaseForce, 1650)
+        XCTAssertEqual(persisted.jog.platterForcePerRpm, 110)
+        XCTAssertEqual(persisted.jog.platterKp, 4000)
+        XCTAssertEqual(persisted.jog.platterKi, 3000)
+        XCTAssertEqual(persisted.jog.platterForceRisePerSecond, 200000)
+        XCTAssertEqual(persisted.jog.platterStartupForceRisePerSecond, 0)
+        XCTAssertEqual(persisted.jog.platterStartupMs, 200)
+        XCTAssertEqual(persisted.jog.platterOverspeedLimitRpm, 0)
         persisted.jog.backspinAssistEnabled = true
         persisted.jog.backspinAssistStrength = 37
         persisted.jog.backspinEnabled = false
+        persisted.jog.vinylEnabledAtStartup = false
+        persisted.jog.platterTargetRpm = 45
+        persisted.jog.platterMaxForce = 16000
+        persisted.jog.platterBaseForce = 1500
+        persisted.jog.platterForcePerRpm = 100
+        persisted.jog.platterKp = 3500
+        persisted.jog.platterKi = 2000
+        persisted.jog.platterForceRisePerSecond = 150000
+        persisted.jog.platterStartupForceRisePerSecond = 25000
+        persisted.jog.platterStartupMs = 150
+        persisted.jog.platterOverspeedLimitRpm = 80
         XCTAssertTrue(persisted.jog.backspinAssistEnabled)
         try persisted.save()
         let reloaded = try testController(resourceURL: fixture, supportURL: support)
@@ -314,6 +493,17 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(reloaded.jog.backspinSpeedIncrease, 5.2)
         XCTAssertTrue(reloaded.jog.backspinAssistEnabled)
         XCTAssertEqual(reloaded.jog.backspinAssistStrength, 37)
+        XCTAssertFalse(reloaded.jog.vinylEnabledAtStartup)
+        XCTAssertEqual(reloaded.jog.platterTargetRpm, 45)
+        XCTAssertEqual(reloaded.jog.platterMaxForce, 16000)
+        XCTAssertEqual(reloaded.jog.platterBaseForce, 1500)
+        XCTAssertEqual(reloaded.jog.platterForcePerRpm, 100)
+        XCTAssertEqual(reloaded.jog.platterKp, 3500)
+        XCTAssertEqual(reloaded.jog.platterKi, 2000)
+        XCTAssertEqual(reloaded.jog.platterForceRisePerSecond, 150000)
+        XCTAssertEqual(reloaded.jog.platterStartupForceRisePerSecond, 25000)
+        XCTAssertEqual(reloaded.jog.platterStartupMs, 150)
+        XCTAssertEqual(reloaded.jog.platterOverspeedLimitRpm, 80)
 
         let invalid = Data(#"{"scratch_reaction":151}"#.utf8)
         try invalid.write(to: support.appendingPathComponent("jog-config.json"))
@@ -482,6 +672,101 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(try TensionPreferences.decode(Data(contentsOf: received), defaults: tensionDefaultsData()).tension, 60)
         XCTAssertTrue(model.commandPreview.contains("--tension-config"))
         XCTAssertTrue(model.commandPreview.contains("--screens"))
+        finalStop = true
+        model.stop()
+        await fulfillment(of: [stopped], timeout: 10)
+        withExtendedLifetime((output, state)) {}
+        XCTAssertFalse(model.isBusy)
+    }
+
+    @MainActor
+    func testMotorizedPlatterSaveAndRestartForwardsJogConfigurationAndPreservesUnrelatedPreferences() async throws {
+        let fixture = try makeFixture()
+        let receivedJog = fixture.appendingPathComponent("received-jog.json")
+        let fifo = fixture.appendingPathComponent("control.fifo")
+        XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
+        let descriptor = Darwin.open(fifo.path, O_RDWR)
+        guard descriptor >= 0 else { throw AppError.invalid("Could not open test FIFO.") }
+        defer { XCTAssertEqual(Darwin.close(descriptor), 0) }
+        let executable = fixture.appendingPathComponent("s4mk3-hid-midi-bridge")
+        let script = """
+        #!/bin/sh
+        trap 'exit 0' INT
+        jog=""
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --jog-config) jog="$2"; shift 2;;
+            *) shift;;
+          esac
+        done
+        [ -n "$jog" ] || exit 2
+        cp "$jog" '\(receivedJog.path)' || exit 3
+        exec 3< '\(fifo.path)'
+        printf 'JOG_READY\\n'
+        IFS= read -r line <&3
+        """
+        try Data(script.utf8).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        let model = try testController(resourceURL: fixture, supportURL: fixture.appendingPathComponent("support"))
+        model.leds.loopColor = "cyan"
+        model.tension.tension = -20
+        model.run.logLevel = "debug"
+        model.jog.vinylEnabledAtStartup = false
+        model.jog.platterTargetRpm = 45
+        model.jog.platterMaxForce = 18000
+        model.jog.platterBaseForce = 1500
+        model.jog.platterForcePerRpm = 120
+        model.jog.platterKp = 4500
+        model.jog.platterKi = 2500
+        model.jog.platterForceRisePerSecond = 250000
+        model.jog.platterStartupForceRisePerSecond = 50000
+        model.jog.platterStartupMs = 150
+        model.jog.platterOverspeedLimitRpm = 85
+
+        let ready = expectation(description: "helper read initial motorized platter jog config")
+        let restarted = expectation(description: "restarted helper read updated motorized platter jog config")
+        let stopped = expectation(description: "restarted helper exited after final stop")
+        var readyCount = 0
+        var finalStop = false
+        let output = model.$log.sink { text in
+            let count = text.components(separatedBy: "JOG_READY").count - 1
+            if count > readyCount {
+                readyCount = count
+                if count == 1 { ready.fulfill() }
+                if count == 2 { restarted.fulfill() }
+            }
+        }
+        let state = model.$state.sink { state in
+            if finalStop && state == .stopped { stopped.fulfill() }
+        }
+        model.start()
+        await fulfillment(of: [ready], timeout: 10)
+        let initialDecoded = try JogPreferences.decode(Data(contentsOf: receivedJog), defaults: jogDefaultsData())
+        XCTAssertEqual(initialDecoded, model.jog)
+        XCTAssertFalse(initialDecoded.vinylEnabledAtStartup)
+        XCTAssertEqual(initialDecoded.platterTargetRpm, 45)
+        XCTAssertEqual(initialDecoded.platterMaxForce, 18000)
+
+        let savedLedData = try Data(contentsOf: model.ledURL)
+        let savedTensionData = try Data(contentsOf: model.tensionURL)
+        let savedRunData = try Data(contentsOf: model.runURL)
+
+        model.jog.vinylEnabledAtStartup = true
+        model.jog.platterTargetRpm = 33
+        model.jog.platterStartupForceRisePerSecond = 0
+        model.jog.platterOverspeedLimitRpm = 0
+        model.apply()
+        await fulfillment(of: [restarted], timeout: 10)
+        let updatedDecoded = try JogPreferences.decode(Data(contentsOf: receivedJog), defaults: jogDefaultsData())
+        XCTAssertEqual(updatedDecoded, model.jog)
+        XCTAssertTrue(updatedDecoded.vinylEnabledAtStartup)
+        XCTAssertEqual(updatedDecoded.platterTargetRpm, 33)
+        XCTAssertEqual(updatedDecoded.platterStartupForceRisePerSecond, 0)
+        XCTAssertEqual(updatedDecoded.platterOverspeedLimitRpm, 0)
+        XCTAssertEqual(try Data(contentsOf: model.ledURL), savedLedData)
+        XCTAssertEqual(try Data(contentsOf: model.tensionURL), savedTensionData)
+        XCTAssertEqual(try Data(contentsOf: model.runURL), savedRunData)
+
         finalStop = true
         model.stop()
         await fulfillment(of: [stopped], timeout: 10)

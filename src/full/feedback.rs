@@ -12,7 +12,7 @@ use midir::os::unix::VirtualInput as _;
 use midir::{MidiInput, MidiInputConnection};
 use tracing::{debug, info, warn};
 
-use super::catalog::{EQ_MODE_NOTE, EXT_THRU_CC};
+use super::catalog::{EQ_MODE_NOTE, EXT_THRU_CC, INTERNAL_MODE_CC};
 
 const QUEUE_CAPACITY: usize = 4096;
 pub const PAD_COLOR_TOKENS: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -37,6 +37,8 @@ pub struct FeedbackState {
     pub eq_mode: [Option<bool>; 4],
     /// Confirmed per-deck THRU mode, not the global DVS-enable setting.
     pub thru: [Option<bool>; 4],
+    /// Explicit Internal mode output; false THRU alone can also mean DVS.
+    pub internal: [Option<bool>; 4],
     /// Canonical FX parameters 1-3, then independent slot wet/dry values.
     pub fx_values: [[Option<u8>; 6]; 4],
     instant_fx_order: [[Option<usize>; 4]; 4],
@@ -55,6 +57,7 @@ impl Default for FeedbackState {
             playing: [None; 4],
             eq_mode: [None; 4],
             thru: [None; 4],
+            internal: [None; 4],
             fx_values: [[None; 6]; 4],
             instant_fx_order: [[None; 4]; 4],
             playback_received: false,
@@ -77,6 +80,12 @@ impl FeedbackState {
             let thru = message.value != 0;
             let changed = self.thru[deck] != Some(thru);
             self.thru[deck] = Some(thru);
+            return Some(changed);
+        }
+        if deck < 4 && message.number == INTERNAL_MODE_CC {
+            let internal = message.value != 0;
+            let changed = self.internal[deck] != Some(internal);
+            self.internal[deck] = Some(internal);
             return Some(changed);
         }
         if deck < 4 && (32..38).contains(&message.number) {

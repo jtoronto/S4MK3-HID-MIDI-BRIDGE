@@ -154,27 +154,58 @@ struct JogPreferences: Codable, Equatable {
     var backspinSpeedIncrease = 5.6
     var backspinAssistEnabled = true
     var backspinAssistStrength = 100
+    var vinylEnabledAtStartup = true
+    var platterTargetRpm = 33
+    var platterMaxForce = 20000
+    var platterBaseForce = 1650
+    var platterForcePerRpm = 110
+    var platterKp = 4000
+    var platterKi = 3000
+    var platterForceRisePerSecond = 200000
+    var platterStartupForceRisePerSecond = 0
+    var platterStartupMs = 200
+    var platterOverspeedLimitRpm = 0
+
+    private static let integerFields: [(key: String, label: String, range: ClosedRange<Int>)] = [
+        ("scratch_reaction", "Scratch reaction", 0...150),
+        ("pitch_bend_reaction", "Pitch bend reaction", 0...150),
+        ("backspin_assist_strength", "Backspin assist strength", 0...100),
+        ("platter_target_rpm", "Platter target RPM", 1...45),
+        ("platter_max_force", "Platter maximum force", 1...25000),
+        ("platter_base_force", "Platter base force", 0...25000),
+        ("platter_force_per_rpm", "Platter force per RPM", 0...25000),
+        ("platter_kp", "Platter proportional gain (Kp)", 0...25000),
+        ("platter_ki", "Platter integral gain (Ki)", 0...25000),
+        ("platter_force_rise_per_second", "Platter force rise rate", 0...1000000),
+        ("platter_startup_force_rise_per_second", "Platter startup force rise rate", 0...1000000),
+        ("platter_startup_ms", "Platter startup duration", 0...2000),
+        ("platter_overspeed_limit_rpm", "Platter overspeed limit", 0...250)
+    ]
 
     static func decode(_ data: Data, defaults: Data) throws -> JogPreferences {
-        guard let base = try JSONSerialization.jsonObject(with: defaults) as? [String: Any],
+        guard let defaultValues = try JSONSerialization.jsonObject(with: JogPreferences().encoded()) as? [String: Any],
+              let base = try JSONSerialization.jsonObject(with: defaults) as? [String: Any],
               let overrides = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AppError.invalid("Jog preferences must be a JSON object.")
         }
-        let unknown = Set(overrides.keys).subtracting(Set(base.keys).union(["backspin_assist_strength"]))
-        guard unknown.isEmpty else {
-            throw AppError.invalid("Unknown jog settings: \(unknown.sorted().joined(separator: ", ")).")
-        }
-        if let raw = overrides["backspin_assist_strength"] {
-            guard let number = raw as? NSNumber,
-                  CFGetTypeID(number) != CFBooleanGetTypeID(),
-                  !["f", "d"].contains(String(cString: number.objCType)) else {
-                throw AppError.invalid("Backspin assist strength must be an integer from 0 to 100.")
+        let allowed = Set(base.keys).union(defaultValues.keys)
+        for object in [base, overrides] {
+            let unknown = Set(object.keys).subtracting(allowed)
+            guard unknown.isEmpty else {
+                throw AppError.invalid("Unknown jog settings: \(unknown.sorted().joined(separator: ", ")).")
+            }
+            for (key, label, range) in integerFields {
+                if let raw = object[key] {
+                    guard let number = raw as? NSNumber,
+                          CFGetTypeID(number) != CFBooleanGetTypeID(),
+                          !["f", "d"].contains(String(cString: number.objCType)) else {
+                        throw AppError.invalid("\(label) must be an integer from \(range.lowerBound) to \(range.upperBound).")
+                    }
+                }
             }
         }
-        var merged = base.merging(overrides) { _, override in override }
-        if merged["backspin_assist_strength"] == nil {
-            merged["backspin_assist_strength"] = 100
-        }
+        var merged = defaultValues.merging(base) { _, baseValue in baseValue }
+        merged.merge(overrides) { _, override in override }
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let value = try decoder.decode(JogPreferences.self, from: JSONSerialization.data(withJSONObject: merged))
@@ -208,6 +239,36 @@ struct JogPreferences: Codable, Equatable {
         }
         guard (0...100).contains(backspinAssistStrength) else {
             throw AppError.invalid("Backspin assist strength must be an integer from 0 to 100.")
+        }
+        guard (1...45).contains(platterTargetRpm) else {
+            throw AppError.invalid("Platter target RPM must be an integer from 1 to 45.")
+        }
+        guard (1...25000).contains(platterMaxForce) else {
+            throw AppError.invalid("Platter maximum force must be an integer from 1 to 25000.")
+        }
+        for (value, label) in [
+            (platterBaseForce, "Platter base force"),
+            (platterForcePerRpm, "Platter force per RPM"),
+            (platterKp, "Platter proportional gain (Kp)"),
+            (platterKi, "Platter integral gain (Ki)")
+        ] {
+            guard (0...25000).contains(value) else {
+                throw AppError.invalid("\(label) must be an integer from 0 to 25000.")
+            }
+        }
+        for (value, label) in [
+            (platterForceRisePerSecond, "Platter force rise rate"),
+            (platterStartupForceRisePerSecond, "Platter startup force rise rate")
+        ] {
+            guard (0...1000000).contains(value) else {
+                throw AppError.invalid("\(label) must be an integer from 0 to 1000000.")
+            }
+        }
+        guard (0...2000).contains(platterStartupMs) else {
+            throw AppError.invalid("Platter startup duration must be an integer from 0 to 2000.")
+        }
+        guard (0...250).contains(platterOverspeedLimitRpm) else {
+            throw AppError.invalid("Platter overspeed limit must be an integer from 0 to 250.")
         }
     }
 }
@@ -811,6 +872,7 @@ struct NumberRow: View {
     let title: String
     @Binding var value: Int
     let range: ClosedRange<Int>
+    var step = 1
     var unit = ""
 
     var body: some View {
@@ -820,7 +882,7 @@ struct NumberRow: View {
             TextField(title, value: $value, format: .number.grouping(.never))
                 .frame(width: 80).multilineTextAlignment(.trailing)
             if !unit.isEmpty { Text(unit).foregroundColor(.secondary) }
-            Stepper(title, value: $value, in: range).labelsHidden().fixedSize()
+            Stepper(title, value: $value, in: range, step: step).labelsHidden().fixedSize()
         }
     }
 }
@@ -1021,6 +1083,27 @@ struct BridgeSettingsView: View {
                     Text("Adjusts motor assistance during detected backspins. Assistance continues after release and fades out within one second. Normal Jog Wheel Tension and scratch speed increase are independent settings.")
                         .font(.caption).foregroundColor(.secondary)
                     Text("Backspin options apply on the next start after saving, or through Save and restart while running; no new Djay mapping export is needed.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                section("Testing: Motorized playback") {
+                    Toggle("Enable Vinyl mode at bridge startup", isOn: $controller.jog.vinylEnabledAtStartup)
+                    Text("Sets the initial Vinyl mode for both physical wheels when the bridge starts. Turntable (TT) motor mode always starts off and must be engaged on the controller.")
+                        .font(.caption).foregroundColor(.secondary)
+                    NumberRow(title: "Target speed", value: $controller.jog.platterTargetRpm, range: 1...45, unit: "RPM")
+                    NumberRow(title: "Maximum force", value: $controller.jog.platterMaxForce, range: 1...25000, step: 500, unit: "force units")
+                    NumberRow(title: "Base force (0 RPM)", value: $controller.jog.platterBaseForce, range: 0...25000, step: 50, unit: "force units")
+                    NumberRow(title: "Force per RPM", value: $controller.jog.platterForcePerRpm, range: 0...25000, step: 10, unit: "force units/RPM")
+                    NumberRow(title: "Proportional gain (Kp)", value: $controller.jog.platterKp, range: 0...25000, step: 100, unit: "force units/RPM")
+                    NumberRow(title: "Integral gain (Ki)", value: $controller.jog.platterKi, range: 0...25000, step: 100, unit: "force units/(RPM*s)")
+                    NumberRow(title: "Force rise rate", value: $controller.jog.platterForceRisePerSecond, range: 0...1000000, step: 10000, unit: "force units/s")
+                    NumberRow(title: "Startup duration", value: $controller.jog.platterStartupMs, range: 0...2000, step: 50, unit: "ms")
+                    NumberRow(title: "Startup force rise rate", value: $controller.jog.platterStartupForceRisePerSecond, range: 0...1000000, step: 10000, unit: "force units/s")
+                    NumberRow(title: "Overspeed limit", value: $controller.jog.platterOverspeedLimitRpm, range: 0...250, unit: "RPM")
+                    Text("Zero semantics: 0 ms startup duration skips the startup window; 0 force units/s startup force rise rate applies an immediate step; 0 force units/s force rise rate holds post-startup force from increasing; 0 RPM overspeed limit disables the overspeed guard.")
+                        .font(.caption).foregroundColor(.secondary)
+                    Text("Experimental tuning values for motorized platter testing, not a final release contract. Vinyl startup and motorized playback settings are runtime bridge preferences: Save preferences to apply on the next start, or Save and restart while running. No new Djay mapping export is needed.")
+                        .font(.caption).foregroundColor(.secondary)
+                    Text("Testing: Turn TT mode off or stop the bridge before quitting Djay. Motorized playback uses the last reported playback state; silence from Djay does not stop it.")
                         .font(.caption).foregroundColor(.secondary)
                 }
                 section("Scratch (platter touch)") {

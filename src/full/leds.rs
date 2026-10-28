@@ -221,6 +221,7 @@ pub struct LocalState {
     /// Zero-based deck selected by the quick-FX target selector.
     pub quick: usize,
     pub vinyl: [bool; 2],
+    pub motor_enabled: [bool; 2],
     pub grid: [bool; 2],
     /// side * 5 + REC, library view, playlist, star, preview; index 10 is filter.
     pub held: [bool; 11],
@@ -244,6 +245,7 @@ impl Default for LocalState {
             fx: [0, 1],
             quick: 0,
             vinyl: [true; 2],
+            motor_enabled: [false; 2],
             grid: [false; 2],
             held: [false; 11],
             tempo: [None; 2],
@@ -385,12 +387,21 @@ impl ButtonRenderer<'_> {
                 self.palette(self.config.deck_colors[selected], deck == selected),
             );
         }
-        for (offsets, active) in [
-            ([16, 39], !self.local.vinyl[side]),
-            ([17, 40], self.local.vinyl[side]),
-        ] {
-            self.set(offsets[side], self.palette(color, active));
-        }
+        self.set(
+            [16, 39][side],
+            self.palette(
+                if self.local.vinyl[side] {
+                    Color::Red
+                } else {
+                    Color::Blue
+                },
+                true,
+            ),
+        );
+        self.set(
+            [17, 40][side],
+            self.palette(color, self.local.motor_enabled[side]),
+        );
         self.set(
             [59, 70][side],
             self.state_raw(Some(u8::from(self.local.shifted[side]))),
@@ -682,17 +693,17 @@ mod tests {
             // Then fixed-color Play/Shift/REV/FLX use NI white-base intensity bytes,
             // not raw MIDI-like brightness values that obscure the mode distinction.
             for offset in [55, 59, 60, 61, 66, 70, 71, 72] {
-                if !active && [60, 61, 71, 72].contains(&offset) {
-                    let jog_offset = if offset < 66 { 16 } else { 39 };
-                    assert_eq!(
-                        report[1 + offset] & 3,
-                        report[1 + jog_offset] & 3,
-                        "REV/FLX idle must match JOG at payload offset {offset}"
-                    );
+                let expected = if !active && [60, 61, 71, 72].contains(&offset) {
+                    Color::White.base() + idle
                 } else {
-                    assert_eq!(report[1 + offset], expected, "lamp payload offset {offset}");
-                }
+                    expected
+                };
+                assert_eq!(report[1 + offset], expected, "lamp payload offset {offset}");
             }
+            assert_eq!(report[1 + 16], Color::Red.base() + 2);
+            assert_eq!(report[1 + 39], Color::Red.base() + 2);
+            assert_eq!(report[1 + 17], Color::Yellow.base() + idle);
+            assert_eq!(report[1 + 40], Color::Purple.base() + idle);
             // Selecting decks without feedback cannot inherit C/D's REV or FLX state.
             local.decks = [0, 1];
             let unknown = render_buttons(&config, &feedback, &local);
@@ -701,6 +712,31 @@ mod tests {
             }
         }
         Ok(())
+    }
+
+    #[test]
+    fn jog_vinyl_and_turntable_motor_lamps_are_independent() {
+        let config = LedConfig::default();
+        let mut local = LocalState::default();
+        let inactive = render_buttons(&config, &FeedbackState::default(), &local);
+        assert_eq!(inactive[17], Color::Red.base() + 2);
+        assert_eq!(inactive[40], Color::Red.base() + 2);
+        assert_eq!(inactive[18], Color::Red.base());
+        assert_eq!(inactive[41], Color::Blue.base());
+
+        local.motor_enabled = [true, true];
+        let report = render_buttons(&config, &FeedbackState::default(), &local);
+        assert_eq!(report[17], Color::Red.base() + 2);
+        assert_eq!(report[40], Color::Red.base() + 2);
+        assert_eq!(report[18], Color::Red.base() + 2);
+        assert_eq!(report[41], Color::Blue.base() + 2);
+
+        local.vinyl = [false, false];
+        let report = render_buttons(&config, &FeedbackState::default(), &local);
+        assert_eq!(report[17], Color::Blue.base() + 2);
+        assert_eq!(report[40], Color::Blue.base() + 2);
+        assert_eq!(report[18], Color::Red.base() + 2);
+        assert_eq!(report[41], Color::Blue.base() + 2);
     }
 
     #[test]
@@ -969,7 +1005,8 @@ mod tests {
         // Then inactive deck C, sample mode, and CD mode are actually dark.
         assert_eq!(report[14], 0);
         assert_eq!(report[58], 0);
-        assert_eq!(report[17], 0);
+        assert_eq!(report[18], 0);
+        assert_eq!(report[17], Color::Red.base() + 2);
         assert_eq!(report[13], Color::Red.base() + 2);
     }
 

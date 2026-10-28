@@ -10,7 +10,8 @@ use plist::{Dictionary, Value};
 
 use super::catalog::{
     Binding, DECK_BINDINGS, EQ_MODE_NOTE, EXT_BINDINGS, EXT_THRU_CC, FX_LEFT_BINDINGS,
-    FX_RIGHT_BINDINGS, Kind, MIXER_BINDINGS, PadMode, QUICK_BINDINGS, pad_binding,
+    FX_RIGHT_BINDINGS, INTERNAL_MODE_CC, Kind, MIXER_BINDINGS, PadMode, QUICK_BINDINGS,
+    pad_binding,
 };
 use super::feedback::{PAD_COLOR_TOKENS, PAD_WHITE_TOKEN};
 use super::jog;
@@ -187,17 +188,22 @@ fn push_ext_outputs(
     addresses: &mut BTreeSet<(u8, u8, u8)>,
 ) -> Result<()> {
     for deck in 1_u8..=4 {
-        push_output(
-            outputs,
-            addresses,
-            OutputSpec {
-                key_path: &format!("turntable{deck}.controlModeIsThru"),
-                channel: deck - 1,
-                data: EXT_THRU_CC,
-                message_type: 3,
-                meter: false,
-            },
-        )?;
+        for (suffix, data) in [
+            ("controlModeIsThru", EXT_THRU_CC),
+            ("controlModeIsInternal", INTERNAL_MODE_CC),
+        ] {
+            push_output(
+                outputs,
+                addresses,
+                OutputSpec {
+                    key_path: &format!("turntable{deck}.{suffix}"),
+                    channel: deck - 1,
+                    data,
+                    message_type: 3,
+                    meter: false,
+                },
+            )?;
+        }
     }
     Ok(())
 }
@@ -604,39 +610,44 @@ mod tests {
     }
 
     #[test]
-    fn ext_thru_feedback_is_boolean_and_deck_addressed() -> anyhow::Result<()> {
+    fn mode_feedback_is_boolean_and_deck_addressed() -> anyhow::Result<()> {
         let outputs = generated_outputs()?;
         for deck in 1_u8..=4 {
-            let key = format!("turntable{deck}.controlModeIsThru");
-            let matches: Vec<_> = outputs
-                .iter()
-                .filter(|output| {
-                    field(output, "keyPath").and_then(Value::as_string) == Some(key.as_str())
-                })
-                .collect();
-            assert_eq!(matches.len(), 1);
-            let output = matches[0];
-            assert_eq!(
-                field(output, "midiChannel").and_then(Value::as_unsigned_integer),
-                Some(u64::from(deck - 1))
-            );
-            assert_eq!(
-                field(output, "midiMessageType").and_then(Value::as_unsigned_integer),
-                Some(3)
-            );
-            assert_eq!(
-                field(output, "midiData").and_then(Value::as_unsigned_integer),
-                Some(u64::from(EXT_THRU_CC))
-            );
-            assert_eq!(
-                field(output, "midiMinValue").and_then(Value::as_unsigned_integer),
-                Some(0)
-            );
-            assert_eq!(
-                field(output, "midiMaxValue").and_then(Value::as_unsigned_integer),
-                Some(127)
-            );
-            assert!(field(output, "controlType").is_none());
+            for (suffix, data) in [
+                ("controlModeIsThru", EXT_THRU_CC),
+                ("controlModeIsInternal", INTERNAL_MODE_CC),
+            ] {
+                let key = format!("turntable{deck}.{suffix}");
+                let matches: Vec<_> = outputs
+                    .iter()
+                    .filter(|output| {
+                        field(output, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                    })
+                    .collect();
+                assert_eq!(matches.len(), 1);
+                let output = matches[0];
+                assert_eq!(
+                    field(output, "midiChannel").and_then(Value::as_unsigned_integer),
+                    Some(u64::from(deck - 1))
+                );
+                assert_eq!(
+                    field(output, "midiMessageType").and_then(Value::as_unsigned_integer),
+                    Some(3)
+                );
+                assert_eq!(
+                    field(output, "midiData").and_then(Value::as_unsigned_integer),
+                    Some(u64::from(data))
+                );
+                assert_eq!(
+                    field(output, "midiMinValue").and_then(Value::as_unsigned_integer),
+                    Some(0)
+                );
+                assert_eq!(
+                    field(output, "midiMaxValue").and_then(Value::as_unsigned_integer),
+                    Some(127)
+                );
+                assert!(field(output, "controlType").is_none());
+            }
         }
         Ok(())
     }
@@ -742,6 +753,7 @@ mod tests {
             backspin_assist_strength: 37,
             backspin_acceleration: 250_000.0,
             backspin_speed_increase: 2.0,
+            ..jog::DEFAULT
         };
         // When the real generated mapping is serialized and read back.
         let mapping = generate_with_jog(&config)?;

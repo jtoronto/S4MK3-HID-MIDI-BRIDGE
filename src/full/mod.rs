@@ -7,6 +7,9 @@ pub mod jog;
 pub mod leds;
 pub mod mapping;
 pub mod output;
+mod playback;
+mod raw;
+pub mod replay;
 pub mod screens;
 
 use std::collections::HashMap;
@@ -136,6 +139,10 @@ struct Translator {
     fx: [Deck; 2],
     quick: Deck,
     vinyl: [bool; 2],
+    motor_enabled: [bool; 2],
+    playback_authorized: [bool; 4],
+    powered_nudge: [playback::Nudge; 2],
+    pending_jog: [Option<i32>; 2],
     grid: [bool; 2],
     wheels: [Option<WheelOwner>; 2],
     wheel_motion: [backspin::Motion; 2],
@@ -171,6 +178,10 @@ impl Default for Translator {
             fx: [Deck::A, Deck::B],
             quick: Deck::A,
             vinyl: [true; 2],
+            motor_enabled: [false; 2],
+            playback_authorized: [false; 4],
+            powered_nudge: std::array::from_fn(|_| playback::Nudge::default()),
+            pending_jog: [None; 2],
             grid: [false; 2],
             wheels: [None; 2],
             wheel_motion: std::array::from_fn(|_| backspin::Motion::default()),
@@ -203,6 +214,7 @@ pub struct FullBridge {
     feedback: feedback::FeedbackState,
     connection: MidiOutputConnection,
     translator: Translator,
+    raw: raw::Parser,
     controls: Vec<Control>,
     messages: Vec<[u8; 3]>,
     screens: screens::Output,
@@ -227,8 +239,10 @@ impl FullBridge {
             connection,
             translator: Translator {
                 jog_config,
+                vinyl: [jog_config.vinyl_enabled_at_startup; 2],
                 ..Translator::default()
             },
+            raw: raw::Parser::new()?,
             controls: Vec::with_capacity(160),
             messages: Vec::with_capacity(160),
             screens: if screen_control {
@@ -246,9 +260,9 @@ impl FullBridge {
     pub fn drain_feedback(&mut self, now: Duration) -> anyhow::Result<(usize, usize)> {
         let received = self.feedback_input.drain(&mut self.feedback, now)?;
         self.messages.clear();
-        self.translator.observe_jog(None, now, &mut self.messages)?;
         self.translator
             .sync_front_panel(&self.feedback, &mut self.messages)?;
+        self.translator.observe_jog(None, now, &mut self.messages)?;
         let sent = self.send_messages()?;
         if received != 0 {
             self.screens
@@ -269,6 +283,10 @@ impl FullBridge {
         self.translator.backspin_assist()
     }
 
+    pub fn playback_state(&self) -> s4mk3_hid_midi_bridge::tension::PlaybackState {
+        self.translator.playback_state()
+    }
+
     pub fn seed_analog(&mut self, events: &[Event]) -> anyhow::Result<()> {
         self.controls.clear();
         self.controls
@@ -284,22 +302,18 @@ impl FullBridge {
     ) -> anyhow::Result<(usize, usize)> {
         let received = self.feedback_input.drain(&mut self.feedback, now)?;
         self.controls.clear();
-        self.controls
-            .extend(events.iter().filter_map(Control::from_event));
+        if !self.raw.parse(report, now, &mut self.controls)? {
+            self.controls
+                .extend(events.iter().filter_map(Control::from_event));
+        }
         self.messages.clear();
-        self.translator
-            .observe_jog(Some(report), now, &mut self.messages)?;
-        let buttons = (report.first() == Some(&1))
-            .then(|| {
-                report[1..]
-                    .try_into()
-                    .context("full button payload must have 22 bytes")
-            })
-            .transpose()?;
-        self.translator
-            .sync_front_panel(&self.feedback, &mut self.messages)?;
-        self.translator
-            .translate(&self.controls, buttons, &mut self.messages)?;
+        self.translator.report(
+            &self.controls,
+            report,
+            now,
+            &self.feedback,
+            &mut self.messages,
+        )?;
         Ok((received, self.send_messages()?))
     }
 
@@ -334,6 +348,38 @@ impl Drop for FullBridge {
 }
 
 impl Translator {
+    fn report(
+        &mut self,
+        controls: &[Control],
+        report: &[u8],
+        now: Duration,
+        feedback: &feedback::FeedbackState,
+        output: &mut Vec<[u8; 3]>,
+    ) -> anyhow::Result<()> {
+        self.sync_front_panel(feedback, output)?;
+        self.observe_jog(Some(report), now, output)?;
+        let buttons = (report.first() == Some(&1))
+            .then(|| {
+                report[1..]
+                    .try_into()
+                    .context("full button payload must have 22 bytes")
+            })
+            .transpose()?;
+        self.translate(controls, buttons, output)
+    }
+
+    fn playback_state(&self) -> s4mk3_hid_midi_bridge::tension::PlaybackState {
+        s4mk3_hid_midi_bridge::tension::PlaybackState {
+            enabled: std::array::from_fn(|side| {
+                self.motor_enabled[side]
+                    && self.playback_authorized[usize::from(self.decks[side].channel())]
+                    && !self.grid[side]
+                    && !self.shifted[side]
+            }),
+            owned: self.wheels.map(|owner| owner.is_some()),
+        }
+    }
+
     fn observe_jog(
         &mut self,
         report: Option<&[u8]>,
@@ -355,6 +401,15 @@ impl Translator {
                     now,
                     self.jog_config.backspin_acceleration,
                 );
+                let state = self.playback_state();
+                self.pending_jog[side] = self.powered_nudge[side].observe(
+                    timer,
+                    counter,
+                    u64::try_from(now.as_micros())?,
+                    state.enabled[side],
+                    state.owned[side],
+                    self.jog_config.platter_target_rpm,
+                )?;
             }
         }
         for (side, previous) in previous.into_iter().enumerate() {
@@ -474,6 +529,7 @@ impl Translator {
             fx: self.fx.map(|deck| usize::from(deck.channel())),
             quick: usize::from(self.quick.channel()),
             vinyl: self.vinyl,
+            motor_enabled: self.motor_enabled,
             grid: self.grid,
             held: self.led_held,
             tempo: self.tempos,
@@ -527,26 +583,7 @@ impl Translator {
         self.observe_led_inputs(controls);
         // All releases precede selectors; selectors precede new presses/movement.
         // Thus descriptor item order cannot choose a simultaneous Shift+Play route.
-        for control in controls {
-            if let Control::Button(name, false) = control {
-                if let Some((side, "wheel_touch")) = side_name(name)
-                    && let Some(owner) = &mut self.wheels[side]
-                    && (owner.coasting
-                        || (self.jog_config.backspin_enabled
-                            && owner.action == "jog_scratch"
-                            && !self.grid[side]
-                            && self.vinyl[side]
-                            && self.wheel_motion[side].qualifies(self.jog_now)))
-                {
-                    if !owner.coasting {
-                        owner.coasting = true;
-                        info!(side, deck = owner.deck.channel() + 1, "BACKSPIN_COAST");
-                    }
-                    continue;
-                }
-                self.release(name, output);
-            }
-        }
+        self.release_inputs(controls, output);
         if pressed(controls, "mixer_fx_filter") && !self.held.contains_key("mixer_fx_filter") {
             self.eq_selecting = !self.eq_selecting;
             self.held.insert("mixer_fx_filter", Vec::new());
@@ -620,10 +657,43 @@ impl Translator {
                 Control::Encoder(name, delta) => {
                     self.encoder(name, delta, output)?;
                 }
-                Control::Jog(name, delta) => self.jog(name, delta, output)?,
+                Control::Jog(name, delta) => {
+                    let (side, _) = side_name(name).context("unknown jog side")?;
+                    if self.pending_jog[side].is_none() {
+                        self.jog(name, delta, output)?;
+                    }
+                }
+            }
+        }
+        for (side, name) in [(0, "left_jog_wheel"), (1, "right_jog_wheel")] {
+            if let Some(counts) = self.pending_jog[side].take() {
+                self.jog(name, f64::from(counts) / 1000.0, output)?;
             }
         }
         self.emit_mixer(output)
+    }
+
+    fn release_inputs(&mut self, controls: &[Control], output: &mut Vec<[u8; 3]>) {
+        for control in controls {
+            if let Control::Button(name, false) = control {
+                if let Some((side, "wheel_touch")) = side_name(name)
+                    && let Some(owner) = &mut self.wheels[side]
+                    && (owner.coasting
+                        || (self.jog_config.backspin_enabled
+                            && owner.action == "jog_scratch"
+                            && !self.grid[side]
+                            && self.vinyl[side]
+                            && self.wheel_motion[side].qualifies(self.jog_now)))
+                {
+                    if !owner.coasting {
+                        owner.coasting = true;
+                        info!(side, deck = owner.deck.channel() + 1, "BACKSPIN_COAST");
+                    }
+                    continue;
+                }
+                self.release(name, output);
+            }
+        }
     }
 
     fn browse_fx(
@@ -816,25 +886,32 @@ impl Translator {
                     self.pads[side] = mode;
                 }
             }
-            if pressed(
-                controls,
-                if side == 0 {
-                    "left_jog_mode"
-                } else {
-                    "right_jog_mode"
-                },
-            ) {
-                self.vinyl[side] = false;
-            }
-            if pressed(
-                controls,
-                if side == 0 {
-                    "left_turntable_mode"
-                } else {
-                    "right_turntable_mode"
-                },
-            ) {
-                self.vinyl[side] = true;
+            for (name, motor) in [
+                (
+                    if side == 0 {
+                        "left_jog_mode"
+                    } else {
+                        "right_jog_mode"
+                    },
+                    false,
+                ),
+                (
+                    if side == 0 {
+                        "left_turntable_mode"
+                    } else {
+                        "right_turntable_mode"
+                    },
+                    true,
+                ),
+            ] {
+                if pressed(controls, name) && !self.held.contains_key(name) {
+                    if motor {
+                        self.motor_enabled[side] = !self.motor_enabled[side];
+                    } else {
+                        self.vinyl[side] = !self.vinyl[side];
+                    }
+                    self.held.insert(name, Vec::new());
+                }
             }
             if self.wheels[side].is_some_and(|owner| owner.coasting)
                 && (self.grid[side] || !self.vinyl[side])
@@ -1211,6 +1288,14 @@ impl Translator {
         output: &mut Vec<[u8; 3]>,
     ) -> anyhow::Result<()> {
         self.thru = feedback.thru;
+        // Testing contract: these are the raw cached outputs, not UI masking
+        // or a play-button guess. Feedback silence does not revoke permission.
+        self.playback_authorized = std::array::from_fn(|deck| {
+            feedback.loaded[deck] == Some(true)
+                && feedback.playing[deck] == Some(true)
+                && feedback.internal[deck] == Some(true)
+                && feedback.thru[deck] != Some(true)
+        });
         for side in 0..2 {
             let deck = usize::from(self.fx[side].channel());
             for slot in 0..6 {

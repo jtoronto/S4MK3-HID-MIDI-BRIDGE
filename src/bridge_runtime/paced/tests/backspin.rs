@@ -52,7 +52,7 @@ fn actual_pacer_applies_qualification_and_fade_while_midi_frames_keep_arriving()
                     frames.send(sample)?;
                 }
             }
-            Action::Initialize | Action::Screens => {}
+            Action::Initialize | Action::Screens | Action::Playback(..) => {}
         }
         Ok(())
     })?;
@@ -105,7 +105,11 @@ fn stop_preempts_a_released_assist_pulse_and_pending_input() -> anyhow::Result<(
     let mut output = Output::new(|action| {
         match action {
             Action::Motor(report) => writes.borrow_mut().push(report),
-            Action::Frame(..) | Action::Feedback(_) | Action::Initialize | Action::Screens => {
+            Action::Frame(..)
+            | Action::Feedback(_)
+            | Action::Initialize
+            | Action::Screens
+            | Action::Playback(..) => {
                 anyhow::bail!("Stop must preempt released assistance")
             }
         }
@@ -149,7 +153,7 @@ fn watchdog_recovery_cannot_rearm_an_untouched_old_event() -> anyhow::Result<()>
                     frames.send(frame(clock.get(), counts, 0))?;
                 }
             }
-            Action::Initialize | Action::Screens => {}
+            Action::Initialize | Action::Screens | Action::Playback(..) => {}
         }
         Ok(())
     })?;
@@ -189,6 +193,7 @@ fn current_frame_cancellation_writes_partial_neutral_before_any_later_tick() -> 
                 *assist = [false; 2];
                 events.borrow_mut().push("input");
             }
+            Action::Playback(..) => {}
             Action::Initialize | Action::Feedback(_) | Action::Screens => {
                 anyhow::bail!("No output tick is part of this input-edge check")
             }

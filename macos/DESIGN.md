@@ -87,9 +87,14 @@ apply. No React, browser runtime, or downloaded assets are needed.
 
 ## Jog preferences and mapping export
 
-- `JogPreferences` mirrors `examples/jog-config.json`: `scratch_speed`,
-  `scratch_reaction`, `pitch_bend_speed`, `pitch_bend_reaction`. Speeds are
-  finite and strictly positive; reactions are integers 0-150. Unknown keys are
+- `JogPreferences` mirrors `examples/jog-config.json`: mapping scratch/pitch-bend
+  speeds and reactions, runtime backspin options, and `Testing: Motorized playback`
+  parameters (`vinyl_enabled_at_startup`, `platter_target_rpm`, `platter_max_force`,
+  `platter_base_force`, `platter_force_per_rpm`, `platter_kp`, `platter_ki`,
+  `platter_force_rise_per_second`, `platter_startup_force_rise_per_second`,
+  `platter_startup_ms`, `platter_overspeed_limit_rpm`). Speeds are
+  finite and strictly positive; reactions are integers 0-150; motorized platter
+  values are validated integers within their documented ranges. Unknown keys are
   rejected; saved files merge over bundled defaults like LED preferences.
 - Bundled defaults live at `Resources/default-jog-config.json`, copied by
   `build-app.sh` from `examples/jog-config.json`. User preferences live at

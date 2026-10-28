@@ -2,6 +2,7 @@
 
 mod input;
 mod paced;
+pub mod replay;
 
 use anyhow::{Context as _, ensure};
 use encdr::device::led_builder::LedBuilder;
@@ -32,23 +33,14 @@ pub fn run(
     let mut events = Vec::with_capacity(128);
     let started = Instant::now();
     let mut engine = Engine::with_backspin_strength(config, jog.backspin_assist_strength)?;
+    engine.configure_playback(jog.platter_settings());
     let mut service = paced::Output::new(|action| {
         match action {
             Action::Initialize => {
                 output = Some(full::output::LedOutput::new(hid)?);
                 crate::initialize_full_analog(hid, parser, &mut bridge)?;
             }
-            Action::Motor(report) => {
-                let written = hid.write(&report).context("write S4 tension report")?;
-                ensure!(
-                    written == report.len(),
-                    "short S4 tension write: {written}/11"
-                );
-                debug!(written, bytes = ?report, "TENSION_WRITE");
-                if report == s4mk3_hid_midi_bridge::tension::neutral_report() {
-                    debug!("TENSION_NEUTRAL");
-                }
-            }
+            Action::Motor(report) => write_motor(hid, &report)?,
             Action::Frame(frame, backspin) => {
                 for index in 0..3 {
                     let report = frame.report(index);
@@ -76,13 +68,17 @@ pub fn run(
                 }
                 *backspin = bridge.backspin_assist();
             }
-            Action::Feedback(now_us) => {
+            Action::Playback(now_us, state) => {
                 let now = Duration::from_micros(now_us);
                 let (received, sent) = bridge.drain_feedback(now)?;
                 counts.feedback_messages = counts
                     .feedback_messages
                     .saturating_add(u64::try_from(received)?);
                 counts.midi_messages = counts.midi_messages.saturating_add(u64::try_from(sent)?);
+                *state = bridge.playback_state();
+            }
+            Action::Feedback(now_us) => {
+                let now = Duration::from_micros(now_us);
                 let writes = output
                     .as_mut()
                     .context("LED output not initialized")?
@@ -125,6 +121,19 @@ pub fn run(
         "reader shutdown",
     )?;
     crate::report_probe_counts(args, &counts)
+}
+
+fn write_motor(hid: &HidDevice, report: &[u8; 11]) -> anyhow::Result<()> {
+    let written = hid.write(report).context("write S4 tension report")?;
+    ensure!(
+        written == report.len(),
+        "short S4 tension write: {written}/11"
+    );
+    debug!(written, bytes = ?report, "TENSION_WRITE");
+    if *report == s4mk3_hid_midi_bridge::tension::neutral_report() {
+        debug!("TENSION_NEUTRAL");
+    }
+    Ok(())
 }
 
 fn with_cleanup(

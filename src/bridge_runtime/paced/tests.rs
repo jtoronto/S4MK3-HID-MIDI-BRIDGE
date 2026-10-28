@@ -2,6 +2,7 @@ use super::*;
 use std::cell::{Cell, RefCell};
 
 mod backspin;
+mod playback;
 mod recovery;
 mod watchdog;
 
@@ -66,7 +67,7 @@ fn screens_require_input_and_a_successful_native_feedback_tick() -> anyhow::Resu
                         events.borrow_mut().push("screens");
                         stop_tx.send(())?;
                     }
-                    Action::Initialize | Action::Motor(_) => {}
+                    Action::Initialize | Action::Motor(_) | Action::Playback(..) => {}
                 }
                 Ok(())
             })?;
@@ -113,7 +114,7 @@ fn queued_one_wheel_release_precedes_overdue_motor_and_feedback() -> anyhow::Res
                 actions.borrow_mut().push((2, neutral_report()));
                 stop_tx.send(())?;
             }
-            Action::Initialize | Action::Screens => {}
+            Action::Initialize | Action::Screens | Action::Playback(..) => {}
         }
         Ok(())
     })?;
@@ -152,7 +153,11 @@ fn stop_wins_over_queued_force_without_dispatching_midi() -> anyhow::Result<()> 
     let mut output = Output::new(|action| {
         match action {
             Action::Motor(report) => writes.borrow_mut().push(report),
-            Action::Frame(..) | Action::Feedback(_) | Action::Initialize | Action::Screens => {
+            Action::Frame(..)
+            | Action::Feedback(_)
+            | Action::Initialize
+            | Action::Screens
+            | Action::Playback(..) => {
                 anyhow::bail!("Stop must win before service dispatch")
             }
         }
@@ -200,7 +205,11 @@ fn runtime_faults_clear_force_before_returning() -> anyhow::Result<()> {
                 }
                 Action::Frame(..) if fault == 3 => anyhow::bail!("MIDI service failure"),
                 Action::Feedback(_) if fault == 5 => anyhow::bail!("LED service failure"),
-                Action::Initialize | Action::Frame(..) | Action::Feedback(_) | Action::Screens => {}
+                Action::Initialize
+                | Action::Frame(..)
+                | Action::Feedback(_)
+                | Action::Screens
+                | Action::Playback(..) => {}
             }
             Ok(())
         })?;
@@ -242,7 +251,7 @@ fn analog_interrupt_reaches_service_unchanged_and_duration_stops_output() -> any
                 clock.set(10000);
             }
             Action::Motor(report) => writes.borrow_mut().push(report),
-            Action::Initialize | Action::Feedback(_) | Action::Screens => {}
+            Action::Initialize | Action::Feedback(_) | Action::Screens | Action::Playback(..) => {}
         }
         Ok(())
     })?;
@@ -281,7 +290,10 @@ fn failed_startup_or_initialization_still_attempts_neutral() {
                         }
                     }
                     Action::Initialize => anyhow::bail!("ring initialization failed"),
-                    Action::Frame(..) | Action::Feedback(_) | Action::Screens => {}
+                    Action::Frame(..)
+                    | Action::Feedback(_)
+                    | Action::Screens
+                    | Action::Playback(..) => {}
                 }
                 Ok(())
             })?;

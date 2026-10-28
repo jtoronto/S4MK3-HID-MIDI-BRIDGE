@@ -13,8 +13,10 @@ use crate::jog::{
 };
 
 mod backspin;
+mod playback;
 
 pub use crate::jog::neutral_report;
+pub use playback::{COUNTS_PER_REVOLUTION, PlaybackState};
 
 const MAX_ASSIST_FORCE: u16 = 7000;
 
@@ -69,6 +71,9 @@ pub struct Engine {
     last_torque: [i32; 2],
     motion: Option<Motion>,
     backspin: [backspin::Assist; 2],
+    playback: Option<[playback::Wheel; 2]>,
+    playback_state: PlaybackState,
+    sensor_seen_us: [u64; 2],
 }
 
 #[cfg(test)]
@@ -122,7 +127,36 @@ impl Engine {
                 backspin::Assist::new(0, strength),
                 backspin::Assist::new(1, strength),
             ],
+            playback: None,
+            playback_state: PlaybackState::default(),
+            sensor_seen_us: [0; 2],
         }
+    }
+
+    /// Enable the shared speed regulator without changing diagnostic defaults.
+    pub fn configure_playback(&mut self, settings: crate::jog::platter::Settings) {
+        self.playback = Some(std::array::from_fn(|_| playback::Wheel::new(settings)));
+    }
+
+    /// Update cached real playback authorization; cancellation is an immediate zero.
+    #[must_use]
+    pub fn set_playback(&mut self, state: PlaybackState) -> Option<[u8; 11]> {
+        let mut changed = false;
+        if let Some(wheels) = &mut self.playback {
+            for (side, wheel) in wheels.iter_mut().enumerate() {
+                if state.enabled[side] != self.playback_state.enabled[side]
+                    || state.owned[side] != self.playback_state.owned[side]
+                {
+                    wheel.reset();
+                    if self.last_torque[side] != 0 {
+                        self.last_torque[side] = 0;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        self.playback_state = state;
+        changed.then(|| report_for(self.last_torque))
     }
 
     /// Discard all movement and smoothing history, preserving the selection.
@@ -133,6 +167,11 @@ impl Engine {
         self.wheels = SmoothWheels::new([true, true]);
         self.last_torque = [0; 2];
         self.motion = None;
+        if let Some(wheels) = &mut self.playback {
+            for wheel in wheels {
+                wheel.reset();
+            }
+        }
         for assist in &mut self.backspin {
             assist.clear();
         }
@@ -169,12 +208,48 @@ impl Engine {
             now_us >= host_us && now_us - host_us <= FRESHNESS_US,
             "queued input is older than 50ms or from the future"
         );
+        let sensor_gap = self.playback.is_some()
+            && jog.len() == 60
+            && jog[0] == 3
+            && self.motion.is_some_and(|previous| {
+                [(0, 8), (1, 36)].into_iter().any(|(side, offset)| {
+                    let timer = u32::from_le_bytes([
+                        jog[offset],
+                        jog[offset + 1],
+                        jog[offset + 2],
+                        jog[offset + 3],
+                    ]);
+                    u64::from(timer.wrapping_sub(previous.timers[side]))
+                        > FRESHNESS_US * crate::jog::platter::SENSOR_TICKS_PER_US
+                })
+            });
+        if sensor_gap {
+            self.clear_motion();
+        }
         let motion = self.decoder.decode_snapshot(buttons, jog, None, host_us)?;
         self.motion = Some(motion);
         self.last_input_us = host_us;
+        for (side, status) in motion.status.iter().enumerate() {
+            if !matches!(status, crate::jog::decode::Status::Duplicate) {
+                self.sensor_seen_us[side] = host_us;
+            }
+        }
         let selection = self.selection;
+        let mut tension_motion = motion;
+        if self.playback.is_some() {
+            for side in 0..2 {
+                if self.playback_state.enabled[side]
+                    && !self.playback_state.owned[side]
+                    && !motion.touch[side]
+                {
+                    // Powered motion is not a newly qualified manual gesture.
+                    tension_motion.status[side] = crate::jog::decode::Status::Baseline;
+                    tension_motion.delta[side] = 0;
+                }
+            }
+        }
         let mut decision = self.wheels.observe(
-            &motion,
+            &tension_motion,
             Decision {
                 torque: [0; 2],
                 report: neutral_report(),
@@ -186,11 +261,34 @@ impl Engine {
                 decision.torque[side] = torque;
             }
         }
+        if let Some(wheels) = &mut self.playback {
+            for (side, wheel) in wheels.iter_mut().enumerate() {
+                let allowed = self.playback_state.enabled[side]
+                    && !self.playback_state.owned[side]
+                    && !motion.touch[side];
+                wheel.observe(&motion, side, allowed)?;
+                if allowed {
+                    decision.torque[side] = wheel.force();
+                } else if motion.touch[side]
+                    && self.playback_state.enabled[side]
+                    && !self.playback_state.owned[side]
+                {
+                    // Raw physical touch must suspend playback before MIDI or LEDs.
+                    decision.torque[side] = 0;
+                }
+            }
+        }
         let immediate_zero =
             (0..2).any(|side| decision.torque[side] == 0 && self.last_torque[side] != 0);
-        if immediate_zero {
-            self.last_torque = decision.torque;
-            Ok(Some(report_for(decision.torque)))
+        if sensor_gap {
+            Ok(Some(neutral_report()))
+        } else if immediate_zero {
+            for (side, torque) in self.last_torque.iter_mut().enumerate() {
+                if decision.torque[side] == 0 {
+                    *torque = 0;
+                }
+            }
+            Ok(Some(report_for(self.last_torque)))
         } else {
             Ok(None)
         }
@@ -214,12 +312,31 @@ impl Engine {
                 torque[side] = override_torque;
             }
         }
+        if let Some(wheels) = &self.playback {
+            for (side, wheel) in wheels.iter().enumerate() {
+                if self.playback_state.enabled[side]
+                    && !self.playback_state.owned[side]
+                    && self.motion.is_none_or(|motion| !motion.touch[side])
+                {
+                    torque[side] = wheel.force();
+                }
+            }
+        }
         self.last_torque = torque;
         Ok(report_for(torque))
     }
 
     #[must_use]
     pub const fn input_deadline_us(&self) -> u64 {
-        self.last_input_us.saturating_add(FRESHNESS_US)
+        let last = if self.playback.is_some() {
+            if self.sensor_seen_us[0] < self.sensor_seen_us[1] {
+                self.sensor_seen_us[0]
+            } else {
+                self.sensor_seen_us[1]
+            }
+        } else {
+            self.last_input_us
+        };
+        last.saturating_add(FRESHNESS_US)
     }
 }

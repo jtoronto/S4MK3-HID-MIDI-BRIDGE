@@ -17,6 +17,17 @@ pub struct Config {
     pub backspin_assist_strength: u8,
     pub backspin_acceleration: f64,
     pub backspin_speed_increase: f64,
+    pub vinyl_enabled_at_startup: bool,
+    pub platter_target_rpm: u16,
+    pub platter_max_force: u16,
+    pub platter_base_force: u16,
+    pub platter_force_per_rpm: u16,
+    pub platter_kp: u16,
+    pub platter_ki: u16,
+    pub platter_force_rise_per_second: u32,
+    pub platter_startup_ms: u16,
+    pub platter_startup_force_rise_per_second: u32,
+    pub platter_overspeed_limit_rpm: u16,
 }
 
 pub const DEFAULT: Config = Config {
@@ -29,6 +40,17 @@ pub const DEFAULT: Config = Config {
     backspin_assist_strength: 100,
     backspin_acceleration: 150_000.0,
     backspin_speed_increase: 5.6,
+    vinyl_enabled_at_startup: true,
+    platter_target_rpm: 33,
+    platter_max_force: 20_000,
+    platter_base_force: 1_650,
+    platter_force_per_rpm: 110,
+    platter_kp: 4_000,
+    platter_ki: 3_000,
+    platter_force_rise_per_second: 200_000,
+    platter_startup_ms: 200,
+    platter_startup_force_rise_per_second: 0,
+    platter_overspeed_limit_rpm: 0,
 };
 
 impl Default for Config {
@@ -38,6 +60,22 @@ impl Default for Config {
 }
 
 impl Config {
+    pub const fn platter_settings(&self) -> s4mk3_hid_midi_bridge::jog::platter::Settings {
+        s4mk3_hid_midi_bridge::jog::platter::Settings {
+            count_direction: 1,
+            target_rpm: self.platter_target_rpm,
+            overspeed_limit_rpm: Some(self.platter_overspeed_limit_rpm),
+            max_force: self.platter_max_force,
+            base_force: self.platter_base_force,
+            force_per_rpm: self.platter_force_per_rpm,
+            kp: self.platter_kp,
+            ki: self.platter_ki,
+            force_rise_per_second: self.platter_force_rise_per_second,
+            startup_ms: self.platter_startup_ms,
+            startup_force_rise_per_second: self.platter_startup_force_rise_per_second,
+        }
+    }
+
     pub const fn motor_assist_enabled(&self) -> bool {
         self.backspin_enabled && self.backspin_assist_enabled && self.backspin_assist_strength > 0
     }
@@ -84,6 +122,38 @@ impl Config {
                 && (self.scratch_speed + self.backspin_speed_increase).is_finite(),
             "backspin_speed_increase must be finite and nonnegative without overflowing scratch speed"
         );
+        ensure!(
+            (1..=45).contains(&self.platter_target_rpm),
+            "platter_target_rpm must be in 1..=45"
+        );
+        ensure!(
+            (1..=25_000).contains(&self.platter_max_force),
+            "platter_max_force must be in 1..=25000"
+        );
+        for (name, value) in [
+            ("platter_base_force", self.platter_base_force),
+            ("platter_force_per_rpm", self.platter_force_per_rpm),
+            ("platter_kp", self.platter_kp),
+            ("platter_ki", self.platter_ki),
+        ] {
+            ensure!(value <= 25_000, "{name} must be in 0..=25000");
+        }
+        ensure!(
+            self.platter_force_rise_per_second <= 1_000_000,
+            "platter_force_rise_per_second must be in 0..=1000000"
+        );
+        ensure!(
+            self.platter_startup_ms <= 2_000,
+            "platter_startup_ms must be in 0..=2000"
+        );
+        ensure!(
+            self.platter_startup_force_rise_per_second <= 1_000_000,
+            "platter_startup_force_rise_per_second must be in 0..=1000000"
+        );
+        ensure!(
+            self.platter_overspeed_limit_rpm <= 250,
+            "platter_overspeed_limit_rpm must be in 0..=250"
+        );
         Ok(())
     }
 }
@@ -129,6 +199,30 @@ mod tests {
             r#"{"backspin_assist_strength":256}"#,
         ] {
             assert!(serde_json::from_str::<Config>(input).is_err());
+        }
+        for input in [
+            r#"{"vinyl_enabled_at_startup":1}"#,
+            r#"{"platter_target_rpm":33.0}"#,
+            r#"{"platter_target_rpm":"33"}"#,
+            r#"{"platter_target_rpm":true}"#,
+        ] {
+            assert!(serde_json::from_str::<Config>(input).is_err(), "{input}");
+        }
+        for input in [
+            r#"{"platter_target_rpm":0}"#,
+            r#"{"platter_max_force":0}"#,
+            r#"{"platter_max_force":25001}"#,
+            r#"{"platter_base_force":25001}"#,
+            r#"{"platter_force_per_rpm":25001}"#,
+            r#"{"platter_kp":25001}"#,
+            r#"{"platter_ki":25001}"#,
+            r#"{"platter_force_rise_per_second":1000001}"#,
+            r#"{"platter_startup_ms":2001}"#,
+            r#"{"platter_startup_force_rise_per_second":1000001}"#,
+            r#"{"platter_overspeed_limit_rpm":251}"#,
+        ] {
+            let config: Config = serde_json::from_str(input)?;
+            assert!(config.validate().is_err(), "{input}");
         }
         Ok(())
     }
@@ -181,5 +275,35 @@ mod tests {
         let excessive: Config = serde_json::from_str(r#"{"backspin_assist_strength":101}"#)?;
         assert!(excessive.validate().is_err());
         Ok(())
+    }
+
+    #[test]
+    fn platter_preferences_map_directly_into_shared_settings() {
+        let config = Config {
+            platter_target_rpm: 40,
+            platter_max_force: 19_000,
+            platter_base_force: 1_200,
+            platter_force_per_rpm: 90,
+            platter_kp: 3_500,
+            platter_ki: 2_500,
+            platter_force_rise_per_second: 100_000,
+            platter_startup_ms: 150,
+            platter_startup_force_rise_per_second: 5_000,
+            platter_overspeed_limit_rpm: 80,
+            ..DEFAULT
+        };
+        let settings = config.platter_settings();
+
+        assert_eq!(settings.count_direction, 1);
+        assert_eq!(settings.target_rpm, 40);
+        assert_eq!(settings.overspeed_limit_rpm, Some(80));
+        assert_eq!(settings.max_force, 19_000);
+        assert_eq!(settings.base_force, 1_200);
+        assert_eq!(settings.force_per_rpm, 90);
+        assert_eq!(settings.kp, 3_500);
+        assert_eq!(settings.ki, 2_500);
+        assert_eq!(settings.force_rise_per_second, 100_000);
+        assert_eq!(settings.startup_ms, 150);
+        assert_eq!(settings.startup_force_rise_per_second, 5_000);
     }
 }

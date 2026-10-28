@@ -27,7 +27,7 @@ fn freshness_gap_neutralizes_tension_without_stopping_midi_or_feedback() -> anyh
                     _ => anyhow::bail!("unexpected extra output tick"),
                 }
             }
-            Action::Initialize | Action::Screens => {}
+            Action::Initialize | Action::Screens | Action::Playback(..) => {}
         }
         Ok(())
     })?;
@@ -85,7 +85,7 @@ fn fresh_queued_motion_cannot_hide_timeout_or_reuse_prior_force() -> anyhow::Res
                         clock.set(at);
                     }
                 }
-                Action::Initialize | Action::Screens => {}
+                Action::Initialize | Action::Screens | Action::Playback(..) => {}
             }
             Ok(())
         })?;
@@ -137,7 +137,7 @@ fn failed_timeout_neutral_still_exits_with_an_error() -> anyhow::Result<()> {
                 active.set(report != neutral_report());
             }
             Action::Feedback(_) => clock.set(70002),
-            Action::Frame(..) | Action::Initialize | Action::Screens => {}
+            Action::Frame(..) | Action::Initialize | Action::Screens | Action::Playback(..) => {}
         }
         Ok(())
     })?;
