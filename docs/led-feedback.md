@@ -18,6 +18,12 @@ outstanding normal-use acceptance requirements.
 
 ## Current-source EXT indicators
 
+The motorized-playback testing build separates JOG and TT indicators. JOG is
+red for Vinyl on and blue for Vinyl off, independent of TT motor enable.
+TT indicates the local motor-mode selection, not proof that force is being
+applied: playback, touch and freshness gates may keep a selected motor neutral.
+Physical integrated lamp acceptance remains separate from report-byte tests.
+
 In the full profile, EXT1-4 indicate actual THRU feedback for fixed decks 1-4,
 independent of deck focus and FX targets. Only known true lights the lamp.
 Known false and unknown remain dark regardless of the dim-idle preference;

@@ -105,6 +105,12 @@ Install a newly generated matching mapping. This addition is not a newly
 published release. EXT lamp locations are confirmed; integrated switching
 acceptance is tracked in the [EXT validation record](docs/ext-input-validation.md).
 
+**Current-source testing build:** TT independently enables motorized playback;
+JOG toggles Vinyl red/on and blue/off. Jog settings include a Vinyl startup
+default and experimental platter tuning controls. Install the newly generated
+mapping for explicit Internal-mode feedback. These additions are not in the
+published download; see [testing workflow and limits](docs/user-guide.md#testing-motorized-playback).
+
 The mapping covers four-deck transport, touch scratching and pitch bending,
 mixing, EQ, headphone cue, loops, browsing, hotcues, samples, Neural Mix, and
 effects. A/C and B/D select the deck controlled by each side. Software feedback
@@ -146,10 +152,10 @@ custom mappings; older mappings lack numeric screen feedback.
 The [screen-driver controls](docs/screen-driver-handover.md) can temporarily
 stop NIHardwareAgent with confirmation and restore it afterward. Manual recovery
 remains available even with screen support off.
-Powered playback rotation and haptic cues aren't supported.
-JOG/TT select software wheel behavior, not powered platter rotation. The app
-does provide motor-assisted wheel tension in the full-controller profile,
-as described below. Jog-ring animation
+Published downloads do not provide powered playback rotation; the
+current-source testing addition is described above. Haptic cues remain
+unsupported. Motor-assisted wheel tension is available in the full-controller
+profile as described below. Jog-ring animation
 remains decorative, not track-position or physical-platter-position tracking.
 
 ### Startup positions and FX pickup

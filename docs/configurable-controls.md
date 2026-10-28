@@ -80,6 +80,17 @@ See [the jog investigation](jog-wheel-investigation.md).
 
 ## Useful future control settings
 
+### Current-source motorized playback testing
+
+The Jog preferences now include `vinyl_enabled_at_startup` (default true)
+and testing-only `platter_*` values for target RPM, maximum force,
+feed-forward base/slope, Kp/Ki, startup duration and rise rates, and overspeed
+cutoff. They use the existing saved jog configuration and apply on the next
+bridge start; no mapping export is required. TT independently toggles
+motorized playback and starts off, while JOG toggles Vinyl red/on and blue/off.
+These testing controls are not a commitment to expose every parameter in a
+release. See the [user workflow](user-guide.md#testing-motorized-playback).
+
 These are candidates, not options silently applied by this release.
 
 | Candidate | Current value/location | How a setting would apply |
@@ -88,7 +99,7 @@ These are candidates, not options silently applied by this release.
 | Grid-edit precision | `0.125` count multiplier, `Translator::jog` in `src/full/mod.rs` | Runtime preference; test fractional residuals and mode changes |
 | Fader pickup | Tempo binding has `pickup=true`, same catalog | Mapping-generation preference; test software/hardware mismatch |
 | Fader direction | Tempo binding has `flipped=true`, same catalog | Mapping-generation preference; do not change ADC normalization |
-| Initial jog/pad/FX targets | Vinyl, Hotcue, A/B FX targets, A instant-FX target in `Translator::default` | Runtime startup defaults, subsequently overridden by physical selectors |
+| Initial pad/FX targets | Hotcue, A/B FX targets, A instant-FX target in `Translator::default` | Runtime startup defaults, subsequently overridden by physical selectors |
 | Encoder actions/step behavior | Fixed catalog bindings and relative MIDI encoding | A separate mapping editor; larger scope than sensitivity preferences |
 
 Mapping-generation controls are separate from runtime settings, since
@@ -105,7 +116,7 @@ restarting the bridge alone cannot apply them inside Djay.
 - Held-note ownership, release-before-selector ordering, fractional jog
   residuals, feedback queue bounds, and output pacing protect correctness and
   smooth input. They are not appearance or musical-control choices.
-- No on-controller settings menu, playback-driven platter rotation,
-  audio-forwarding, guessed end-warning, or track-position chase setting is
-  exposed. App screen controls and motor-backed tension are separate;
+- No on-controller settings menu, audio-forwarding, guessed end-warning, or
+  track-position chase setting is exposed. Motorized playback testing is
+  separate from app screen controls and motor-backed tension;
   decorative chase does not claim actual position.

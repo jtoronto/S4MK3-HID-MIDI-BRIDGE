@@ -4,6 +4,12 @@ This is the installed-version reference for the S4 MK3 bridge audit. It separate
 
 ## Sources and completeness
 
+Current-source motorized-playback testing adds
+`turntable1..4.controlModeIsInternal` as Djay-to-bridge CC22 on deck channels
+1-4 (one-based), alongside CC21 for THRU. It is explicit motor-authorization
+feedback, not a substitute for global DVS enable or audio routing. Install a
+newly generated matching mapping. No new bridge-to-Djay jog address is added.
+
 - Installed application: **djay Pro 5.6.9**, from `/Applications/djay Pro.app/Contents/Info.plist`.
 - `Contents/Resources/MidiModelMetadata.plist`: **944** action/control/rotary metadata entries; this is the source of the exhaustive declared input-key table.
 - Metadata type counts: **494** `button-action`, **211** `button-toggle`, **145** `control`, **71** `button-hold`, **5** `button-trigger`, and **18** entries with no `type` field.

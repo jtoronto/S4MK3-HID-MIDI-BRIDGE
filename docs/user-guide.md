@@ -395,9 +395,16 @@ Djay's onscreen recording controls when you want to record a mix.
 
 ## Jog wheels and feel
 
-**JOG/TT select software wheel behavior, not powered platter rotation.**
-In Turntable mode, touching the top scratches; untouched motion bends/nudges.
-Jog mode uses bend/nudge instead of top-touch scratch. Shift+jog seeks.
+**In the current-source testing build, JOG and TT are independent toggles.**
+JOG toggles Vinyl: red enables top-touch scratching; blue disables top-touch
+scratch and retains bend/nudge behavior. Vinyl starts on unless you change
+its startup preference in Jog settings.
+TT enables motorized playback on that physical side and starts off each time
+the bridge starts. Rotation follows actual playback feedback for the selected
+deck, not a press of Play. Install/select the newly generated mapping under
+a new filename: it adds explicit Internal-mode feedback required for motors.
+The selected deck must be loaded, playing and confirmed Internal, not THRU
+or DVS. Shift+jog seeks.
 GRID+jog edits the beat grid rather than performing an ordinary nudge.
 A detected backspin can keep scratching after you lift your hand, following
 the wheel's actual movement rather than switching immediately to nudge.
@@ -422,8 +429,9 @@ Djay mapping. Defaults are scratch **2.7% / 150%** and pitch bend **2.7% / 17%**
 These change software response, not motor force.
 
 Tension needs saving/restarting, but no mapping export. Speed/Reaction need a
-newly exported mapping selected in Djay. Playback-driven TT rotation and haptic
-cue points are not implemented.
+newly exported mapping selected in Djay. The testing motor and Vinyl-startup
+preferences need saving/restarting, not a mapping export. Haptic cue points
+remain unavailable.
 
 ### Backspin detection
 
@@ -481,6 +489,29 @@ flick and release. The slider does not change a running motor until you apply
 it. Keep normal Jog Wheel Tension and Scratch speed increase fixed while
 comparing motor levels; neither is changed by the strength control. No mapping
 reinstall is needed.
+
+### Testing motorized playback
+
+The **Testing: Motorized playback** section in Jog settings retains the
+experimental tuning controls for comparison during actual DJ use. These are
+not settled release options. The starting values are 33 RPM, maximum force
+20000, base force 1650, force per RPM 110, Kp 4000, Ki 3000, force rise
+200000/second, startup 200 ms, immediate startup force step and overspeed
+abort disabled. Save and restart to apply changes; controls are not live.
+
+Unlike the diagnostic's MOVE-armed pulse, TT playback has no 15-second
+duration limit. Switch TT off or pause the selected deck to remove drive.
+Physical touch and held scratch/backspin ownership suspend playback torque.
+Sensor loss clears force and requires a new baseline before recovery.
+Nominal powered travel is removed from jog MIDI; rim deviations are measured
+relative to nominal speed, not independently identified hand contact.
+
+**For this testing build, turn TT off or Stop bridge before quitting Djay.**
+Playback authorization is cached from real feedback; silence from Djay does
+not itself clear a previously reported playing state.
+Integrated physical feel and playing acceptance are tracked separately in
+the [integration validation record](motorized-playback-integration-validation.md).
+This is current-source testing behavior, not a published release.
 
 ## Screens and feedback
 

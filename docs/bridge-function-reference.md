@@ -7,6 +7,28 @@ snapshot retained later in this document.
 
 ## Logic implemented inside the bridge
 
+### Current-source motorized playback testing
+
+TT toggles motorized playback independently per physical side, initially off.
+JOG toggles Vinyl red/on or blue/off; `vinyl_enabled_at_startup` defaults true.
+The testing `platter_*` preferences use the existing saved Jog configuration.
+Their provisional feel defaults and application steps are in the
+[user guide](user-guide.md#testing-motorized-playback).
+
+The matching generated mapping adds Djay-to-bridge CC22 on deck channels 1-4
+(one-based) for `turntableN.controlModeIsInternal`. Loaded and raw playing
+feedback plus explicit Internal true and THRU false authorize rotation;
+false THRU alone is insufficient because it may mean DVS. This requires
+installing/selecting a newly generated mapping, preserving custom mappings.
+There is no new bridge-to-Djay wheel address.
+
+The production motor owner arbitrates rotation, tension and owned gestures;
+nominal powered motion is removed before jog MIDI translation. Touch,
+scratch/backspin ownership and sensor freshness suspend playback torque.
+Cached real playback authorization survives feedback silence in this testing
+build: use TT-off or Stop bridge before quitting Djay.
+See [integration evidence](motorized-playback-integration-validation.md).
+
 Ordinary jog Speed/Reaction are mapping-generation preferences, not count scaling in
 the translator. Calibrated defaults are scratch 2.7% / 150% and pitch bend
 2.7% / 17%, configurable through the app's Jog tab and CLI `--jog-config`
