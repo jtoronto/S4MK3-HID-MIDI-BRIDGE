@@ -278,6 +278,22 @@ Saving or restarting the bridge alone does not apply mapping changes in Djay.
 These mapping parameters do not fix backspin termination on touch release.
 Hardware tension is independent of them.
 
+### Current-source motorized playback testing
+
+TT enables each physical motor independently; JOG selects Vinyl on/red or
+off/blue. Normal mode defaults to Vinyl on and TT to off, with separate saved
+startup choices. Install the matching generated mapping for Internal-mode
+feedback. Steady TT rotation emits no jog correction; measured deviations use
+pitch bend, handing off to Scratch at provisional lower/upper speed bounds.
+Holding or braking retains assistance. Released upper-speed Scratch does not
+override the motor's speed regulator.
+
+Normal rings advance with playback, follow Scratch and freeze on pause;
+TT rings follow the physical wheel. These source-only additions are still
+being beta tested, not included in the published download. See the
+[workflow and limits](../docs/user-guide.md#testing-motorized-playback).
+Testing controls are not a final end-user settings contract.
+
 **Stop bridge** and **Quit S4 MK3 Bridge** send the bridge its normal Ctrl-C
 signal and wait for it to exit. Quitting the settings window does not stop it.
 Diagnostics shows the actual launch arguments, exit status, and a bounded log.

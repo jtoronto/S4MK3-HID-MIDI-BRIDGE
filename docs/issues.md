@@ -213,14 +213,17 @@ GUI setup. The bridge doesn't detect global DVS enable.
   No distinct assignment chosen; revisit after screen support is understood,
   when layered controls may provide a useful role. This defers the design
   decision, not a change to the current STEMS-duplicate behavior.
-- [ ] **Powered platter rotation and other haptics** - Playback-driven
-  rotation, cue effects, and other haptic behavior need their own agreed scope.
-  The completed tension setting does not implement those behaviors.
-- [ ] **Jog-ring position polish** - Hold the current chase position on top
-  touch or playback stop, follow physical rotation, and resume smoothly.
-  Deferred by the user on October 20, 2026; not implemented. Physical rotation
-  scale still needs measurement; the LED's 2880-position encoding is not proof
-  of sensor counts per revolution.
+- [ ] **Motorized playback beta testing** - Current source implements TT drive,
+  relative bend and lower/upper Scratch handoffs, with continued holding force.
+  On October 30 the user reported the corrected build much better and began
+  extended beta testing; this is not exhaustive fault/recovery acceptance.
+  See [current evidence](tt-normal-ring-recovery-validation.md).
+  Review experimental settings for removal or hiding before release.
+  Cue effects and other new haptics remain deferred.
+- [ ] **Jog-ring extended validation** - Normal playback/Scratch/pause
+  continuity and TT physical tracking are implemented and software-tested.
+  The user reported TT tracking good and the corrected combined build much
+  better. Longer beta testing continues; see the same validation record.
 
 ## DJ-laptop validation
 

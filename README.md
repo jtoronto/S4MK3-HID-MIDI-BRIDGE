@@ -107,7 +107,10 @@ acceptance is tracked in the [EXT validation record](docs/ext-input-validation.m
 
 **Current-source testing build:** TT independently enables motorized playback;
 JOG toggles Vinyl red/on and blue/off. Jog settings include a Vinyl startup
-default and experimental platter tuning controls. Install the newly generated
+default per mode: normal starts on, TT starts off. With TT Vinyl off, braking
+or nudging past the provisional speed bounds hands off to Scratch. Normal rings
+follow playback and Scratch and hold on pause; TT rings follow the physical
+wheel. Jog settings retain experimental tuning controls. Install the newly generated
 mapping for explicit Internal-mode feedback. These additions are not in the
 published download; see [testing workflow and limits](docs/user-guide.md#testing-motorized-playback).
 
@@ -155,8 +158,9 @@ remains available even with screen support off.
 Published downloads do not provide powered playback rotation; the
 current-source testing addition is described above. Haptic cues remain
 unsupported. Motor-assisted wheel tension is available in the full-controller
-profile as described below. Jog-ring animation
-remains decorative, not track-position or physical-platter-position tracking.
+profile as described below. Published jog-ring animation is decorative. Current
+source adds pause/Scratch continuity in normal mode and physical tracking in TT;
+neither is an absolute track playhead.
 
 ### Startup positions and FX pickup
 

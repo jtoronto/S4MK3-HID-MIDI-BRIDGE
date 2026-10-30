@@ -122,6 +122,15 @@ a new filename when bindings change, preserving custom maps. See the focused
 
 ## Current hardware tension and mixer EQ overlay
 
+Current source also has a separate TT motorized-playback beta: normal and TT
+keep independent Vinyl choices, and provisional lower/upper speed bounds switch
+from pitch bend to Scratch with TT Vinyl off. It retains assistance while held
+and restores speed regulation after a released forward nudge. Normal rings
+illustrate playback/Scratch/pause; TT rings track physical rotation.
+This is not Traktor parity or a published-download promise. See the
+[current workflow](user-guide.md#testing-motorized-playback) and
+[retired absolute Scratch approach](absolute-position-scratch-experiment.md).
+
 The normal full-profile bridge now supports saved hardware wheel tension:
 one Assist / Neutral / Brake setting, with independent per-wheel movement
 and touch response. The user confirmed the focused integration checks on
