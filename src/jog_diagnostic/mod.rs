@@ -43,11 +43,17 @@ mod motor;
 mod options;
 mod ownership;
 mod paced;
+mod platter;
+mod platter_live;
+mod platter_rotation;
+mod platter_session;
+mod platter_telemetry;
 #[cfg(test)]
 mod play_tests;
 #[cfg(test)]
 mod preparation_tests;
 mod reader;
+mod reader_telemetry;
 mod replay;
 mod session;
 mod smooth {
@@ -103,6 +109,14 @@ pub struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Measure integrated relative raw counts, without any HID output.
+    PlatterMeasure(platter::MeasureOptions),
+    /// Bounded open-loop fixed force, not constant-RPM playback.
+    PlatterDrive(platter::DriveOptions),
+    /// Bounded feedback-controlled speed probe, separate from Djay playback.
+    PlatterRotate(platter_rotation::Options),
+    /// Follow calibrated relative motion; touch holds, release resumes.
+    PlatterRing(platter::RingOptions),
     /// Capture buttons/jog snapshots without sending any output reports.
     Capture {
         #[arg(long)]
@@ -232,6 +246,10 @@ struct ControlArgs {
 
 pub fn run(args: Args) -> anyhow::Result<()> {
     match args.command {
+        Command::PlatterMeasure(options) => platter_live::run(options.into()),
+        Command::PlatterDrive(options) => platter_live::run(options.resolve()?),
+        Command::PlatterRotate(options) => platter_live::run(options.resolve()?),
+        Command::PlatterRing(options) => platter_live::run(options.into()),
         Command::Capture {
             out,
             seconds,

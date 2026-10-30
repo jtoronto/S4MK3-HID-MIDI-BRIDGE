@@ -150,7 +150,12 @@ fn fader_defaults_and_explicit_duration_conflicts_are_resolved() -> anyhow::Resu
             assert_eq!(control.gain, 1);
             assert!(until_stopped);
         }
-        Command::Capture { .. } | Command::Replay { .. } => {
+        Command::Capture { .. }
+        | Command::Replay { .. }
+        | Command::PlatterMeasure(_)
+        | Command::PlatterDrive(_)
+        | Command::PlatterRotate(_)
+        | Command::PlatterRing(_) => {
             anyhow::bail!("expected live arguments");
         }
     }

@@ -586,6 +586,25 @@ The Testing settings remain available during beta testing. Before release,
 the settings exposed to ordinary users will be reviewed; no options are removed
 by this documentation update.
 
+The separate [attended platter diagnostic](platter-diagnostic.md)
+measures motor response and physical ring following without controlling Djay.
+Current source also provides a short target-speed probe, armed with MOVE,
+with a two-second powered window by default and an optional window up to
+15 seconds for repeated rim-feel checks. Its 33 RPM/8,000-unit defaults use
+sensor-timed feed-forward and PI feedback. The standalone command lets you
+adjust the force ceiling, feed-forward curve, PI gains and startup behavior
+for each attended run; the log records the selected values. Change the command
+between runs; values are not adjusted live or saved to the bridge app. For a
+trial, you can also override the overspeed cutoff or set it to zero to disable
+that cutoff; the direction and sensor-freshness guards remain. Clear both
+platters and wait for the terminal to show
+`PLATTER_STATE gate=Ready` before arming MOVE. Top-plate touch cancels drive,
+and lifting does not restart it; this does not enable scratching. Separate
+rim-brake and forward-nudge checks compare recovery. The current feel remains
+different from Traktor; see the diagnostic guide for the adjustable values
+and run procedure.
+Run it separately from the bridge, only during an attended test.
+
 ## Screens and feedback
 
 HOTCUE and SAMPLES show **JUMP / LOOP / KEY / RANGE**. STEMS and MUTE show the

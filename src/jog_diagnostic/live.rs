@@ -167,7 +167,7 @@ fn trial_loop<F: FnMut(&[u8]) -> anyhow::Result<usize>>(
     }
 }
 
-fn create_log(path: &Path) -> anyhow::Result<BufWriter<std::fs::File>> {
+pub(super) fn create_log(path: &Path) -> anyhow::Result<BufWriter<std::fs::File>> {
     Ok(BufWriter::new(
         OpenOptions::new()
             .write(true)
@@ -177,7 +177,7 @@ fn create_log(path: &Path) -> anyhow::Result<BufWriter<std::fs::File>> {
     ))
 }
 
-fn open(motor: bool) -> anyhow::Result<(HidDevice, Option<HidDevice>)> {
+pub(super) fn open(motor: bool) -> anyhow::Result<(HidDevice, Option<HidDevice>)> {
     let api = HidApi::new().context("initialize native HID")?;
     let mut devices = api
         .device_list()
@@ -203,9 +203,16 @@ fn open(motor: bool) -> anyhow::Result<(HidDevice, Option<HidDevice>)> {
     Ok((reader, writer))
 }
 
-fn stop_signal() -> anyhow::Result<Receiver<()>> {
+pub(super) fn stop_signal() -> anyhow::Result<Receiver<()>> {
+    stop_signal_observed(|| {})
+}
+
+pub(super) fn stop_signal_observed(
+    mut observe: impl FnMut() + Send + 'static,
+) -> anyhow::Result<Receiver<()>> {
     let (tx, rx) = bounded(1);
     ctrlc::set_handler(move || {
+        observe();
         if let Err(error) = tx.try_send(()) {
             warn!(%error, "DIAGNOSTIC_STOP_SIGNAL_FAILED");
         }

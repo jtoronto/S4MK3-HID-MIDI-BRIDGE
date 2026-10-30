@@ -1,5 +1,8 @@
 use super::*;
+use crate::jog_diagnostic::reader_telemetry::{PollEvent, Telemetry};
+use anyhow::ensure;
 use std::cell::Cell;
+use std::time::Instant;
 
 #[test]
 fn ready_interrupts_cannot_accelerate_snapshot_polling() -> anyhow::Result<()> {
@@ -65,7 +68,64 @@ fn delayed_acquisition_does_not_catch_up_in_a_burst() -> anyhow::Result<()> {
 }
 
 #[test]
+fn delayed_poll_reports_lateness_without_changing_schedule() -> anyhow::Result<()> {
+    let (_cancel_tx, cancel) = bounded(1);
+    let mut next = 2000;
+    let clock_calls = Cell::new(0);
+    let now = Cell::new(0_u64);
+    let mut telemetry = Telemetry::new(Instant::now());
+    // Given a late wait return followed by injected delay before poll admission.
+    let acquired = poll_slot_observed(
+        &mut next,
+        &cancel,
+        (
+            || {
+                let call = clock_calls.get();
+                clock_calls.set(call + 1);
+                Ok(match call {
+                    0 => 1000,
+                    1 => now.get(),
+                    _ => now.get() + 500,
+                })
+            },
+            |requested| {
+                assert_eq!(requested, 1000);
+                now.set(2000 + 275);
+                false
+            },
+        ),
+        |event| {
+            if let PollEvent::PollAdmitted { lateness_us, .. } = event {
+                telemetry.poll_lateness(std::time::Duration::from_micros(lateness_us));
+            }
+            telemetry.poll_event(event);
+            Ok(())
+        },
+        true,
+    )?;
+
+    // When the actual acquisition gate admits the poll.
+    assert!(acquired);
+
+    // Then wait overshoot and post-wait delay are separately measurable.
+    let snapshot = telemetry.snapshot(0);
+    assert_eq!(snapshot.waits.latest_requested_us, Some(1000));
+    assert_eq!(snapshot.waits.latest_scheduled_deadline_us, Some(2000));
+    assert_eq!(snapshot.waits.latest_elapsed_us, Some(1275));
+    assert_eq!(snapshot.waits.latest_overshoot_us, Some(275));
+    assert_eq!(snapshot.latest_poll_lateness_us, Some(775));
+    assert_eq!(snapshot.latest_post_wait_us, Some(500));
+    assert_eq!(snapshot.latest_poll_admitted_us, Some(2775));
+    assert_eq!(snapshot.post_wait_count, 1);
+    // Scheduling remains relative to the actual admitted poll start.
+    assert_eq!(next, 4775);
+    Ok(())
+}
+
+#[test]
 fn cancellation_wins_before_or_during_the_poll_wait() -> anyhow::Result<()> {
+    use std::time::Instant;
+
     // Given either a queued cancel or a cancel reported by the wait itself.
     for prequeued in [false, true] {
         let (tx, cancel) = bounded(1);
@@ -74,8 +134,9 @@ fn cancellation_wins_before_or_during_the_poll_wait() -> anyhow::Result<()> {
         }
         let waited = Cell::new(false);
         let mut next = 2000;
+        let mut telemetry = Telemetry::new(Instant::now());
         // When the reader is waiting for its next acquisition slot.
-        let acquire = poll_slot(
+        let acquire = poll_slot_observed(
             &mut next,
             &cancel,
             (
@@ -85,11 +146,49 @@ fn cancellation_wins_before_or_during_the_poll_wait() -> anyhow::Result<()> {
                     true
                 },
             ),
+            |event| {
+                telemetry.poll_event(event);
+                Ok(())
+            },
+            true,
         )?;
         // Then no snapshot read is admitted after cancellation.
         assert!(!acquire);
         assert_eq!(waited.get(), !prequeued);
+        let snapshot = telemetry.snapshot(0);
+        let recorded_wait = u64::from(!prequeued);
+        assert_eq!(snapshot.waits.count, recorded_wait);
+        assert_eq!(snapshot.waits.cancellations, recorded_wait);
+        assert_eq!(
+            snapshot.waits.latest_cancelled,
+            (!prequeued).then_some(true)
+        );
     }
+    Ok(())
+}
+
+#[test]
+fn eligible_poll_does_not_wait() -> anyhow::Result<()> {
+    let (_cancel_tx, cancel) = bounded(1);
+    let mut next = 0;
+    let waited = Cell::new(false);
+    let admitted = poll_slot_observed(
+        &mut next,
+        &cancel,
+        (
+            || Ok(42),
+            |_| {
+                waited.set(true);
+                false
+            },
+        ),
+        |_| Ok(()),
+        true,
+    )?;
+
+    assert!(admitted);
+    assert!(!waited.get());
+    assert_eq!(next, 2042);
     Ok(())
 }
 
