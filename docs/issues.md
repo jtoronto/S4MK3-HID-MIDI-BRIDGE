@@ -1,6 +1,6 @@
 # S4 MK3 bridge issues
 
-Current checklist as of October 27, 2026. This is the source of truth for issue
+Current checklist as of October 30, 2026. This is the source of truth for issue
 status; [the mapping audit](mapping-audit.md) retains detailed findings and
 historical snapshots.
 
@@ -161,9 +161,8 @@ GUI setup. The bridge doesn't detect global DVS enable.
   uninvestigated; this is separate from the self-recovering 50 ms input-gap
   path and was not changed by the musical-key fix. Retain the exact log if it
   occurs again. See [the captured run](key-feedback-order-validation.md#evidence-and-diagnostic-boundaries).
-- [ ] **Jog feel and backspin** - Reduce excessive slow-movement sensitivity
-  while improving fast-backspin response. Measure raw counts,
-  emitted MIDI, and Djay response before choosing tuning behavior.
+- [x] **Jog feel and backspin** - User confirmed the current jog feel and
+  backspin tuning are solved to their satisfaction on October 27, 2026.
   [October 6 comparison](jog-wheel-investigation.md): Traktor's target is
   2.5 beats per revolution at either speed, including released backspin,
   with no reversal after the platter stops. The user calibrated scratch
@@ -177,7 +176,7 @@ GUI setup. The bridge doesn't detect global DVS enable.
   confirmed live continuation, catching, indicator clearing, slow release and
   normal rim nudging on both wheels, plus the detection-disabled comparison.
   A 1.0% boost was not noticeable to them; 5.2% was closer to the desired feel.
-  General slow/fast calibration remains open; optional boost deliberately changes
+  Optional boost deliberately changes
   event travel rather than guaranteeing a fixed distance per revolution.
   The normal motor-tension setting is preserved. A subsequent
   released-assist trial provides independent on/off and 0-100% strength with a
@@ -191,17 +190,19 @@ GUI setup. The bridge doesn't detect global DVS enable.
 - [ ] **Leftmost FX button duplicates slot 1** - Verify native bank-enable
   behavior and investigate a whole-bank bypass that preserves individual
   slot states.
-- [ ] **REC / Record Sample** - The user reports on October 21, 2026 that
-  the action did not record a sample in their testing. Its actual behavior
-  remains unknown; establish what it does before choosing a useful REC
-  assignment rather than assuming it supports sample recording.
-- [ ] **Broader external-audio validation** -
+- [ ] **REC / Record Sample: confirmed Djay bug** - The action did not record
+  a sample in the user's October 21, 2026 testing. On October 30, the user
+  reported that Algoriddim confirmed this is a bug on their end. Keep this
+  open pending an upstream fix and a successful retest; do not treat it as
+  an unresolved bridge mapping assignment or claim that it is fixed.
+  REC remains assigned to Record Sample, not the set recorder.
+- [x] **Broader external-audio validation** - User confirmed external audio
+  is already validated on October 27, 2026, closing this checklist item.
   The user has confirmed manually selected DVS THRU on channel 4 works with
   the bridge active, including channel fader, FX and mix/cue. Input-channel
   mixing is no longer a blocker. The user also confirmed the USB input map:
   A 1-2, B 3-4, C 5-6, D 7-8, with PHONO/LINE on A/B and LINE/MIC on C/D.
-  Full mixer-control checks on the remaining channels, phono-stage behavior
-  and four-source operation remain unverified. The earlier stopped-bridge headphone result
+  The earlier stopped-bridge headphone result
   remains unexplained, not a current fault. See the
   [test record](external-input-routing-test.md),
   [manual workflow](user-guide.md#external-audio-through-a-deck) and

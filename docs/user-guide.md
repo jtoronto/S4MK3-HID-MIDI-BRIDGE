@@ -390,8 +390,8 @@ Neural Mix availability depends on the track and Djay support. The screen
 reports actual mute/solo state; ON in a MUTE tile means that mute is active.
 
 **REC is not the set recorder.** It is assigned to Djay's Record Sample
-action, whose source/slot and press/hold behavior remain unresolved. Use
-Djay's onscreen recording controls when you want to record a mix.
+action, which currently has a bug confirmed by Algoriddim. A fix and retest
+are pending. Use Djay's onscreen recording controls to record a mix.
 
 ## Jog wheels and feel
 
