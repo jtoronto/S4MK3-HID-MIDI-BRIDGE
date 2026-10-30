@@ -4,6 +4,7 @@ use std::cell::{Cell, RefCell};
 mod backspin;
 mod playback;
 mod recovery;
+mod tt_gesture;
 mod watchdog;
 
 fn config(value: i32) -> anyhow::Result<s4mk3_hid_midi_bridge::tension::Config> {

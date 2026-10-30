@@ -101,21 +101,32 @@ fn production_replay_gates_motor_force_and_preserves_original_scratch_owner() ->
             .any(|record| record["now_us"].as_u64().is_some_and(|at| at > 282_001))
     );
     assert!(!records.iter().any(|record| record["event"] == "midi"
+        && record["now_us"].as_u64().is_some_and(|at| at < 1_000_000)
         && record["message"][0] == 0xb2
         && record["message"][1] == 5));
-    // Raw physical touch zero precedes the corresponding MIDI work.
+    // TT touch enters the original deck's Scratch route without cutting drive.
     let touch: Vec<_> = records
         .iter()
         .filter(|record| record["now_us"] == 200_001)
         .collect();
-    assert_eq!(touch[1]["event"], "motor");
-    assert_eq!(touch[1]["report"][4], 0);
-    assert_eq!(touch[2]["message"], serde_json::json!([0x90, 7, 127]));
+    assert!(
+        writes
+            .iter()
+            .filter(|(at, _)| (200_001..220_001).contains(at))
+            .all(|(_, report)| force(report, 0) == 5280)
+    );
+    let scratch_index = touch
+        .iter()
+        .position(|record| {
+            record["event"] == "midi" && record["message"][0] == 0xb0 && record["message"][1] == 5
+        })
+        .context("touch scratch movement")?;
+    assert!(scratch_index > 0);
     Ok(())
 }
 
 #[test]
-fn powered_nominal_motion_is_silent_and_rim_deviations_remain_midi() -> anyhow::Result<()> {
+fn powered_platter_uses_relative_jog_bend_and_continues_assist_on_touch() -> anyhow::Result<()> {
     // Given motor integration with all optional tension/backspin features off.
     let config = full::jog::Config {
         backspin_enabled: false,
@@ -126,13 +137,36 @@ fn powered_nominal_motion_is_silent_and_rim_deviations_remain_midi() -> anyhow::
     // When the same executable fixture supplies raw nominal and rim movement.
     let records = transcript(config)?;
     let writes = motors(&records)?;
-    // Then playback still runs, untouched powered counts never become jog MIDI,
-    // while the measured extra rim movement bends the track.
+    // Then motorized motion uses relative Pitch Bend CC, and touch owns the wheel.
     assert!(
         writes
             .iter()
             .any(|(at, report)| *at == 16_000_001 && force(report, 0) > 0)
     );
+    assert!(!records.iter().any(|record| {
+        record["event"] == "midi"
+            && record["message"][0]
+                .as_u64()
+                .is_some_and(|status| (0xb0..=0xb3).contains(&status))
+            && record["message"][1] == 8
+    }));
+    let scratch_mode = records
+        .iter()
+        .filter(|record| {
+            record["event"] == "midi" && record["message"][1] == full::catalog::SCRATCHING_MODE_NOTE
+        })
+        .collect::<Vec<_>>();
+    // Touch or the deliberate speed-floor gesture may hold Scratch, never nominal rotation.
+    assert!(scratch_mode.iter().all(|record| {
+        record["now_us"].as_u64().is_some_and(|at| {
+            (200_001..=282_001).contains(&at)
+                || (3_000_000..4_600_000).contains(&at)
+                || (6_000_000..7_700_000).contains(&at)
+        })
+    }));
+    assert!(scratch_mode.iter().any(|record| {
+        record["now_us"] == 200_001 && record["message"] == serde_json::json!([0x90, 7, 127])
+    }));
     let jogs: Vec<_> = records
         .iter()
         .filter(|record| {
@@ -143,23 +177,101 @@ fn powered_nominal_motion_is_silent_and_rim_deviations_remain_midi() -> anyhow::
                 && record["message"][1] == 4
         })
         .collect();
-    assert!(jogs.iter().any(|record| {
-        record["now_us"] == 70_001
-            && record["message"][2]
-                .as_u64()
-                .is_some_and(|value| value > 64)
-    }));
-    assert!(!jogs.iter().any(|record| {
-        record["now_us"]
+    assert!(
+        jogs.iter().all(
+            |record| record["now_us"].as_u64().is_some_and(|at| at < 1_000_000
+                || (3_000_000..4_600_000).contains(&at)
+                || (6_000_000..7_700_000).contains(&at))
+        ),
+        "nominal powered motion emitted relative jog-bend CC: {jogs:?}"
+    );
+    assert!(jogs.iter().all(|record| {
+        record["message"][2]
             .as_u64()
-            .is_some_and(|at| (10_001..60_001).contains(&at) || at > 1_000_000)
+            .is_some_and(|value| (1..=127).contains(&value) && value != 64)
     }));
     let vinyl_off = records
         .iter()
         .find(|record| record["event"] == "local" && record["now_us"] == 130_001)
         .context("vinyl off state")?;
-    assert_eq!(vinyl_off["vinyl"], serde_json::json!([false, true]));
+    assert_eq!(vinyl_off["vinyl"], serde_json::json!([false, false]));
     assert_eq!(vinyl_off["motor_enabled"], serde_json::json!([true, true]));
+    Ok(())
+}
+
+#[test]
+fn powered_speed_error_emits_only_the_corresponding_relative_bend() -> anyhow::Result<()> {
+    // Given the production parser/translator with a quantized steady sensor speed.
+    for (rpm_tenths, direction) in [
+        (327_u64, 0_i64),
+        (330, 0),
+        (316, 0),
+        (320, 0),
+        (340, 0),
+        (300, -1),
+        (360, 1),
+    ] {
+        let mut fixture = replay::fixture()?;
+        let mut anchor = None;
+        for step in &mut fixture {
+            if step.now_us < 2_000_000 {
+                continue;
+            }
+            if let Some(frame) = &mut step.frame {
+                let (start, counters) = *anchor.get_or_insert((
+                    step.now_us,
+                    [
+                        u32::from_le_bytes(frame.buffers[1][12..16].try_into()?),
+                        u32::from_le_bytes(frame.buffers[1][40..44].try_into()?),
+                    ],
+                ));
+                let travel =
+                    u32::try_from((step.now_us - start) * rpm_tenths * 2880 / 600_000_000)?;
+                for (side, offset) in [(0, 12), (1, 40)] {
+                    let counter = counters[side].wrapping_add(travel);
+                    frame.buffers[1][offset..offset + 4].copy_from_slice(&counter.to_le_bytes());
+                }
+            }
+        }
+        // When the complete production replay processes that speed.
+        let bends = RefCell::new(Vec::new());
+        replay::execute(full::jog::DEFAULT, fixture, |record| {
+            if record["event"] == "midi"
+                && record["now_us"].as_u64().is_some_and(|at| at > 3_000_000)
+                && record["message"][0]
+                    .as_u64()
+                    .is_some_and(|status| (0xb0..=0xb3).contains(&status))
+                && record["message"][1] == 4
+            {
+                bends
+                    .borrow_mut()
+                    .push((record["now_us"].as_u64(), record["message"][2].as_i64()));
+            }
+        })?;
+        // Then nominal and the captured steady baseline stay silent, while
+        // sustained slower/faster travel produces only matching signed bends.
+        let bends = bends
+            .into_inner()
+            .into_iter()
+            .map(|(at, value)| {
+                Ok((
+                    at.context("bend timestamp")?,
+                    value.context("bend value")? - 64,
+                ))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        if direction == 0 {
+            assert!(bends.is_empty(), "{rpm_tenths}: {bends:?}");
+        } else {
+            assert!(!bends.is_empty(), "{rpm_tenths}");
+            assert!(
+                bends
+                    .iter()
+                    .all(|(_, bend)| bend.signum() == direction && bend.abs() == 1)
+            );
+            assert!(bends.windows(2).all(|pair| pair[1].0 - pair[0].0 <= 10_000));
+        }
+    }
     Ok(())
 }
 
@@ -173,6 +285,7 @@ fn duplicate_sensor_snapshots_cannot_refresh_motor_freshness() -> anyhow::Result
             .set_playback(s4mk3_hid_midi_bridge::tension::PlaybackState {
                 enabled: [true; 2],
                 owned: [false; 2],
+                continuous: [false; 2],
             })
             .is_none()
     );
@@ -216,6 +329,7 @@ fn sensor_clock_gap_clears_force_and_requires_a_new_measurement_window() -> anyh
             .set_playback(s4mk3_hid_midi_bridge::tension::PlaybackState {
                 enabled: [true; 2],
                 owned: [false; 2],
+                continuous: [false; 2],
             })
             .is_none()
     );
@@ -254,6 +368,7 @@ fn powered_history_cannot_become_immediate_tension_when_touch_arrives() -> anyho
             .set_playback(s4mk3_hid_midi_bridge::tension::PlaybackState {
                 enabled: [true; 2],
                 owned: [false; 2],
+                continuous: [false; 2],
             })
             .is_none()
     );
@@ -278,5 +393,45 @@ fn powered_history_cannot_become_immediate_tension_when_touch_arrives() -> anyho
     assert_eq!(force(&immediate, 0), 0);
     assert!(force(&immediate, 1) > 0);
     assert_eq!(force(&engine.tick(32_001)?, 0), 0);
+    Ok(())
+}
+
+#[test]
+fn touch_across_sensor_rollover_neutralizes_without_exiting() -> anyhow::Result<()> {
+    // Given active playback near a 32-bit sensor rollover, with 20ms snapshots.
+    let mut engine = Engine::new(config(0)?);
+    engine.configure_playback(full::jog::DEFAULT.platter_settings());
+    assert!(
+        engine
+            .set_playback(PlaybackState {
+                enabled: [true; 2],
+                owned: [false; 2],
+                continuous: [false; 2],
+            })
+            .is_none()
+    );
+    let origin = u32::MAX - 5_000_000;
+    for index in 0_u32..=2 {
+        let at = u64::from(index) * 20_000 + 1;
+        let mut sample = frame(at, [index * 32; 2], 0);
+        for offset in [8, 36] {
+            sample.buffers[1][offset..offset + 4]
+                .copy_from_slice(&origin.wrapping_add(index * 2_000_000).to_le_bytes());
+        }
+        engine.observe(sample.report(0), sample.report(1), at, at)?;
+        assert!(index == 0 || force(&engine.tick(at)?, 0) > 0);
+    }
+    // When top touch arrives on the first post-rollover snapshot.
+    let mut touched = frame(60_001, [96; 2], 0x10);
+    for offset in [8, 36] {
+        touched.buffers[1][offset..offset + 4]
+            .copy_from_slice(&origin.wrapping_add(6_000_000).to_le_bytes());
+    }
+    let immediate = engine
+        .observe(touched.report(0), touched.report(1), 60_001, 60_001)?
+        .context("touch neutral")?;
+    // Then touch clears only its wheel and the runtime can keep ticking.
+    assert_eq!(force(&immediate, 0), 0);
+    assert!(force(&engine.tick(60_001)?, 1) > 0);
     Ok(())
 }

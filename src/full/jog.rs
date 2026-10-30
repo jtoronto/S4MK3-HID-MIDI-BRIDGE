@@ -5,11 +5,42 @@ use std::path::Path;
 use anyhow::{Context as _, Result, ensure};
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScratchDirection {
+    #[default]
+    Normal,
+    Reversed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "bool", into = "bool")]
+pub enum VinylMode {
+    Bend,
+    Scratch,
+}
+
+impl From<bool> for VinylMode {
+    fn from(enabled: bool) -> Self {
+        if enabled { Self::Scratch } else { Self::Bend }
+    }
+}
+
+impl From<VinylMode> for bool {
+    fn from(mode: VinylMode) -> Self {
+        match mode {
+            VinylMode::Bend => false,
+            VinylMode::Scratch => true,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub scratch_speed: f64,
     pub scratch_reaction: u8,
+    pub scratch_direction: ScratchDirection,
     pub pitch_bend_speed: f64,
     pub pitch_bend_reaction: u8,
     pub backspin_enabled: bool,
@@ -18,7 +49,11 @@ pub struct Config {
     pub backspin_acceleration: f64,
     pub backspin_speed_increase: f64,
     pub vinyl_enabled_at_startup: bool,
+    #[serde(rename = "tt_vinyl_enabled_at_startup")]
+    pub tt_startup_mode: VinylMode,
+    pub tt_pitch_bend_floor_percent: u8,
     pub platter_target_rpm: u16,
+    pub platter_position_sensitivity: f64,
     pub platter_max_force: u16,
     pub platter_base_force: u16,
     pub platter_force_per_rpm: u16,
@@ -33,6 +68,7 @@ pub struct Config {
 pub const DEFAULT: Config = Config {
     scratch_speed: 2.7,
     scratch_reaction: 150,
+    scratch_direction: ScratchDirection::Normal,
     pitch_bend_speed: 2.7,
     pitch_bend_reaction: 17,
     backspin_enabled: true,
@@ -41,7 +77,10 @@ pub const DEFAULT: Config = Config {
     backspin_acceleration: 150_000.0,
     backspin_speed_increase: 5.6,
     vinyl_enabled_at_startup: true,
+    tt_startup_mode: VinylMode::Bend,
+    tt_pitch_bend_floor_percent: 50,
     platter_target_rpm: 33,
+    platter_position_sensitivity: 14.0,
     platter_max_force: 20_000,
     platter_base_force: 1_650,
     platter_force_per_rpm: 110,
@@ -102,6 +141,11 @@ impl Config {
                 "{name} must be finite and positive"
             );
         }
+        ensure!(
+            self.platter_position_sensitivity.is_finite()
+                && (0.1..=100.0).contains(&self.platter_position_sensitivity),
+            "platter_position_sensitivity must be finite and between 0.1 and 100"
+        );
         for (name, reaction) in [
             ("scratch_reaction", self.scratch_reaction),
             ("pitch_bend_reaction", self.pitch_bend_reaction),
@@ -121,6 +165,10 @@ impl Config {
                 && self.backspin_speed_increase >= 0.0
                 && (self.scratch_speed + self.backspin_speed_increase).is_finite(),
             "backspin_speed_increase must be finite and nonnegative without overflowing scratch speed"
+        );
+        ensure!(
+            (1..=95).contains(&self.tt_pitch_bend_floor_percent),
+            "tt_pitch_bend_floor_percent must be in 1..=95"
         );
         ensure!(
             (1..=45).contains(&self.platter_target_rpm),
@@ -171,8 +219,13 @@ mod tests {
         let partial: Config = serde_json::from_str(r#"{"scratch_speed":4.5}"#)?;
         // Then shipped defaults agree and omitted user fields retain those defaults.
         assert!((shipped.backspin_speed_increase - 5.6).abs() < f64::EPSILON);
+        assert!((shipped.platter_position_sensitivity - 14.0).abs() < f64::EPSILON);
+        assert_eq!(shipped.scratch_direction, ScratchDirection::Normal);
         assert!(shipped.backspin_assist_enabled);
         assert_eq!(shipped.backspin_assist_strength, 100);
+        assert!(shipped.vinyl_enabled_at_startup);
+        assert_eq!(shipped.tt_startup_mode, VinylMode::Bend);
+        assert_eq!(shipped.tt_pitch_bend_floor_percent, 50);
         assert_eq!(
             serde_json::to_value(shipped)?,
             serde_json::to_value(DEFAULT)?
@@ -202,6 +255,8 @@ mod tests {
         }
         for input in [
             r#"{"vinyl_enabled_at_startup":1}"#,
+            r#"{"scratch_direction":true}"#,
+            r#"{"scratch_direction":"sideways"}"#,
             r#"{"platter_target_rpm":33.0}"#,
             r#"{"platter_target_rpm":"33"}"#,
             r#"{"platter_target_rpm":true}"#,
@@ -210,6 +265,10 @@ mod tests {
         }
         for input in [
             r#"{"platter_target_rpm":0}"#,
+            r#"{"tt_pitch_bend_floor_percent":0}"#,
+            r#"{"tt_pitch_bend_floor_percent":96}"#,
+            r#"{"platter_position_sensitivity":0.0}"#,
+            r#"{"platter_position_sensitivity":100.1}"#,
             r#"{"platter_max_force":0}"#,
             r#"{"platter_max_force":25001}"#,
             r#"{"platter_base_force":25001}"#,
@@ -274,6 +333,47 @@ mod tests {
         assert!((reloaded.backspin_speed_increase - 5.2).abs() < f64::EPSILON);
         let excessive: Config = serde_json::from_str(r#"{"backspin_assist_strength":101}"#)?;
         assert!(excessive.validate().is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn tt_preferences_default_independently_and_round_trip() -> Result<()> {
+        // Given legacy preferences with a saved normal-mode Vinyl choice.
+        let legacy: Config = serde_json::from_str(r#"{"vinyl_enabled_at_startup":false}"#)?;
+        assert!(!legacy.vinyl_enabled_at_startup);
+        assert_eq!(legacy.tt_startup_mode, VinylMode::Bend);
+        assert_eq!(legacy.tt_pitch_bend_floor_percent, 50);
+
+        // When TT preferences are saved and reloaded.
+        let config = Config {
+            tt_startup_mode: VinylMode::Scratch,
+            tt_pitch_bend_floor_percent: 73,
+            ..legacy
+        };
+        let reloaded: Config = serde_json::from_value(serde_json::to_value(config)?)?;
+
+        // Then each mode's Vinyl preference and the floor remain independent.
+        assert!(!reloaded.vinyl_enabled_at_startup);
+        assert_eq!(reloaded.tt_startup_mode, VinylMode::Scratch);
+        assert_eq!(reloaded.tt_pitch_bend_floor_percent, 73);
+        for floor in [1, 95] {
+            let bounded = Config {
+                tt_pitch_bend_floor_percent: floor,
+                ..DEFAULT
+            };
+            bounded.validate()?;
+            assert_eq!(
+                serde_json::from_value::<Config>(serde_json::to_value(bounded)?)?
+                    .tt_pitch_bend_floor_percent,
+                floor
+            );
+        }
+        for input in [
+            r#"{"tt_pitch_bend_floor_percent":50.0}"#,
+            r#"{"tt_pitch_bend_floor_percent":true}"#,
+        ] {
+            assert!(serde_json::from_str::<Config>(input).is_err(), "{input}");
+        }
         Ok(())
     }
 

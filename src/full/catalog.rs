@@ -5,6 +5,7 @@ use super::jog;
 pub const EQ_MODE_NOTE: u8 = 20;
 pub const EXT_THRU_CC: u8 = 21;
 pub const INTERNAL_MODE_CC: u8 = 22;
+pub const SCRATCHING_MODE_NOTE: u8 = 7;
 
 pub const EXT_INPUTS: [&str; 4] = [
     "mixer_ch1_ext",
@@ -57,6 +58,7 @@ pub enum Kind {
     Note,
     Absolute,
     Relative,
+    RotaryAbsolute,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -110,6 +112,10 @@ const fn relative(
     binding(input, number, Kind::Relative, target, shifted)
 }
 
+const fn rotary_absolute(input: &'static str, number: u8, target: &'static str) -> Binding {
+    binding(input, number, Kind::RotaryAbsolute, target, None)
+}
+
 const fn note(
     input: &'static str,
     number: u8,
@@ -118,6 +124,9 @@ const fn note(
 ) -> Binding {
     binding(input, number, Kind::Note, target, shifted)
 }
+
+pub const PLATTER_POSITION_BINDING: Binding =
+    rotary_absolute("jog_platter_position", 8, "turntable{deck}.scratchingMove");
 
 /// Deck suffixes are prefixed with `left_` / `right_` by the HID bridge.
 pub const DECK_BINDINGS: &[Binding] = &[
@@ -156,7 +165,7 @@ pub const DECK_BINDINGS: &[Binding] = &[
     ),
     note(
         "wheel_touch",
-        7,
+        SCRATCHING_MODE_NOTE,
         "turntable{deck}.scratchingMode",
         Some("turntable{deck}.jogSeekMode"),
     ),

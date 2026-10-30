@@ -44,7 +44,9 @@ impl Replay {
     ) -> anyhow::Result<PlaybackState> {
         self.translator.sync_front_panel(&self.feedback, output)?;
         self.translator.observe_jog(None, now, output)?;
-        Ok(self.translator.playback_state())
+        let playback = self.translator.playback_state();
+        self.translator.motorized_bend(None, playback, output)?;
+        Ok(playback)
     }
 
     pub fn report(

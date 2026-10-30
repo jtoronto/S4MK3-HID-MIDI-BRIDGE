@@ -10,7 +10,9 @@ snapshot retained later in this document.
 ### Current-source motorized playback testing
 
 TT toggles motorized playback independently per physical side, initially off.
-JOG toggles Vinyl red/on or blue/off; `vinyl_enabled_at_startup` defaults true.
+JOG toggles Vinyl red/on or blue/off. Normal-mode `vinyl_enabled_at_startup`
+defaults true; `tt_vinyl_enabled_at_startup` defaults false. Each mode remembers
+its own Vinyl choice during the session.
 The testing `platter_*` preferences use the existing saved Jog configuration.
 Their provisional feel defaults and application steps are in the
 [user guide](user-guide.md#testing-motorized-playback).
@@ -20,11 +22,20 @@ The matching generated mapping adds Djay-to-bridge CC22 on deck channels 1-4
 feedback plus explicit Internal true and THRU false authorize rotation;
 false THRU alone is insufficient because it may mean DVS. This requires
 installing/selecting a newly generated mapping, preserving custom mappings.
-There is no new bridge-to-Djay wheel address.
+Active wheel output uses the existing CC4/CC5/Note7 routes. The retained CC8
+absolute-position mapping is experimental and receives no runtime stream;
+see the [archived method](absolute-position-scratch-experiment.md).
 
 The production motor owner arbitrates rotation, tension and owned gestures;
-nominal powered motion is removed before jog MIDI translation. Touch,
-scratch/backspin ownership and sensor freshness suspend playback torque.
+nominal powered motion is removed before jog MIDI translation. The TT diagnostic
+retains bounded forward assistance through touch, braking and Scratch rather
+than summing tension/backspin force. Freshness, playback and deck-owner gates
+still neutralize drive. With TT Vinyl off, the provisional configurable
+`tt_pitch_bend_floor_percent` (50 initially) selects a speed-driven CC4-to-CC5
+Scratch handoff with hysteresis at the floor and the symmetric
+`200% - floor` ceiling. Upper Scratch MIDI ownership alone does not bypass
+above-target motor regulation after touch release. These bounds need actual CC4/audio calibration;
+see the [diagnostic runbook](tt-speed-scratch-diagnostic.md).
 Cached real playback authorization survives feedback silence in this testing
 build: use TT-off or Stop bridge before quitting Djay.
 See [integration evidence](motorized-playback-integration-validation.md).

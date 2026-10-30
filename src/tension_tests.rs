@@ -2,6 +2,8 @@ use super::*;
 
 #[path = "tension_tests/backspin.rs"]
 mod backspin;
+#[path = "tension_tests/continuous.rs"]
+mod continuous;
 
 fn sample(at: u64, timer: u32, counts: [u32; 2], touch: [bool; 2]) -> ([u8; 23], [u8; 60]) {
     let mut buttons = [0; 23];
@@ -47,6 +49,66 @@ fn prime_until(
 
 fn magnitude(report: [u8; 11], side: usize) -> u16 {
     u16::from_le_bytes([report[4 + side * 5], report[5 + side * 5]])
+}
+
+#[test]
+fn continuous_tt_keeps_bounded_motor_assist_through_touch_and_scratch() -> anyhow::Result<()> {
+    let mut engine = Engine::new(selected(-100)?);
+    engine.configure_playback(crate::jog::platter::Settings {
+        target_rpm: 33,
+        overspeed_limit_rpm: None,
+        max_force: 20_000,
+        base_force: 1_650,
+        force_per_rpm: 110,
+        kp: 4_000,
+        ki: 3_000,
+        startup_ms: 200,
+        force_rise_per_second: 200_000,
+        startup_force_rise_per_second: 0,
+        count_direction: 1,
+    });
+    let state = PlaybackState {
+        enabled: [true, false],
+        owned: [false; 2],
+        continuous: [true, false],
+    };
+    assert_eq!(engine.set_playback(state), None);
+    // Given fresh sensor time, touch alone must not bypass the recovery window.
+    for index in 0..10_u32 {
+        let at = 1 + u64::from(index) * 2000;
+        let (buttons, jog) = sample(at, 1 + index * 200_000, [0; 2], [true, false]);
+        engine.observe(&buttons, &jog, at, at)?;
+        assert_eq!(magnitude(engine.tick(at)?, 0), 0);
+    }
+    let (buttons, jog) = sample(20_001, 2_000_001, [0; 2], [true, false]);
+    engine.observe(&buttons, &jog, 20_001, 20_001)?;
+    let assist = magnitude(engine.tick(20_001)?, 0);
+    assert_eq!(assist, 5280);
+
+    let owned = PlaybackState {
+        owned: [true, false],
+        ..state
+    };
+    assert_eq!(engine.set_playback(owned), None);
+    let (buttons, jog) = sample(22_001, 2_200_001, [0; 2], [false, false]);
+    engine.observe(&buttons, &jog, 22_001, 22_001)?;
+    assert_eq!(magnitude(engine.tick(22_001)?, 0), assist);
+
+    let stopped = PlaybackState {
+        enabled: [false; 2],
+        ..owned
+    };
+    let neutral = engine
+        .set_playback(stopped)
+        .context("stop gate neutralizes continuous motor")?;
+    assert_eq!(magnitude(neutral, 0), 0);
+    for index in 1..=5 {
+        let at = 22_001 + u64::from(index) * 2000;
+        let (buttons, jog) = sample(at, 2_200_001 + index * 200_000, [index * 2; 2], [true; 2]);
+        engine.observe(&buttons, &jog, at, at)?;
+        assert_eq!(magnitude(engine.tick(at)?, 0), 0);
+    }
+    Ok(())
 }
 
 #[test]

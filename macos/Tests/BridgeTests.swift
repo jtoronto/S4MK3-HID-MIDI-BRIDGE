@@ -92,6 +92,64 @@ final class BridgeTests: XCTestCase {
     }
 
     @MainActor
+    func testMotorDiagnosticCaptureRequiresDebugLogLevel() throws {
+        // Given the default info-level bridge configuration.
+        let fixture = try makeFixture()
+        let support = fixture.appendingPathComponent("support")
+        let model = try testController(resourceURL: fixture, supportURL: support)
+
+        // When a motor diagnostic capture is requested.
+        model.startMotorDiagnosticCapture()
+
+        // Then the app refuses an empty position capture until Debug is selected.
+        XCTAssertFalse(model.isCapturingMotorDiagnostic)
+        XCTAssertNil(model.motorDiagnosticURL)
+        XCTAssertFalse(model.canStartMotorDiagnosticCapture)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: model.motorDiagnosticDirectoryURL.path
+        ))
+    }
+
+    @MainActor
+    func testMotorDiagnosticCaptureFiltersEventsAndOutlivesTheDisplayBuffer() throws {
+        // Given Debug output and an explicit motor diagnostic capture.
+        let fixture = try makeFixture()
+        let support = fixture.appendingPathComponent("support")
+        let model = try testController(resourceURL: fixture, supportURL: support)
+        model.run.logLevel = "debug"
+        model.startMotorDiagnosticCapture()
+        let url = try XCTUnwrap(model.motorDiagnosticURL)
+
+        // When many position events and unrelated Debug noise are received.
+        let records = (0..<900).map { position in
+            """
+            2026-10-29T13:33:37.968918Z DEBUG MOTOR_JOG_POSITION side="right" deck=2 position=\(position % 128)
+            2026-10-29T13:33:37.970920Z DEBUG TENSION_WRITE written=11
+            """
+        }.joined(separator: "\n")
+        model.appendLog(records)
+        model.appendLog(
+            "2026-10-29T13:33:37.999000Z DEBUG MOTOR_JOG_BEND side=\"right\" deck=2 steps=1\n" +
+            "2026-10-29T13:33:38.000000Z  INFO MOTOR_PLAYBACK_GATE side=\"right\" playback_gate_open=true\n" +
+            "2026-10-29T13:33:38.001000Z  INFO MOTOR_SCRATCH_MODE side=\"right\" active=true"
+        )
+        model.stopMotorDiagnosticCapture()
+        let capture = String(decoding: try Data(contentsOf: url), as: UTF8.self)
+
+        // Then the complete filtered trace survives past the bounded UI buffer.
+        XCTAssertFalse(model.isCapturingMotorDiagnostic)
+        XCTAssertLessThanOrEqual(model.log.utf8.count, 60000)
+        XCTAssertGreaterThan(capture.utf8.count, 60000)
+        XCTAssertTrue(capture.contains("position=0"))
+        XCTAssertTrue(capture.contains("position=3"))
+        XCTAssertTrue(capture.contains("MOTOR_JOG_BEND"))
+        XCTAssertTrue(capture.contains("MOTOR_PLAYBACK_GATE"))
+        XCTAssertTrue(capture.contains("MOTOR_SCRATCH_MODE"))
+        XCTAssertFalse(capture.contains("TENSION_WRITE"))
+        XCTAssertTrue(url.path.hasPrefix(model.motorDiagnosticDirectoryURL.path))
+    }
+
+    @MainActor
     func testInvalidSavedPreferencesArePreservedUntilExplicitReset() throws {
         let fixture = try makeFixture()
         let support = fixture.appendingPathComponent("support")
@@ -200,6 +258,8 @@ final class BridgeTests: XCTestCase {
         XCTAssertTrue(base.backspinAssistEnabled)
         XCTAssertEqual(base.backspinAssistStrength, 100)
         XCTAssertTrue(base.vinylEnabledAtStartup)
+        XCTAssertFalse(base.ttVinylEnabledAtStartup)
+        XCTAssertEqual(base.ttPitchBendFloorPercent, 50)
         XCTAssertEqual(base.platterTargetRpm, 33)
         XCTAssertEqual(base.platterMaxForce, 20000)
         XCTAssertEqual(base.platterBaseForce, 1650)
@@ -367,9 +427,75 @@ final class BridgeTests: XCTestCase {
         XCTAssertThrowsError(try nonFiniteIncrease.validate())
     }
 
+    func testAbsolutePlatterTuningIsIndependentAndLegacyDefaultsMerge() throws {
+        let defaults = try jogDefaultsData()
+        let base = try JogPreferences.decode(defaults, defaults: defaults)
+        XCTAssertEqual(base.platterPositionSensitivity, 14.0)
+        XCTAssertEqual(base.scratchDirection, .normal)
+
+        let legacy = Data(#"{"scratch_speed":3.5}"#.utf8)
+        let merged = try JogPreferences.decode(legacy, defaults: defaults)
+        XCTAssertEqual(merged.scratchSpeed, 3.5)
+        XCTAssertEqual(merged.platterPositionSensitivity, 14.0)
+        XCTAssertEqual(merged.scratchDirection, .normal)
+
+        var changed = base
+        changed.scratchSpeed = 4.5
+        changed.platterPositionSensitivity = 22.4
+        changed.scratchDirection = .reversed
+        XCTAssertEqual(try JogPreferences.decode(changed.encoded(), defaults: defaults), changed)
+        let keys = try XCTUnwrap(JSONSerialization.jsonObject(with: changed.encoded()) as? [String: Any])
+        XCTAssertEqual(keys["platter_position_sensitivity"] as? Double, 22.4)
+        XCTAssertEqual(keys["scratch_direction"] as? String, "reversed")
+
+        for input in [
+            #"{"scratch_direction":true}"#,
+            #"{"scratch_direction":"sideways"}"#,
+            #"{"platter_position_sensitivity":0}"#,
+            #"{"platter_position_sensitivity":100.1}"#,
+            #"{"platter_position_sensitivity":true}"#,
+            #"{"platter_position_sensitivity":"14"}"#
+        ] {
+            XCTAssertThrowsError(try JogPreferences.decode(Data(input.utf8), defaults: defaults), input)
+        }
+        var invalid = base
+        invalid.platterPositionSensitivity = .infinity
+        XCTAssertThrowsError(try invalid.validate())
+    }
+
+    func testTurntablePreferencesMergeLegacyAndRoundTripIndependently() throws {
+        let defaults = try jogDefaultsData()
+        let legacy = Data(#"{"vinyl_enabled_at_startup":false}"#.utf8)
+        let merged = try JogPreferences.decode(legacy, defaults: defaults)
+        XCTAssertFalse(merged.vinylEnabledAtStartup)
+        XCTAssertFalse(merged.ttVinylEnabledAtStartup)
+        XCTAssertEqual(merged.ttPitchBendFloorPercent, 50)
+
+        var changed = merged
+        changed.ttVinylEnabledAtStartup = true
+        changed.ttPitchBendFloorPercent = 73
+        let reloaded = try JogPreferences.decode(changed.encoded(), defaults: defaults)
+        XCTAssertFalse(reloaded.vinylEnabledAtStartup)
+        XCTAssertTrue(reloaded.ttVinylEnabledAtStartup)
+        XCTAssertEqual(reloaded.ttPitchBendFloorPercent, 73)
+        let keys = try XCTUnwrap(JSONSerialization.jsonObject(with: reloaded.encoded()) as? [String: Any])
+        XCTAssertEqual(keys["tt_vinyl_enabled_at_startup"] as? Bool, true)
+        XCTAssertEqual(keys["tt_pitch_bend_floor_percent"] as? Int, 73)
+
+        for input in [
+            #"{"tt_pitch_bend_floor_percent":0}"#,
+            #"{"tt_pitch_bend_floor_percent":96}"#,
+            #"{"tt_pitch_bend_floor_percent":50.0}"#,
+            #"{"tt_pitch_bend_floor_percent":true}"#
+        ] {
+            XCTAssertThrowsError(try JogPreferences.decode(Data(input.utf8), defaults: defaults), input)
+        }
+    }
+
     func testMotorizedPlatterBoundsAndIntegerJSONTypes() throws {
         let defaults = try jogDefaultsData()
         let fields: [(String, WritableKeyPath<JogPreferences, Int>, ClosedRange<Int>)] = [
+            ("tt_pitch_bend_floor_percent", \.ttPitchBendFloorPercent, 1...95),
             ("platter_target_rpm", \.platterTargetRpm, 1...45),
             ("platter_max_force", \.platterMaxForce, 1...25000),
             ("platter_base_force", \.platterBaseForce, 0...25000),

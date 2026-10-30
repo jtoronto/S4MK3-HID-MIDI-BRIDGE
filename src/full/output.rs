@@ -13,6 +13,13 @@ const BUTTON_INTERVAL: Duration = Duration::from_millis(10);
 const RING_INTERVAL: Duration = Duration::from_millis(20);
 const METER_INTERVAL: Duration = Duration::from_millis(50);
 
+#[path = "ring_phase.rs"]
+mod ring_phase;
+
+#[cfg(test)]
+#[path = "ring_tests.rs"]
+mod ring_tests;
+
 pub struct LedOutput<'a> {
     hid: &'a HidDevice,
     buttons: Option<[u8; 95]>,
@@ -21,6 +28,7 @@ pub struct LedOutput<'a> {
     button_written: Option<Duration>,
     ring_written: Option<Duration>,
     meter_written: Option<Duration>,
+    ring_phase: ring_phase::Rings,
 }
 
 impl<'a> LedOutput<'a> {
@@ -49,6 +57,7 @@ impl<'a> LedOutput<'a> {
             button_written: None,
             ring_written: None,
             meter_written: None,
+            ring_phase: ring_phase::Rings::default(),
         })
     }
 
@@ -60,6 +69,9 @@ impl<'a> LedOutput<'a> {
         now: Duration,
     ) -> anyhow::Result<usize> {
         let mut writes = 0;
+        // Update phase on every service tick, independently of HID write pacing.
+        let mut presented = *local;
+        presented.ring_positions = self.ring_phase.positions(config, feedback, local, now)?;
         if due(self.button_written, now, BUTTON_INTERVAL) {
             let report = render_button_frame(config, feedback, local, now);
             if self.buttons != Some(report) {
@@ -71,7 +83,7 @@ impl<'a> LedOutput<'a> {
         }
         if due(self.ring_written, now, RING_INTERVAL) {
             for side in 0_u8..2 {
-                let report = render_ring(config, feedback, local, side, now);
+                let report = render_ring(config, feedback, &presented, side, now);
                 let index = usize::from(side);
                 if self.rings[index] != Some(report) {
                     self.write(&report)?;
@@ -191,7 +203,7 @@ fn render_ring(
     feedback: &FeedbackState,
     local: &LocalState,
     side: u8,
-    now: Duration,
+    _now: Duration,
 ) -> [u8; 41] {
     let deck = local.decks[usize::from(side)];
     let looping = config.loop_enabled && feedback.notes[deck][6].is_some_and(|value| value != 0);
@@ -205,12 +217,8 @@ fn render_ring(
     report[1] = side; // Physical side, not logical A/B/C/D.
     // Firmware flashes mode 3 until loop exit; mode 2 is a stationary spot.
     report[2] = if looping { 3 } else { 2 };
-    if !looping && feedback.playing[deck] == Some(true) {
-        // Decorative chase, not track position. The bounded value is 0..2879;
-        // only its low two little-endian bytes are part of the HID packet.
-        let period = u128::from(config.chase_period_ms);
-        let position = now.as_millis() % period * 2880 / period;
-        report[3..5].copy_from_slice(&position.to_le_bytes()[..2]);
+    if !looping {
+        report[3..5].copy_from_slice(&local.ring_positions[usize::from(side)].to_le_bytes());
     }
     report[5] = color.base().saturating_add(config.palette_active_intensity);
     report
@@ -421,24 +429,58 @@ mod tests {
     }
 
     #[test]
-    fn decorative_chase_moves_only_for_selected_deck_raw_playback_state() {
+    fn stationary_ring_does_not_follow_playback_clock() {
+        // Given an unchanged wheel in either normal or TT mode.
+        for tt in [false, true] {
+            let config = LedConfig::default();
+            let mut feedback = FeedbackState::default();
+            feedback.playing[0] = Some(true);
+            let mut local = LocalState::default();
+            local.motor_enabled[0] = tt;
+            // When only wall-clock time changes while the deck keeps playing.
+            let first = render_ring(&config, &feedback, &local, 0, Duration::from_millis(100));
+            let later = render_ring(&config, &feedback, &local, 0, Duration::from_millis(400));
+            // Then no ring movement is invented.
+            assert_eq!(first, later);
+        }
+    }
+
+    #[test]
+    fn pausing_does_not_reposition_stationary_ring() {
+        // Given a stationary physical wheel while software playback is active.
+        let config = LedConfig::default();
+        let mut feedback = FeedbackState::default();
+        feedback.playing[0] = Some(true);
+        let local = LocalState::default();
+        let now = Duration::from_millis(500);
+        let playing = render_ring(&config, &feedback, &local, 0, now);
+        // When the software deck pauses without any wheel movement.
+        feedback.playing[0] = Some(false);
+        let paused = render_ring(&config, &feedback, &local, 0, now);
+        // Then the ring keeps its position instead of returning to noon.
+        assert_eq!(playing, paused);
+    }
+
+    #[test]
+    fn ring_uses_physical_phase_independently_of_selected_deck_playback() {
         let config = LedConfig::default();
         let mut feedback = FeedbackState::default();
         let mut local = LocalState::default();
         local.decks[0] = 2;
+        local.ring_positions = [960, 1800];
         feedback.playing[2] = Some(true);
         let quarter = render_ring(&config, &feedback, &local, 0, Duration::from_millis(500));
         let half = render_ring(&config, &feedback, &local, 0, Duration::from_millis(1000));
-        assert_eq!(u16::from_le_bytes([quarter[3], quarter[4]]), 720);
-        assert_eq!(u16::from_le_bytes([half[3], half[4]]), 1440);
+        assert_eq!(u16::from_le_bytes([quarter[3], quarter[4]]), 960);
+        assert_eq!(quarter, half);
         assert_eq!(half[5], Color::Yellow.base() + 2);
         feedback.playing[2] = Some(false);
         for now in [Duration::from_millis(500), Duration::from_millis(1000)] {
             let stopped = render_ring(&config, &feedback, &local, 0, now);
-            assert_eq!(&stopped[3..5], &[0, 0]);
+            assert_eq!(stopped, half);
         }
         let right = render_ring(&config, &feedback, &local, 1, Duration::from_millis(500));
-        assert_eq!(&right[3..5], &[0, 0]);
+        assert_eq!(u16::from_le_bytes([right[3], right[4]]), 1800);
     }
 
     #[test]

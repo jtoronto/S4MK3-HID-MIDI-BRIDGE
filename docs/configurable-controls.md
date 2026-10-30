@@ -7,6 +7,12 @@ backspin controls affect runtime detection and event-only scratch routing/gain.
 
 ## Available now
 
+- The TT speed-Scratch diagnostic adds separate TT Vinyl startup (off by
+  default; normal Vinyl stays on) and an integer TT pitch-bend floor from
+  1 to 95% of target RPM, initially 50%. These are save/restart runtime
+  preferences, not mapping changes or a measured CC4 limit. See the
+  [calibration workflow](tt-speed-scratch-diagnostic.md).
+
 - Current source adds app-managed screen on/off, optional automatic NI-driver
   stopping, restoration, and manual recovery. Screen controls save immediately;
   see [screen setup](screen-driver-handover.md).
@@ -14,9 +20,14 @@ backspin controls affect runtime detection and event-only scratch routing/gain.
   controller enumeration, raw HID logging, and log detail.
 - Mapping installation/export. The installed file contains the same fixed
   input addresses and verified feedback outputs as the CLI generator.
-- Jog-tab scratch and pitch-bend Speed/Reaction settings. Defaults are
-  scratch 2.7% / 150% and pitch bend 2.7% / 17%, applied to decks A-D.
-  Speed becomes `rotarySensitivity`; Reaction becomes `rotaryAcceleration`.
+- Jog-tab manual Scratch and Pitch Bend Speed/Reaction settings. Defaults are
+  manual scratch 2.7% / 150% and pitch bend 2.7% / 17%, applied to decks A-D.
+  Manual touch Scratch direction is independently reversible. The retained
+  experimental absolute Scratch CC8 mapping has a separate sensitivity setting,
+  default 14.0% and bounded to 0.1-100%; current motorized playback emits relative
+  CC4 and speed-owned CC5 instead, so the absolute sensitivity does not tune that path. These values
+  are encoded as `rotarySensitivity`, `rotaryAcceleration` and `flipped` in the
+  generated mapping.
 - Current-source Jog > Backspin controls: detection enabled by default,
   filtered backward-acceleration threshold **150000 counts/s^2**, and additive
   scratch-speed increase **5.6%**. Save/restart applies these without exporting
@@ -39,7 +50,8 @@ backspin controls affect runtime detection and event-only scratch routing/gain.
 - Every setting in `examples/led-config.json`: deck/stem/hotcue palettes,
   cue-color policy, lamp/palette brightness, inactive display, mute meaning,
   quantize mixed state, calibrated tempo-center indicator, loop color/enabling,
-  decorative chase period, and channel-meter curve/brightness/freshness.
+  normal-mode playback-ring period, and channel-meter curve/brightness/freshness.
+  The ring period does not affect TT's physical-position display.
 
 LED edits only need a bridge restart, which the app performs on Save and
 restart. They do not require mapping regeneration or a Rust toolchain.
@@ -78,18 +90,21 @@ Nonzero assist opt-in selects the paced motor runtime even if no tension file is
 supplied, using neutral as the normal selection. Minimal MIDI never accepts these options.
 See [the jog investigation](jog-wheel-investigation.md).
 
-## Useful future control settings
+## Testing-only and future control settings
 
 ### Current-source motorized playback testing
 
 The Jog preferences now include `vinyl_enabled_at_startup` (default true)
-and testing-only `platter_*` values for target RPM, maximum force,
+and testing-only `platter_*` runtime values for target RPM, maximum force,
 feed-forward base/slope, Kp/Ki, startup duration and rise rates, and overspeed
-cutoff. They use the existing saved jog configuration and apply on the next
-bridge start; no mapping export is required. TT independently toggles
-motorized playback and starts off, while JOG toggles Vinyl red/on and blue/off.
-These testing controls are not a commitment to expose every parameter in a
-release. See the [user workflow](user-guide.md#testing-motorized-playback).
+cutoff. They use the saved jog configuration and apply on the next bridge
+start. `platter_position_sensitivity` is a separate mapping-time percentage for
+the retained CC8 experiment, not the current CC4 motorized path; save, export and
+select a new Djay mapping to apply it. TT independently
+toggles motorized playback and starts off, while JOG toggles Vinyl red/on and
+blue/off. These testing controls are not a commitment to expose every
+parameter in a release. See the
+[user workflow](user-guide.md#testing-motorized-playback).
 
 These are candidates, not options silently applied by this release.
 
@@ -119,4 +134,5 @@ restarting the bridge alone cannot apply them inside Djay.
 - No on-controller settings menu, audio-forwarding, guessed end-warning, or
   track-position chase setting is exposed. Motorized playback testing is
   separate from app screen controls and motor-backed tension;
-  decorative chase does not claim actual position.
+  normal rings illustrate playback with Scratch movement and pause continuity;
+  TT ring phase follows physical wheel movement. Neither is a track playhead.

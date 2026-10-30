@@ -127,10 +127,14 @@ impl Decoder {
                     motion.status[side] = Status::Duplicate;
                     continue; // A duplicate cannot refresh the freshness deadline.
                 }
+                // Compare modular distance, not absolute proximity to zero:
+                // a valid polling interval can span millions of sensor ticks.
+                // A backwards timestamp has a distance in the upper half.
                 ensure!(
-                    current.timer > old.timer
-                        || (old.timer > u32::MAX - 1_000_000 && current.timer < 1_000_000),
-                    "wheel {side} sensor time reversed"
+                    current.timer.wrapping_sub(old.timer) <= i32::MAX.unsigned_abs(),
+                    "wheel {side} sensor time reversed: previous={} current={} host_us={host_us} elapsed_us={elapsed}",
+                    old.timer,
+                    current.timer
                 );
                 let delta =
                     i32::from_le_bytes(current.counter.wrapping_sub(old.counter).to_le_bytes());

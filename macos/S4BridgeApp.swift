@@ -144,9 +144,17 @@ struct LedPreferences: Codable, Equatable {
     }
 }
 
+enum ScratchDirection: String, Codable, CaseIterable, Identifiable {
+    case normal
+    case reversed
+
+    var id: String { rawValue }
+}
+
 struct JogPreferences: Codable, Equatable {
     var scratchSpeed = 2.7
     var scratchReaction = 150
+    var scratchDirection: ScratchDirection = .normal
     var pitchBendSpeed = 2.7
     var pitchBendReaction = 17
     var backspinEnabled = true
@@ -155,7 +163,10 @@ struct JogPreferences: Codable, Equatable {
     var backspinAssistEnabled = true
     var backspinAssistStrength = 100
     var vinylEnabledAtStartup = true
+    var ttVinylEnabledAtStartup = false
+    var ttPitchBendFloorPercent = 50
     var platterTargetRpm = 33
+    var platterPositionSensitivity = 14.0
     var platterMaxForce = 20000
     var platterBaseForce = 1650
     var platterForcePerRpm = 110
@@ -170,6 +181,7 @@ struct JogPreferences: Codable, Equatable {
         ("scratch_reaction", "Scratch reaction", 0...150),
         ("pitch_bend_reaction", "Pitch bend reaction", 0...150),
         ("backspin_assist_strength", "Backspin assist strength", 0...100),
+        ("tt_pitch_bend_floor_percent", "TT pitch-bend floor", 1...95),
         ("platter_target_rpm", "Platter target RPM", 1...45),
         ("platter_max_force", "Platter maximum force", 1...25000),
         ("platter_base_force", "Platter base force", 0...25000),
@@ -227,6 +239,9 @@ struct JogPreferences: Codable, Equatable {
                 throw AppError.invalid("Jog speeds must be finite and greater than 0.")
             }
         }
+        guard platterPositionSensitivity.isFinite, (0.1...100).contains(platterPositionSensitivity) else {
+            throw AppError.invalid("Motorized platter sensitivity must be between 0.1 and 100.")
+        }
         guard (0...150).contains(scratchReaction), (0...150).contains(pitchBendReaction) else {
             throw AppError.invalid("Jog reactions must be integers from 0 to 150.")
         }
@@ -239,6 +254,9 @@ struct JogPreferences: Codable, Equatable {
         }
         guard (0...100).contains(backspinAssistStrength) else {
             throw AppError.invalid("Backspin assist strength must be an integer from 0 to 100.")
+        }
+        guard (1...95).contains(ttPitchBendFloorPercent) else {
+            throw AppError.invalid("TT pitch-bend floor must be an integer from 1 to 95.")
         }
         guard (1...45).contains(platterTargetRpm) else {
             throw AppError.invalid("Platter target RPM must be an integer from 1 to 45.")
@@ -359,6 +377,8 @@ final class BridgeController: ObservableObject {
     @Published var tension: TensionPreferences
     @Published private(set) var state: BridgeState = .stopped
     @Published private(set) var log = ""
+    @Published private(set) var motorDiagnosticURL: URL?
+    @Published private(set) var isCapturingMotorDiagnostic = false
     @Published private(set) var message = ""
     @Published private(set) var errorMessage = ""
     @Published private(set) var requiresReset = false
@@ -375,6 +395,9 @@ final class BridgeController: ObservableObject {
     private var launchID: UUID?
     private var invalidSavedTension = false
     private var process: Process?
+    private var motorDiagnosticFileHandle: FileHandle?
+    private var activeLogLevel: String?
+    private var activeProfile: BridgeProfile?
     private var isDiagnostic = false
     private var stopRequested = false
     private var restartRequested = false
@@ -386,16 +409,32 @@ final class BridgeController: ObservableObject {
     var isBusy: Bool { process != nil || screens.busy }
     var hasChildProcess: Bool { process != nil }
     var canStop: Bool { process != nil && state != .stopping && !screens.busy }
+    var canStartMotorDiagnosticCapture: Bool {
+        if process == nil { return run.profile == .full && run.logLevel == "debug" }
+        return !isDiagnostic && activeProfile == .full && activeLogLevel == "debug"
+    }
     var ledURL: URL { supportURL.appendingPathComponent("led-config.json") }
     var jogURL: URL { supportURL.appendingPathComponent("jog-config.json") }
     var tensionURL: URL { supportURL.appendingPathComponent("tension-config.json") }
     var runURL: URL { supportURL.appendingPathComponent("run-settings.json") }
+    var motorDiagnosticDirectoryURL: URL {
+        supportURL.appendingPathComponent("diagnostics", isDirectory: true)
+    }
     var executableURL: URL { resourceURL.appendingPathComponent("s4mk3-hid-midi-bridge") }
     var commandPreview: String {
         ([executableURL.path] + run.arguments(ledURL: ledURL, jogURL: jogURL, tensionURL: tensionURL, screens: screens.preferences.enabled))
             .map { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }
             .joined(separator: " ")
     }
+
+    private static let motorDiagnosticEvents = [
+        "MOTOR_JOG_BEND",
+        "MOTOR_JOG_POSITION",
+        "MOTOR_SCRATCH_MODE",
+        "MOTOR_SCRATCH_HANDOFF",
+        "MOTOR_TT_SELECTION",
+        "MOTOR_PLAYBACK_GATE"
+    ]
 
     init(resourceURL: URL, supportURL: URL, agent: NIHardwareAgentControlling? = nil) throws {
         self.resourceURL = resourceURL
@@ -442,6 +481,84 @@ final class BridgeController: ObservableObject {
 
     func appendLog(_ text: String) {
         log = String((log + text + "\n").suffix(60000))
+        guard let handle = motorDiagnosticFileHandle else { return }
+        let capturedLines = text.split(whereSeparator: \.isNewline).filter { line in
+            Self.motorDiagnosticEvents.contains { line.contains($0) }
+        }
+        guard !capturedLines.isEmpty else { return }
+        do {
+            let data = Data((capturedLines.joined(separator: "\n") + "\n").utf8)
+            try handle.write(contentsOf: data)
+        } catch {
+            motorDiagnosticFileHandle = nil
+            isCapturingMotorDiagnostic = false
+            try? handle.close()
+            errorMessage = "Motor diagnostic file write failed: \(error.localizedDescription)"
+        }
+    }
+
+    func startMotorDiagnosticCapture() {
+        guard !isCapturingMotorDiagnostic else { return }
+        guard canStartMotorDiagnosticCapture else {
+            errorMessage = "Set Log detail to Debug and start or restart the bridge before capturing motor positions."
+            return
+        }
+        let startedAt = ISO8601DateFormatter().string(from: Date())
+        let safeTimestamp = startedAt.replacingOccurrences(of: ":", with: "-")
+        let filename = "motor-diagnostic-\(safeTimestamp)-\(UUID().uuidString.prefix(8)).log"
+        let url = motorDiagnosticDirectoryURL.appendingPathComponent(filename)
+        let fileManager = FileManager.default
+        var openedHandle: FileHandle?
+        do {
+            try fileManager.createDirectory(
+                at: motorDiagnosticDirectoryURL,
+                withIntermediateDirectories: true
+            )
+            guard fileManager.createFile(atPath: url.path, contents: nil) else {
+                throw AppError.invalid("Could not create the motor diagnostic file.")
+            }
+            let handle = try FileHandle(forWritingTo: url)
+            openedHandle = handle
+            let header = """
+            # S4 MK3 Bridge motor diagnostic
+            # Started: \(startedAt)
+            # Captured events: \(Self.motorDiagnosticEvents.joined(separator: ", "))
+
+            """
+            try handle.write(contentsOf: Data(header.utf8))
+            motorDiagnosticFileHandle = handle
+            motorDiagnosticURL = url
+            isCapturingMotorDiagnostic = true
+            errorMessage = ""
+            message = "Motor diagnostic capture started."
+        } catch {
+            try? openedHandle?.close()
+            errorMessage = "Could not start motor diagnostic capture: \(error.localizedDescription)"
+        }
+    }
+
+    func stopMotorDiagnosticCapture() {
+        guard let handle = motorDiagnosticFileHandle else { return }
+        motorDiagnosticFileHandle = nil
+        isCapturingMotorDiagnostic = false
+        do {
+            let stoppedAt = ISO8601DateFormatter().string(from: Date())
+            try handle.write(contentsOf: Data("# Stopped: \(stoppedAt)\n".utf8))
+            try handle.synchronize()
+            try handle.close()
+            if let motorDiagnosticURL {
+                message = "Motor diagnostic saved to \(motorDiagnosticURL.path)"
+            }
+            errorMessage = ""
+        } catch {
+            try? handle.close()
+            errorMessage = "Could not finish motor diagnostic capture: \(error.localizedDescription)"
+        }
+    }
+
+    func revealMotorDiagnostic() {
+        guard let motorDiagnosticURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([motorDiagnosticURL])
     }
 
     func report(_ error: Error) {
@@ -529,6 +646,8 @@ final class BridgeController: ObservableObject {
         var environment = ProcessInfo.processInfo.environment
         environment["RUST_LOG"] = run.logLevel
         child.environment = environment
+        activeLogLevel = run.logLevel
+        activeProfile = run.profile
         let input = try screenControlInput(for: child, diagnostic: diagnostic)
         child.standardOutput = pipe.fileHandleForWriting
         child.standardError = pipe.fileHandleForWriting
@@ -563,6 +682,8 @@ final class BridgeController: ObservableObject {
             child.terminationHandler = nil
             if !child.isRunning {
                 process = nil
+                activeLogLevel = nil
+                activeProfile = nil
                 closeScreenInput()
                 try input?.fileHandleForReading.close()
                 try pipe.fileHandleForWriting.close()
@@ -656,6 +777,8 @@ final class BridgeController: ObservableObject {
         let restart = restartRequested && normalStop
         let wasDiagnostic = isDiagnostic
         process = nil
+        activeLogLevel = nil
+        activeProfile = nil
         closeScreenInput()
         restartRequested = false
         screens.beginOperation()
@@ -673,6 +796,7 @@ final class BridgeController: ObservableObject {
             message = "Bridge stopped."
         }
         if quitRequested && !screens.busy {
+            stopMotorDiagnosticCapture()
             replyToQuit(true)
         } else if restart {
             start()
@@ -680,7 +804,10 @@ final class BridgeController: ObservableObject {
     }
 
     func prepareToQuit() -> NSApplication.TerminateReply {
-        guard isBusy || (screens.preferences.restorePending && screens.preferences.restoreNIOnStop) else { return .terminateNow }
+        guard isBusy || (screens.preferences.restorePending && screens.preferences.restoreNIOnStop) else {
+            stopMotorDiagnosticCapture()
+            return .terminateNow
+        }
         quitRequested = true
         guard !screens.busy else { return .terminateLater }
         if process == nil && !screens.busy {
@@ -688,6 +815,7 @@ final class BridgeController: ObservableObject {
             Task { @MainActor in
                 await screens.bridgeExited(restarting: false)
                 screens.endOperation()
+                stopMotorDiagnosticCapture()
                 replyToQuit(true)
             }
         } else if process != nil && state != .stopping { stop() }
@@ -704,6 +832,7 @@ final class BridgeController: ObservableObject {
             Task { @MainActor in
                 await screens.bridgeExited(restarting: false)
                 screens.endOperation()
+                stopMotorDiagnosticCapture()
                 replyToQuit(true)
             }
         }
@@ -991,7 +1120,7 @@ struct BridgeSettingsView: View {
                 section("Bridge operation") {
                     Picker("Profile", selection: $controller.run.profile) {
                         ForEach(BridgeProfile.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }.disabled(controller.screens.busy)
+                    }.disabled(controller.screens.busy || controller.isCapturingMotorDiagnostic)
                     Toggle("Stop after a fixed duration", isOn: $controller.run.limitDuration)
                     if controller.run.limitDuration {
                         NumberRow(title: "Run duration", value: $controller.run.durationSeconds, range: 1...604800, unit: "seconds")
@@ -1086,10 +1215,15 @@ struct BridgeSettingsView: View {
                         .font(.caption).foregroundColor(.secondary)
                 }
                 section("Testing: Motorized playback") {
-                    Toggle("Enable Vinyl mode at bridge startup", isOn: $controller.jog.vinylEnabledAtStartup)
-                    Text("Sets the initial Vinyl mode for both physical wheels when the bridge starts. Turntable (TT) motor mode always starts off and must be engaged on the controller.")
+                    Toggle("Enable Vinyl at normal-mode startup", isOn: $controller.jog.vinylEnabledAtStartup)
+                    Toggle("Enable Vinyl mode at TT startup", isOn: $controller.jog.ttVinylEnabledAtStartup)
+                    Text("Normal and TT modes have separate Vinyl defaults. Each mode remembers its last choice during the session. TT motors always start off and must be engaged on the controller.")
+                        .font(.caption).foregroundColor(.secondary)
+                    NumberRow(title: "TT pitch-bend floor", value: $controller.jog.ttPitchBendFloorPercent, range: 1...95, unit: "%")
+                    Text("Testing: the floor also sets a symmetric upper ceiling (50% floor means 150% ceiling). Both limits hand off to Scratch. These are provisional diagnostic bounds, not verified CC 4 limits.")
                         .font(.caption).foregroundColor(.secondary)
                     NumberRow(title: "Target speed", value: $controller.jog.platterTargetRpm, range: 1...45, unit: "RPM")
+                    DecimalRow(title: "Absolute platter sensitivity", value: $controller.jog.platterPositionSensitivity, range: 0.1...100, unit: "%")
                     NumberRow(title: "Maximum force", value: $controller.jog.platterMaxForce, range: 1...25000, step: 500, unit: "force units")
                     NumberRow(title: "Base force (0 RPM)", value: $controller.jog.platterBaseForce, range: 0...25000, step: 50, unit: "force units")
                     NumberRow(title: "Force per RPM", value: $controller.jog.platterForcePerRpm, range: 0...25000, step: 10, unit: "force units/RPM")
@@ -1101,7 +1235,7 @@ struct BridgeSettingsView: View {
                     NumberRow(title: "Overspeed limit", value: $controller.jog.platterOverspeedLimitRpm, range: 0...250, unit: "RPM")
                     Text("Zero semantics: 0 ms startup duration skips the startup window; 0 force units/s startup force rise rate applies an immediate step; 0 force units/s force rise rate holds post-startup force from increasing; 0 RPM overspeed limit disables the overspeed guard.")
                         .font(.caption).foregroundColor(.secondary)
-                    Text("Experimental tuning values for motorized platter testing, not a final release contract. Vinyl startup and motorized playback settings are runtime bridge preferences: Save preferences to apply on the next start, or Save and restart while running. No new Djay mapping export is needed.")
+                    Text("Motor force and Vinyl startup are runtime preferences; save and restart to apply. Absolute platter sensitivity controls the generated CC 8 mapping: save, install a new Djay mapping, and select it to apply. The starting sensitivity was estimated from a timed 145 BPM test.")
                         .font(.caption).foregroundColor(.secondary)
                     Text("Testing: Turn TT mode off or stop the bridge before quitting Djay. Motorized playback uses the last reported playback state; silence from Djay does not stop it.")
                         .font(.caption).foregroundColor(.secondary)
@@ -1109,13 +1243,19 @@ struct BridgeSettingsView: View {
                 section("Scratch (platter touch)") {
                     DecimalRow(title: "Scratch speed", value: $controller.jog.scratchSpeed, range: 0.1...Double.greatestFiniteMagnitude, unit: "%")
                     NumberRow(title: "Scratch reaction", value: $controller.jog.scratchReaction, range: 0...150, unit: "%")
+                    Picker("Touch-scratch direction", selection: $controller.jog.scratchDirection) {
+                        Text("Normal").tag(ScratchDirection.normal)
+                        Text("Reversed").tag(ScratchDirection.reversed)
+                    }
+                    Text("Applies to manual top-touch Scratch CC only; motorized absolute platter position keeps its own direction.")
+                        .font(.caption).foregroundColor(.secondary)
                 }
                 section("Pitch bend (no touch)") {
                     DecimalRow(title: "Pitch bend speed", value: $controller.jog.pitchBendSpeed, range: 0.1...Double.greatestFiniteMagnitude, unit: "%")
                     NumberRow(title: "Pitch bend reaction", value: $controller.jog.pitchBendReaction, range: 0...150, unit: "%")
                 }
                 section("Applying jog mapping changes") {
-                    Text("Scratch and pitch bend changes affect the exported mapping only. Save preferences, then install a new mapping and select it in Djay; restarting the bridge is not required. Seek behavior is unchanged.")
+                    Text("Scratch speed, touch direction, absolute platter sensitivity and pitch bend affect the exported mapping only. Save preferences, then install a new mapping and select it in Djay; restarting the bridge is not required. Seek behavior is unchanged.")
                         .font(.caption).foregroundColor(.secondary)
                     HStack {
                         Button("Install Djay mapping…") { controller.installMapping() }.disabled(controller.isExporting)
@@ -1232,10 +1372,32 @@ struct BridgeSettingsView: View {
                 Picker("Log detail", selection: $controller.run.logLevel) {
                     Text("Warnings").tag("warn"); Text("Normal").tag("info"); Text("Debug").tag("debug")
                 }
+                .disabled(controller.isCapturingMotorDiagnostic)
                 Toggle("Raw HID reports", isOn: $controller.run.rawReports)
             }
             Text("Debug/raw reports can generate substantial output. Logs are bounded to the most recent 60,000 characters.")
                 .font(.caption).foregroundColor(.secondary)
+            HStack {
+                Button(controller.isCapturingMotorDiagnostic ? "Stop motor diagnostic capture" : "Start motor diagnostic capture") {
+                    if controller.isCapturingMotorDiagnostic {
+                        controller.stopMotorDiagnosticCapture()
+                    } else {
+                        controller.startMotorDiagnosticCapture()
+                    }
+                }
+                .disabled(!controller.isCapturingMotorDiagnostic && !controller.canStartMotorDiagnosticCapture)
+                if controller.motorDiagnosticURL != nil {
+                    Button("Show file") { controller.revealMotorDiagnostic() }
+                }
+            }
+            Text("Use the Full profile and select Debug before starting or restarting the bridge. Start capture before the test; timestamped relative jog-bend, motor-position, and playback-mode events are saved under Application Support/S4 MK3 Bridge/diagnostics.")
+                .font(.caption).foregroundColor(.secondary)
+            if let motorDiagnosticURL = controller.motorDiagnosticURL {
+                Text(motorDiagnosticURL.path)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(controller.commandPreview).font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             ScrollView([.vertical, .horizontal]) {

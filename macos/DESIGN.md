@@ -49,15 +49,22 @@ apply. No React, browser runtime, or downloaded assets are needed.
   physical wheels. Put its title and value above the label-hidden slider; the
   Assist, Neutral (0), and Brake legends share the slider's width. Neutral is
   the physical midpoint of the track, not the midpoint of a labeled control.
-- Jog also exposes four mapping-time scratch/pitch-bend speed/reaction values.
-  Those mapping changes affect the exported Djay mapping only: install the generated file
+- Jog exposes mapping-time manual scratch and pitch-bend speed/reaction,
+  touch-scratch direction, and separate absolute platter sensitivity. Those
+  values affect the exported Djay mapping only: install the generated file
   under a new name and select it in Djay. Bridge restart is not required and
   does not apply mapping changes; seek behavior is unchanged. Hardware tension
-  applies through Save and restart, independently of the mapping.
+  and platter force settings apply through Save and restart, independently of
+  the mapping. Absolute sensitivity belongs to the retained CC8 experiment;
+  current motorized playback sends filtered relative CC4 with a diagnostic
+  lower/upper-speed CC5 Scratch handoff instead. Normal and TT modes have separate
+  Vinyl startup preferences; each remembers its own session choice. The control
+  remains in Testing and does not adjust the current motorized response.
 - LEDs and Palette expose all current JSON preferences. Invalid values must
   produce a visible error, not silently reset user configuration.
 - Diagnostics contains the bundled release version and build number, a bounded
-  selectable log, and the exact launch arguments.
+  selectable log, exact launch arguments, and an opt-in timestamped motor
+  trace file for jog-bend, position, and playback-gate events.
 
 ## Tokens and primitives
 
@@ -88,14 +95,16 @@ apply. No React, browser runtime, or downloaded assets are needed.
 ## Jog preferences and mapping export
 
 - `JogPreferences` mirrors `examples/jog-config.json`: mapping scratch/pitch-bend
-  speeds and reactions, runtime backspin options, and `Testing: Motorized playback`
-  parameters (`vinyl_enabled_at_startup`, `platter_target_rpm`, `platter_max_force`,
+  speeds and reactions, `scratch_direction`, `platter_position_sensitivity`,
+  runtime backspin options, and `Testing: Motorized playback` parameters
+  (`vinyl_enabled_at_startup`, `platter_target_rpm`, `platter_max_force`,
   `platter_base_force`, `platter_force_per_rpm`, `platter_kp`, `platter_ki`,
   `platter_force_rise_per_second`, `platter_startup_force_rise_per_second`,
-  `platter_startup_ms`, `platter_overspeed_limit_rpm`). Speeds are
-  finite and strictly positive; reactions are integers 0-150; motorized platter
-  values are validated integers within their documented ranges. Unknown keys are
-  rejected; saved files merge over bundled defaults like LED preferences.
+  `platter_startup_ms`, `platter_overspeed_limit_rpm`). Manual speeds are
+  finite and positive; absolute platter sensitivity is 0.1-100%; touch direction
+  uses the `normal`/`reversed` enum; reactions are integers 0-150; motor-force values use their
+  documented ranges. Unknown keys are rejected; saved files merge over bundled
+  defaults like LED preferences.
 - Bundled defaults live at `Resources/default-jog-config.json`, copied by
   `build-app.sh` from `examples/jog-config.json`. User preferences live at
   `supportURL/jog-config.json`. Missing user files fall back to bundled

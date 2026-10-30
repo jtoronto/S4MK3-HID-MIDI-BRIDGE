@@ -7,7 +7,9 @@ pub mod jog;
 pub mod leds;
 pub mod mapping;
 pub mod output;
-mod playback;
+mod platter_bend;
+mod platter_gesture;
+mod platter_position;
 mod raw;
 pub mod replay;
 pub mod screens;
@@ -82,11 +84,24 @@ impl Address {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct WheelOwner {
     deck: Deck,
     action: &'static str,
     coasting: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct MotorGateState {
+    deck: u8,
+    tt_enabled: bool,
+    loaded: Option<bool>,
+    playing: Option<bool>,
+    internal: Option<bool>,
+    thru: Option<bool>,
+    grid: bool,
+    shifted: bool,
+    owner: Option<WheelOwner>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -139,10 +154,16 @@ struct Translator {
     fx: [Deck; 2],
     quick: Deck,
     vinyl: [bool; 2],
+    mode_vinyl: [[Option<bool>; 2]; 2],
+    touch_decks: [Option<Deck>; 2],
     motor_enabled: [bool; 2],
     playback_authorized: [bool; 4],
-    powered_nudge: [playback::Nudge; 2],
-    pending_jog: [Option<i32>; 2],
+    last_motor_gate: [Option<MotorGateState>; 2],
+    platter_position: [platter_position::Position; 2],
+    ring_position: [platter_position::Position; 2],
+    platter_bend: [platter_bend::Bend; 2],
+    platter_scratch: [Option<Deck>; 2],
+    platter_counter: [Option<u32>; 2],
     grid: [bool; 2],
     wheels: [Option<WheelOwner>; 2],
     wheel_motion: [backspin::Motion; 2],
@@ -178,10 +199,16 @@ impl Default for Translator {
             fx: [Deck::A, Deck::B],
             quick: Deck::A,
             vinyl: [true; 2],
+            mode_vinyl: [[None; 2]; 2],
+            touch_decks: [None; 2],
             motor_enabled: [false; 2],
             playback_authorized: [false; 4],
-            powered_nudge: std::array::from_fn(|_| playback::Nudge::default()),
-            pending_jog: [None; 2],
+            last_motor_gate: [None; 2],
+            platter_position: std::array::from_fn(|_| platter_position::Position::default()),
+            ring_position: std::array::from_fn(|_| platter_position::Position::default()),
+            platter_bend: std::array::from_fn(|_| platter_bend::Bend::default()),
+            platter_scratch: [None; 2],
+            platter_counter: [None; 2],
             grid: [false; 2],
             wheels: [None; 2],
             wheel_motion: std::array::from_fn(|_| backspin::Motion::default()),
@@ -263,6 +290,10 @@ impl FullBridge {
         self.translator
             .sync_front_panel(&self.feedback, &mut self.messages)?;
         self.translator.observe_jog(None, now, &mut self.messages)?;
+        let playback = self.translator.playback_state();
+        self.translator
+            .motorized_bend(None, playback, &mut self.messages)?;
+        self.translator.log_motor_gate_changes(&self.feedback);
         let sent = self.send_messages()?;
         if received != 0 {
             self.screens
@@ -365,7 +396,12 @@ impl Translator {
                     .context("full button payload must have 22 bytes")
             })
             .transpose()?;
-        self.translate(controls, buttons, output)
+        self.translate(controls, buttons, output)?;
+        let playback = self.playback_state();
+        self.motorized_bend(Some(report), playback, output)?;
+        self.log_platter_position(report, playback)?;
+        self.log_motor_gate_changes(feedback);
+        Ok(())
     }
 
     fn playback_state(&self) -> s4mk3_hid_midi_bridge::tension::PlaybackState {
@@ -375,8 +411,14 @@ impl Translator {
                     && self.playback_authorized[usize::from(self.decks[side].channel())]
                     && !self.grid[side]
                     && !self.shifted[side]
+                    && self.touch_decks[side].is_none_or(|deck| deck == self.decks[side])
+                    && self.wheels[side].is_none_or(|owner| owner.deck == self.decks[side])
+                    && self.platter_scratch[side].is_none_or(|deck| deck == self.decks[side])
             }),
-            owned: self.wheels.map(|owner| owner.is_some()),
+            owned: std::array::from_fn(|side| {
+                self.wheels[side].is_some() || self.platter_scratch[side].is_some()
+            }),
+            continuous: self.motor_enabled,
         }
     }
 
@@ -395,21 +437,13 @@ impl Translator {
             for (side, offset) in [(0, 8), (1, 36)] {
                 let timer = u32::from_le_bytes(report[offset..offset + 4].try_into()?);
                 let counter = u32::from_le_bytes(report[offset + 4..offset + 8].try_into()?);
+                self.ring_position[side].observe(counter)?;
                 self.wheel_motion[side].observe(
                     counter,
                     timer,
                     now,
                     self.jog_config.backspin_acceleration,
                 );
-                let state = self.playback_state();
-                self.pending_jog[side] = self.powered_nudge[side].observe(
-                    timer,
-                    counter,
-                    u64::try_from(now.as_micros())?,
-                    state.enabled[side],
-                    state.owned[side],
-                    self.jog_config.platter_target_rpm,
-                )?;
             }
         }
         for (side, previous) in previous.into_iter().enumerate() {
@@ -432,6 +466,43 @@ impl Translator {
         Ok(())
     }
 
+    fn log_platter_position(
+        &mut self,
+        report: &[u8],
+        state: s4mk3_hid_midi_bridge::tension::PlaybackState,
+    ) -> anyhow::Result<()> {
+        if report.first() != Some(&3) {
+            return Ok(());
+        }
+        ensure!(report.len() == 60, "full jog report must have 60 bytes");
+        for (side, offset) in [(0, 8), (1, 36)] {
+            let counter = u32::from_le_bytes(report[offset + 4..offset + 8].try_into()?);
+            let deck = self.decks[side].channel() + 1;
+            let position = if !state.enabled[side] {
+                self.platter_position[side].suspend(counter);
+                None
+            } else if state.owned[side] {
+                if self.platter_position[side].is_active_for(deck) {
+                    self.platter_position[side].rebase(counter);
+                } else {
+                    self.platter_position[side].suspend(counter);
+                }
+                None
+            } else if self.platter_position[side].is_active_for(deck) {
+                self.platter_position[side].observe(counter)?
+            } else {
+                self.platter_position[side].activate(counter, deck)?
+            };
+            if let Some(position) = position {
+                debug!(
+                    side = if side == 0 { "left" } else { "right" },
+                    deck, position, "MOTOR_JOG_POSITION"
+                );
+            }
+        }
+        Ok(())
+    }
+
     fn backspin_deck(&self, side: usize) -> Option<u8> {
         let owner = self.wheels[side]?;
         (self.jog_config.backspin_enabled
@@ -444,7 +515,9 @@ impl Translator {
 
     fn backspin_assist(&self) -> [bool; 2] {
         std::array::from_fn(|side| {
-            self.jog_config.motor_assist_enabled() && self.backspin_deck(side).is_some()
+            !self.motor_enabled[side]
+                && self.jog_config.motor_assist_enabled()
+                && self.backspin_deck(side).is_some()
         })
     }
 
@@ -530,6 +603,20 @@ impl Translator {
             quick: usize::from(self.quick.channel()),
             vinyl: self.vinyl,
             motor_enabled: self.motor_enabled,
+            ring_positions: self
+                .ring_position
+                .each_ref()
+                .map(platter_position::Position::ring_position),
+            ring_counters: self
+                .ring_position
+                .each_ref()
+                .map(platter_position::Position::counter),
+            scratch_decks: std::array::from_fn(|side| {
+                self.wheels[side]
+                    .filter(|owner| owner.action == "jog_scratch")
+                    .map(|owner| usize::from(owner.deck.channel()))
+                    .or_else(|| self.platter_scratch[side].map(|deck| usize::from(deck.channel())))
+            }),
             grid: self.grid,
             held: self.led_held,
             tempo: self.tempos,
@@ -658,16 +745,8 @@ impl Translator {
                     self.encoder(name, delta, output)?;
                 }
                 Control::Jog(name, delta) => {
-                    let (side, _) = side_name(name).context("unknown jog side")?;
-                    if self.pending_jog[side].is_none() {
-                        self.jog(name, delta, output)?;
-                    }
+                    self.jog(name, delta, output)?;
                 }
-            }
-        }
-        for (side, name) in [(0, "left_jog_wheel"), (1, "right_jog_wheel")] {
-            if let Some(counts) = self.pending_jog[side].take() {
-                self.jog(name, f64::from(counts) / 1000.0, output)?;
             }
         }
         self.emit_mixer(output)
@@ -906,7 +985,7 @@ impl Translator {
             ] {
                 if pressed(controls, name) && !self.held.contains_key(name) {
                     if motor {
-                        self.motor_enabled[side] = !self.motor_enabled[side];
+                        self.toggle_motor_mode(side);
                     } else {
                         self.vinyl[side] = !self.vinyl[side];
                     }
@@ -935,6 +1014,11 @@ impl Translator {
             if let Control::Button(name, touched) = *input
                 && name == touch
             {
+                if touched {
+                    self.touch_decks[side].get_or_insert(self.decks[side]);
+                } else {
+                    self.touch_decks[side] = None;
+                }
                 let next = WheelOwner {
                     deck: self.decks[side],
                     action: if self.shifted[side] {
@@ -957,6 +1041,9 @@ impl Translator {
                             continue;
                         }
                         self.end_backspin(side, output);
+                    }
+                    if !self.vinyl[side] && !self.shifted[side] {
+                        continue;
                     }
                     self.wheel_motion[side].reset_window();
                     self.wheels[side] = Some(next);
@@ -1190,7 +1277,11 @@ impl Translator {
     fn release_all(&mut self, output: &mut Vec<[u8; 3]>) {
         self.eq_selecting = false;
         self.wheels = [None; 2];
+        self.touch_decks = [None; 2];
+        self.platter_scratch = [None; 2];
+        self.platter_counter = [None; 2];
         self.residuals = [0.0; 2];
+        self.platter_bend = std::array::from_fn(|_| platter_bend::Bend::default());
         for motion in &mut self.wheel_motion {
             motion.reset_window();
         }
@@ -1209,6 +1300,13 @@ impl Translator {
     fn jog(&mut self, name: &str, delta: f64, output: &mut Vec<[u8; 3]>) -> anyhow::Result<()> {
         let (side, _) = side_name(name).context("unknown jog side")?;
         ensure!(delta.is_finite(), "non-finite jog movement");
+        if self.motor_enabled[side]
+            && !self.grid[side]
+            && !self.shifted[side]
+            && self.wheels[side].is_none()
+        {
+            return Ok(()); // Raw powered rotation is removed by the sensor-speed path.
+        }
         let owner = self.wheels[side].unwrap_or(WheelOwner {
             deck: self.decks[side],
             action: if self.shifted[side] {
@@ -1332,6 +1430,109 @@ impl Translator {
         self.emit_mixer(output)
     }
 
+    fn motor_gate_state(&self, side: usize, feedback: &feedback::FeedbackState) -> MotorGateState {
+        let deck_channel = self.decks[side].channel();
+        let deck = usize::from(deck_channel);
+        let owner = self.wheels[side];
+        MotorGateState {
+            deck: deck_channel + 1,
+            tt_enabled: self.motor_enabled[side],
+            loaded: feedback.loaded[deck],
+            playing: feedback.playing[deck],
+            internal: feedback.internal[deck],
+            thru: feedback.thru[deck],
+            grid: self.grid[side],
+            shifted: self.shifted[side],
+            owner,
+        }
+    }
+
+    fn motor_gate_changed(&mut self, side: usize, state: MotorGateState) -> bool {
+        if self.last_motor_gate[side] == Some(state) {
+            return false;
+        }
+        self.last_motor_gate[side] = Some(state);
+        true
+    }
+
+    fn motor_gate_blocked(state: MotorGateState) -> Vec<&'static str> {
+        let mut blocked = Vec::new();
+        if !state.tt_enabled {
+            blocked.push("tt_off");
+        }
+        match state.loaded {
+            Some(true) => {}
+            Some(false) => blocked.push("track_unloaded"),
+            None => blocked.push("track_load_unknown"),
+        }
+        match state.playing {
+            Some(true) => {}
+            Some(false) => blocked.push("paused"),
+            None => blocked.push("playback_unknown"),
+        }
+        match state.internal {
+            Some(true) => {}
+            Some(false) => blocked.push("not_internal"),
+            None => blocked.push("internal_mode_unknown"),
+        }
+        if state.thru == Some(true) {
+            blocked.push("thru");
+        }
+        if state.grid {
+            blocked.push("grid");
+        }
+        if state.shifted {
+            blocked.push("shift");
+        }
+        if state.owner.is_some() {
+            blocked.push("wheel_owned");
+        }
+        blocked
+    }
+
+    fn log_motor_gate_changes(&mut self, feedback: &feedback::FeedbackState) {
+        for side in 0..2 {
+            let state = self.motor_gate_state(side, feedback);
+            if self.last_motor_gate[side]
+                .is_some_and(|previous| previous.tt_enabled != state.tt_enabled)
+            {
+                info!(
+                    side = if side == 0 { "left" } else { "right" },
+                    deck = state.deck,
+                    enabled = state.tt_enabled,
+                    "MOTOR_TT_SELECTION"
+                );
+            }
+            if !self.motor_gate_changed(side, state) {
+                continue;
+            }
+            let blocked = Self::motor_gate_blocked(state);
+            let playback_gate_open = state.tt_enabled
+                && self.playback_authorized[usize::from(state.deck - 1)]
+                && !state.grid
+                && !state.shifted
+                && state.owner.is_none();
+            info!(
+                side = if side == 0 { "left" } else { "right" },
+                deck = state.deck,
+                tt_enabled = state.tt_enabled,
+                loaded = ?state.loaded,
+                playing = ?state.playing,
+                internal = ?state.internal,
+                thru = ?state.thru,
+                playback_authorized = self.playback_authorized[usize::from(state.deck - 1)],
+                grid = state.grid,
+                shifted = state.shifted,
+                wheel_action = ?state.owner.map(|owner| owner.action),
+                wheel_deck = ?state.owner.map(|owner| owner.deck.channel() + 1),
+                wheel_coasting = state.owner.is_some_and(|owner| owner.coasting),
+                playback_gate_open,
+                blocked = ?blocked,
+                "MOTOR_PLAYBACK_GATE"
+            );
+        }
+    }
+
     fn emit_front_panel(&mut self, output: &mut Vec<[u8; 3]>) -> anyhow::Result<()> {
         if !self.front_panel_ready {
             return Ok(());
@@ -1404,6 +1605,47 @@ mod tests {
         let mut output = Vec::new();
         state.translate(controls, None, &mut output)?;
         Ok(output)
+    }
+
+    #[test]
+    fn motor_gate_logs_are_transition_only_and_explain_blockers() -> anyhow::Result<()> {
+        let mut state = Translator::default();
+        let mut feedback = feedback::FeedbackState::default();
+        let initial = state.motor_gate_state(0, &feedback);
+
+        assert_eq!(
+            Translator::motor_gate_blocked(initial),
+            [
+                "tt_off",
+                "track_load_unknown",
+                "playback_unknown",
+                "internal_mode_unknown"
+            ]
+        );
+        assert!(state.motor_gate_changed(0, initial));
+        assert!(!state.motor_gate_changed(0, initial));
+
+        state.motor_enabled[0] = true;
+        feedback.loaded[0] = Some(true);
+        feedback.playing[0] = Some(true);
+        feedback.internal[0] = Some(true);
+        state.sync_front_panel(&feedback, &mut Vec::new())?;
+        let authorized = state.motor_gate_state(0, &feedback);
+        assert!(state.playback_authorized[0]);
+        assert!(Translator::motor_gate_blocked(authorized).is_empty());
+        assert!(state.motor_gate_changed(0, authorized));
+        assert!(!state.motor_gate_changed(0, authorized));
+
+        state.wheels[0] = Some(WheelOwner {
+            deck: Deck::A,
+            action: "jog_scratch",
+            coasting: false,
+        });
+        let owned = state.motor_gate_state(0, &feedback);
+        assert_eq!(Translator::motor_gate_blocked(owned), ["wheel_owned"]);
+        assert!(state.motor_gate_changed(0, owned));
+        assert!(!state.motor_gate_changed(0, owned));
+        Ok(())
     }
 
     #[test]

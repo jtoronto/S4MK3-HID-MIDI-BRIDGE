@@ -18,10 +18,23 @@ outstanding normal-use acceptance requirements.
 
 ## Current-source EXT indicators
 
+Normal-mode rings retain a playback-driven phase per logical deck. They advance
+while playing, apply signed encoder deltas to the original Scratch owner's
+phase while scratching, and freeze on pause. Scratch release resumes animation
+from the held position. They do not reset to noon on pause or on a touch/release
+transition. This is a playback illustration, not absolute track position.
+
+TT rings retain physical encoder phase, including holds and reverse movement.
+Firmware loop flashing is unchanged; exit restores the current mode's phase.
+The earlier physical-only normal-ring diagnostic is superseded by this behavior.
+
 The motorized-playback testing build separates JOG and TT indicators. JOG is
 red for Vinyl on and blue for Vinyl off, independent of TT motor enable.
+Normal mode defaults red; TT defaults blue. Returning to a mode restores its
+last session choice. Blue in TT does not exclude the diagnostic speed-floor
+Scratch handoff; it excludes capacitive top-touch Scratch.
 TT indicates the local motor-mode selection, not proof that force is being
-applied: playback, touch and freshness gates may keep a selected motor neutral.
+applied: playback, deck-owner and freshness gates may keep a selected motor neutral.
 Physical integrated lamp acceptance remains separate from report-byte tests.
 
 In the full profile, EXT1-4 indicate actual THRU feedback for fixed decks 1-4,
@@ -148,7 +161,7 @@ The renderer uses captured modes 2/3 for that revised design. The user confirmed
 the integrated result. Firmware owns the loop flash cadence; software does not
 alternate back to the deck segment until the loop exits.
 
-The user subsequently chose a moving chase, accepting decorative spinning
+Historically, the user subsequently chose a moving chase, accepting decorative spinning
 while playing rather than exact track-position tracking. The chase uses
 verified raw `turntable1..4.playing` feedback, not the blinking Play-lamp state.
 It advances at a fixed configurable speed, returns to a stationary 12:00
@@ -157,6 +170,8 @@ green loop flashing. It does not represent seeking, tempo, or track position.
 The user confirmed the integrated chase across A/B/C/D, stopping on pause,
 green loop flashing and return to chase on exit. Jog response and hardware
 master meters remained normal with the moving chase active.
+That historical chase behavior is superseded by the mode-specific ring behavior
+described above; its old pause-to-noon behavior is no longer current.
 
 ## Start and select the feedback mapping
 
@@ -243,7 +258,7 @@ For example:
 | `quantize_mixed` | `dim` or `dark`; bright means all four known deck states are on |
 | `tempo_center_tolerance` | Disabled (`null`) until physical center tolerance is calibrated |
 | `loop_enabled`, `loop_color` | Firmware flashes the whole ring green while looping; exit restores the deck-colored segment. Flash rate is controlled by hardware, not configurable. |
-| `chase_period_ms` | Decorative revolution duration while playing, default 2000 ms (30 RPM); 250-10000 ms supported. |
+| `chase_period_ms` | Normal-mode playback revolution period, 250-10000 ms (default 2000); TT uses physical movement instead. |
 | `meter_brightness` | 0 off, 125 dim, or 127 bright |
 | `meter_gamma` | Level curve exponent, default 1.0; 0.1-5.0 supported |
 | `meter_stale_ms` | Continuous-level freshness deadline, default 500 ms; validate against actual Djay update cadence |
@@ -298,9 +313,10 @@ RUST_LOG=info,s4mk3_hid_midi_bridge::full::feedback=debug \
 3. Verify A/B ring segments are red/blue by default and C/D selection redraws them.
    Enable/exit automatic and manual loops, including paused loops. Confirm
    green whole-ring flashing and `loop_enabled=false` restores
-   the deck-colored chase while playing or stationary segment while paused.
-   Confirm that mouse Play/Pause controls also start/stop the chase and that
-   seeking does not imply track-position tracking.
+   the deck-colored spot. In normal mode, confirm playback advances it, Scratch
+   follows movement, pause freezes it and release resumes without a jump.
+   In TT, confirm the spot follows the physical wheel. Seeking is not absolute
+   track-position tracking. Loop exit restores the current mode's phase.
 4. Play each deck and confirm the corresponding channel bar responds. Measure
    update gaps before accepting the freshness deadline. Confirm master bars
    and hardware clip indication keep working with direct S4 audio.

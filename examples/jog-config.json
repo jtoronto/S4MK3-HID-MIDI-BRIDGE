@@ -1,6 +1,8 @@
 {
   "scratch_speed": 2.7,
   "scratch_reaction": 150,
+  "scratch_direction": "normal",
+  "platter_position_sensitivity": 14.0,
   "pitch_bend_speed": 2.7,
   "pitch_bend_reaction": 17,
   "backspin_enabled": true,
@@ -9,6 +11,8 @@
   "backspin_acceleration": 150000.0,
   "backspin_speed_increase": 5.6,
   "vinyl_enabled_at_startup": true,
+  "tt_vinyl_enabled_at_startup": false,
+  "tt_pitch_bend_floor_percent": 50,
   "platter_target_rpm": 33,
   "platter_max_force": 20000,
   "platter_base_force": 1650,

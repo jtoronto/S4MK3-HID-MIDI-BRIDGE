@@ -145,7 +145,9 @@ impl Engine {
         if let Some(wheels) = &mut self.playback {
             for (side, wheel) in wheels.iter_mut().enumerate() {
                 if state.enabled[side] != self.playback_state.enabled[side]
-                    || state.owned[side] != self.playback_state.owned[side]
+                    || state.continuous[side] != self.playback_state.continuous[side]
+                    || (state.owned[side] != self.playback_state.owned[side]
+                        && !(state.continuous[side] && self.playback_state.continuous[side]))
                 {
                     wheel.reset();
                     if self.last_torque[side] != 0 {
@@ -238,11 +240,12 @@ impl Engine {
         let mut tension_motion = motion;
         if self.playback.is_some() {
             for side in 0..2 {
-                if self.playback_state.enabled[side]
-                    && !self.playback_state.owned[side]
-                    && !motion.touch[side]
+                if self.playback_state.continuous[side]
+                    || (self.playback_state.enabled[side]
+                        && !self.playback_state.owned[side]
+                        && !motion.touch[side])
                 {
-                    // Powered motion is not a newly qualified manual gesture.
+                    // TT movement must never prime a competing normal motor owner.
                     tension_motion.status[side] = crate::jog::decode::Status::Baseline;
                     tension_motion.delta[side] = 0;
                 }
@@ -257,25 +260,35 @@ impl Engine {
             },
         );
         for (side, assist) in self.backspin.iter_mut().enumerate() {
-            if let Some(torque) = assist.observe(&motion, now_us) {
+            if !self.playback_state.continuous[side]
+                && let Some(torque) = assist.observe(&motion, now_us)
+            {
                 decision.torque[side] = torque;
             }
         }
         if let Some(wheels) = &mut self.playback {
             for (side, wheel) in wheels.iter_mut().enumerate() {
+                let continuous = self.playback_state.continuous[side];
                 let allowed = self.playback_state.enabled[side]
-                    && !self.playback_state.owned[side]
-                    && !motion.touch[side];
-                wheel.observe(&motion, side, allowed)?;
+                    && (continuous || (!self.playback_state.owned[side] && !motion.touch[side]));
+                wheel.observe(
+                    &motion,
+                    side,
+                    allowed,
+                    continuous,
+                    self.playback_state.owned[side],
+                )?;
                 if allowed {
-                    decision.torque[side] = wheel.force();
-                } else if motion.touch[side]
-                    && self.playback_state.enabled[side]
-                    && !self.playback_state.owned[side]
-                {
+                    decision.torque[side] = wheel.force(continuous);
+                } else if motion.touch[side] && self.playback_state.enabled[side] {
                     // Raw physical touch must suspend playback before MIDI or LEDs.
                     decision.torque[side] = 0;
                 }
+            }
+        }
+        for (side, torque) in decision.torque.iter_mut().enumerate() {
+            if self.playback_state.continuous[side] && !self.playback_state.enabled[side] {
+                *torque = 0;
             }
         }
         let immediate_zero =
@@ -308,18 +321,27 @@ impl Engine {
             .at(now_us)
             .map_or([0; 2], |decision| decision.torque);
         for (side, assist) in self.backspin.iter_mut().enumerate() {
-            if let Some(override_torque) = assist.at(now_us, self.motion.as_ref()) {
-                torque[side] = override_torque;
+            if !self.playback_state.continuous[side] {
+                if let Some(override_torque) = assist.at(now_us, self.motion.as_ref()) {
+                    torque[side] = override_torque;
+                }
             }
         }
         if let Some(wheels) = &self.playback {
             for (side, wheel) in wheels.iter().enumerate() {
+                let continuous = self.playback_state.continuous[side];
                 if self.playback_state.enabled[side]
-                    && !self.playback_state.owned[side]
-                    && self.motion.is_none_or(|motion| !motion.touch[side])
+                    && (continuous
+                        || (!self.playback_state.owned[side]
+                            && self.motion.is_none_or(|motion| !motion.touch[side])))
                 {
-                    torque[side] = wheel.force();
+                    torque[side] = wheel.force(continuous);
                 }
+            }
+        }
+        for (side, value) in torque.iter_mut().enumerate() {
+            if self.playback_state.continuous[side] && !self.playback_state.enabled[side] {
+                *value = 0;
             }
         }
         self.last_torque = torque;

@@ -61,7 +61,8 @@ pub fn fixture() -> anyhow::Result<Vec<Step>> {
         if (1..=3).contains(&index) {
             buttons.extend(["left_turntable_mode", "right_turntable_mode"]);
         }
-        if [65, 85].contains(&index) {
+        // TT now starts with Vinyl off; select Vinyl on before the touch test.
+        if [85, 1000].contains(&index) {
             buttons.push("left_jog_mode");
         }
         if index == 110 {
@@ -81,15 +82,28 @@ pub fn fixture() -> anyhow::Result<Vec<Step>> {
             buffers[0][17] |= 0x10;
         }
         for side in 0..2 {
-            fractions[side] += 33 * 2880 * 2000;
-            let nominal = fractions[side] / 60_000_000;
-            fractions[side] %= 60_000_000;
+            let rpm_tenths: i32 = if side == 0 {
+                match index {
+                    1500..1800 => 120,
+                    1800..2000 => 0,
+                    2000..2200 => -60,
+                    3000..3300 => 600,
+                    3300..3500 => 480,
+                    3500..3800 => 450,
+                    _ => 330,
+                }
+            } else {
+                330
+            };
+            fractions[side] += rpm_tenths.unsigned_abs() * 2880 * 2000;
+            let nominal = i32::try_from(fractions[side] / 600_000_000)? * rpm_tenths.signum();
+            fractions[side] %= 600_000_000;
             let delta = if side == 0 && (100..=200).contains(&index) {
                 -10
             } else if side == 0 && (201..220).contains(&index) {
                 0
             } else {
-                i32::try_from(nominal)? + i32::from(side == 0 && (30..40).contains(&index))
+                nominal + i32::from(side == 0 && (30..40).contains(&index))
             };
             counters[side] = counters[side].wrapping_add_signed(delta);
             let offset = if side == 0 { 8 } else { 36 };
@@ -146,6 +160,14 @@ fn feedback_step(index: u32) -> (Vec<u8>, &'static str) {
         440 => (vec![0x96, 1, 127, 0xb6, 5, 127], "right_reload"),
         470 => (vec![0xb2, 21, 0, 22, 0], "dvs_not_thru"),
         480 => (vec![0xb2, 22, 127], "dvs_to_internal"),
+        1000 => (vec![], "tt_vinyl_off_speed_handoff"),
+        1500 => (vec![], "speed_brake_toward_floor"),
+        1800 => (vec![], "speed_scratch_stationary_hold"),
+        2000 => (vec![], "speed_scratch_reverse"),
+        2200 => (vec![], "speed_scratch_recovery"),
+        3000 => (vec![], "speed_scratch_upper_entry"),
+        3300 => (vec![], "speed_scratch_upper_hysteresis"),
+        3500 => (vec![], "speed_scratch_upper_recovery"),
         8000 => (vec![], "continuous_playback_beyond_15_seconds"),
         _ => (vec![], ""),
     }
@@ -216,7 +238,7 @@ pub fn execute(
         if !step.label.is_empty() {
             let local = replay.borrow().leds();
             emit(
-                json!({"event":"local","now_us":step.now_us,"motor_enabled":local.motor_enabled,"vinyl":local.vinyl,"decks":local.decks}),
+                json!({"event":"local","now_us":step.now_us,"motor_enabled":local.motor_enabled,"vinyl":local.vinyl,"decks":local.decks,"ring_positions":local.ring_positions}),
             );
         }
     }

@@ -222,6 +222,11 @@ pub struct LocalState {
     pub quick: usize,
     pub vinyl: [bool; 2],
     pub motor_enabled: [bool; 2],
+    /// Physical wheel phase in native ring units, independent of deck/playback state.
+    pub ring_positions: [u16; 2],
+    pub ring_counters: [Option<u32>; 2],
+    /// Original logical owner of each physical wheel's Scratch movement.
+    pub scratch_decks: [Option<usize>; 2],
     pub grid: [bool; 2],
     /// side * 5 + REC, library view, playlist, star, preview; index 10 is filter.
     pub held: [bool; 11],
@@ -246,6 +251,9 @@ impl Default for LocalState {
             quick: 0,
             vinyl: [true; 2],
             motor_enabled: [false; 2],
+            ring_positions: [0; 2],
+            ring_counters: [None; 2],
+            scratch_decks: [None; 2],
             grid: [false; 2],
             held: [false; 11],
             tempo: [None; 2],

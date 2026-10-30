@@ -397,14 +397,22 @@ Djay's onscreen recording controls when you want to record a mix.
 
 **In the current-source testing build, JOG and TT are independent toggles.**
 JOG toggles Vinyl: red enables top-touch scratching; blue disables top-touch
-scratch and retains bend/nudge behavior. Vinyl starts on unless you change
-its startup preference in Jog settings.
+scratch and retains bend/nudge behavior. Normal mode starts with Vinyl on;
+TT mode starts with Vinyl off. Jog settings have separate startup preferences
+for the two modes. Switching modes restores that mode's last Vinyl choice
+for the current bridge session.
 TT enables motorized playback on that physical side and starts off each time
 the bridge starts. Rotation follows actual playback feedback for the selected
 deck, not a press of Play. Install/select the newly generated mapping under
-a new filename: it adds explicit Internal-mode feedback required for motors.
+a new filename: it adds explicit Internal-mode feedback required by this experiment.
 The selected deck must be loaded, playing and confirmed Internal, not THRU
 or DVS. Shift+jog seeks.
+If TT lights blue but the platter stays still, open Diagnostics at **Info**
+log detail. `MOTOR_TT_SELECTION` confirms the press; `MOTOR_PLAYBACK_GATE`
+lists the selected deck and blocking conditions. `internal_mode_unknown`
+means Internal-mode feedback has not arrived: install and select this app's
+newly generated mapping, then stop and start the bridge. Preserve your existing
+mapping under its old name. A selected TT light is not proof of motor output.
 GRID+jog edits the beat grid rather than performing an ordinary nudge.
 A detected backspin can keep scratching after you lift your hand, following
 the wheel's actual movement rather than switching immediately to nudge.
@@ -428,10 +436,10 @@ The other Jog sections control **Speed** and **Reaction** in the exported
 Djay mapping. Defaults are scratch **2.7% / 150%** and pitch bend **2.7% / 17%**.
 These change software response, not motor force.
 
-Tension needs saving/restarting, but no mapping export. Speed/Reaction need a
-newly exported mapping selected in Djay. The testing motor and Vinyl-startup
-preferences need saving/restarting, not a mapping export. Haptic cue points
-remain unavailable.
+Tension, motor-force and Vinyl-startup values are runtime preferences and need
+saving/restarting. Scratch and pitch-bend mappings, touch-scratch direction and
+absolute platter sensitivity need a newly exported mapping selected in Djay.
+Haptic cue points remain unavailable.
 
 ### Backspin detection
 
@@ -501,10 +509,72 @@ abort disabled. Save and restart to apply changes; controls are not live.
 
 Unlike the diagnostic's MOVE-armed pulse, TT playback has no 15-second
 duration limit. Switch TT off or pause the selected deck to remove drive.
-Physical touch and held scratch/backspin ownership suspend playback torque.
-Sensor loss clears force and requires a new baseline before recovery.
-Nominal powered travel is removed from jog MIDI; rim deviations are measured
-relative to nominal speed, not independently identified hand contact.
+In this diagnostic, physical touch and Scratch ownership do not cut TT force.
+Braking, holding and reversing use bounded constant forward assistance; the
+speed regulator does not accumulate error against your hand. With the starting
+settings this assistance is 5280 force units, capped by maximum force, not a
+measured physical torque. Normal tension and backspin motor assistance do not
+add to it. Sensor loss clears force and requires a new baseline and fresh
+20 ms sensor window before recovery.
+In the current relative-pitchbend test build, when TT is authorized and the
+wheel is not touch-owned, only deviation from the configured target RPM produces
+signed relative Pitch Bend CC 4 steps for the selected deck's `pitchBendMove`
+mapping. Speed uses a rolling 100 ms measurement, but corrections follow fresh
+input reports rather than arriving in 100 ms bursts. Startup and recovery first
+require measured rotation within 0.75 RPM of the target. Corrections then start
+only beyond 2 RPM deviation and stop when rotation returns within 0.75 RPM.
+This testing filter favors quiet steady rotation over subtle nudges.
+Slower rotation sends negative corrections; faster rotation sends positive
+corrections. The nominal rotation itself is subtracted.
+The current stronger-braking test doubles negative motorized corrections while
+leaving forward nudging at its original strength. This is a command multiplier,
+not a guaranteed percentage of audible slowdown. Manual TT-off jog and top-touch
+Scratch keep their existing response.
+With TT selected and Vinyl off, slowing to the **TT pitch-bend floor**
+switches from CC 4 to held Scratch mode and raw relative CC 5 movement.
+The initial diagnostic floor is **50% of target RPM** (16.5 RPM at 33 RPM);
+it is adjustable from 1 to 95% in Testing. This is provisional: the supplied
+tone recording reached half speed, but the CC 4 mapping's actual floor has
+not been established. Acceleration above the floor plus hysteresis returns
+to pitch bend without needing top-touch release. At the default settings the
+exit is 18.5 RPM. Switching deck or losing playback authorization releases
+the original speed-Scratch owner and neutralizes drive.
+The same setting now defines a symmetric upper ceiling: `200% - floor`.
+At the default 50% floor, reaching 150% of target (49.5 RPM at 33 RPM)
+also enters Scratch; slowing back to 47.5 RPM releases the upper handoff.
+Both bounds are provisional diagnostic values, not measured CC4 limits.
+Above-target rotation without physical touch remains under speed regulation
+even while the upper Scratch MIDI handoff is active; it does not select constant
+forward assistance solely because Scratch is held.
+See the [diagnostic calibration and attended checks](tt-speed-scratch-diagnostic.md).
+There is no absolute CC 8 position stream in this test path. Ordinary top-touch
+Scratch remains on relative CC 5.
+**Absolute platter sensitivity** in Testing starts at **14.0%** based on the
+first timed trial and can be adjusted from **0.1 to 100%** independently of
+manual Scratch speed. It controls the generated CC 8 mapping and does not tune
+this relative CC 4 experiment. Tune the Djay Pitch Bend mapping's sensitivity
+for this test.
+The retired [absolute-position Scratch experiment](absolute-position-scratch-experiment.md)
+is documented separately for future software compatibility work.
+The touch-scratch direction picker offers **Normal** and **Reversed** for the
+manual CC 5 route only.
+Nominal TT rotation does not hold Djay's `scratchingMode` state. The new
+speed-floor handoff can hold it with Vinyl off; Vinyl on retains conventional
+top-touch Scratch ownership while continuing bounded TT assistance.
+Physical coverage and remaining limits are recorded in the
+[integration validation record](motorized-playback-integration-validation.md).
+For diagnostics, set log detail to **Debug** and look for
+`MOTOR_JOG_BEND` to confirm relative CC 4 movement, and `MOTOR_JOG_POSITION`
+to observe the encoder-derived angle. These confirm bridge output, not that
+Djay produced the intended audible speed.
+For a longer trace, select the **Full** profile and **Debug** before starting
+the bridge, then choose **Start motor diagnostic capture** before the test and
+stop the capture afterward. The app writes timestamped
+`MOTOR_JOG_BEND`, `MOTOR_JOG_POSITION`, `MOTOR_SCRATCH_MODE`,
+`MOTOR_SCRATCH_HANDOFF`, `MOTOR_TT_SELECTION` and `MOTOR_PLAYBACK_GATE` lines to a separate file under
+`~/Library/Application Support/S4 MK3 Bridge/diagnostics/`; **Show file**
+reveals it in Finder. Unlike the Diagnostics display, this filtered file is
+not limited to 60,000 characters.
 
 **For this testing build, turn TT off or Stop bridge before quitting Djay.**
 Playback authorization is cached from real feedback; silence from Djay does
@@ -512,6 +582,9 @@ not itself clear a previously reported playing state.
 Integrated physical feel and playing acceptance are tracked separately in
 the [integration validation record](motorized-playback-integration-validation.md).
 This is current-source testing behavior, not a published release.
+The Testing settings remain available during beta testing. Before release,
+the settings exposed to ordinary users will be reviewed; no options are removed
+by this documentation update.
 
 ## Screens and feedback
 
@@ -534,8 +607,14 @@ preserves the newly reported key, and eject uses Djay's explicit no-key value.
 It does not guess a key or retain an old track's key as a fallback.
 
 Most playback, pad and meter indications follow Djay feedback; selection and
-physical-hold indicators also represent local bridge state. The jog ring is
-decorative, not an absolute track playhead or physical-platter-position display.
+physical-hold indicators also represent local bridge state. Normal-mode rings
+advance while the deck plays, follow Scratch movement and freeze in place when
+paused and untouched. Releasing Scratch resumes playback animation from that
+same position, without a jump. Each logical deck keeps its phase and original
+Scratch ownership. The normal animation period uses `chase_period_ms`; it is
+not an absolute track playhead. TT rings remain tied to physical wheel rotation.
+Whole-ring loop flashing takes precedence and restores the current mode's phase
+when the loop exits.
 See the [screen reference](screens.md) and [LED reference](led-feedback.md).
 
 ## Settings: what needs saving or a new mapping?
