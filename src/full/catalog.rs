@@ -386,7 +386,7 @@ pub const MIXER_BINDINGS: &[Binding] = &[
     note("mixer_ch4_pfl", 3, "mixer.monitorActive4", None),
 ];
 
-/// Quick-FX controls use the locally selected deck, not a mixer audio bus.
+/// Quick-FX controls use the locally armed decks, not a mixer audio bus.
 pub const QUICK_BINDINGS: &[Binding] = &[
     note("mixer_fx_1", 16, "turntable{deck}.instantFx1", None),
     note("mixer_fx_2", 17, "turntable{deck}.instantFx2", None),
@@ -591,7 +591,7 @@ pub const LOCAL_CONTROLS: &[ControlNote] = &[
     },
     ControlNote {
         name: "mixer_chN_fx_select",
-        reason: "selects the quick-FX deck",
+        reason: "toggles an independent quick-FX target",
     },
     ControlNote {
         name: "jog",

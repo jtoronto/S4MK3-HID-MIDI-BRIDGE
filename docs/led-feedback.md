@@ -35,6 +35,9 @@ last session choice. Blue in TT does not exclude the diagnostic speed-floor
 Scratch handoff; it excludes capacitive top-touch Scratch.
 TT indicates the local motor-mode selection, not proof that force is being
 applied: playback, deck-owner and freshness gates may keep a selected motor neutral.
+Current source renders TT red on both sides and all decks, bright when selected
+and dim when off (or dark with dark inactive lighting). JOG retains its red/blue
+Vinyl indication. This lamp change does not need a new mapping.
 Physical integrated lamp acceptance remains separate from report-byte tests.
 
 In the full profile, EXT1-4 indicate actual THRU feedback for fixed decks 1-4,
@@ -94,19 +97,29 @@ their hashes. The previous bundle/archive are preserved at
 The full profile now uses the central Filter button as a one-shot EQ-mode
 selector, not resetFilter. Pressing it flashes cyan every 600 ms; pressing again
 cancels. The next channel ON press toggles only that deck's native Neural Mix EQ
-mode, leaving the Instant FX target unchanged and ending the flash. Outside
-selection, ON still selects the Instant FX target. Duplicate held snapshots do
+mode, leaving the armed Instant FX decks unchanged and ending the flash. Outside
+selection, current source makes ON independently arm/disarm its own deck.
+Only A starts armed; all four can be armed or disarmed. Duplicate held snapshots do
 not repeat either action. Stop/restart clears the local selection latch.
 Filter stays dim cyan at idle, even with inactive_display=dark. Selection keeps
 its bright-cyan/dark flash; selecting a deck or cancelling restores dim cyan.
 
 ON lamps are dim white for known normal EQ and dim cyan for known Neural Mix;
-the armed Instant FX target is bright in that mode color. These four lamps keep
+each armed Instant FX deck is bright in that mode color. These four lamps keep
 their requested dim indication even when inactive_display is dark. Unknown EQ
 state stays dark, rather than claiming normal EQ. Active Instant FX overrides
 the mode color with its slot color (red/green/blue/yellow), on every deck,
 including a previously selected target. The most recently activated still-active
 effect wins; repeated positive feedback does not change this order.
+
+The four central FX buttons aggregate actual feedback from armed decks: any
+known active effect lights its button, all known off allows idle lighting, and
+missing feedback without a known active effect stays dark. With no armed decks
+the central buttons stay dark. A hold retains every original deck address until
+release or Stop, including a press made with no targets; later arming cannot
+start an effect from a repeated held snapshot. The existing per-deck mapping
+addresses are unchanged. These multi-target changes are current-source behavior,
+not part of the published download.
 
 The new generated mapping assigns native toggleUnmixerEQMode to Note 20 on
 channels 1-4 with embedded feedback. The cache derives mode solely from that

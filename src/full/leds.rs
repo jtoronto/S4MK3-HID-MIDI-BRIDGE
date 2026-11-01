@@ -218,8 +218,8 @@ pub struct LocalState {
     pub pads: [PadMode; 2],
     /// Zero-based deck targeted by each FX strip.
     pub fx: [usize; 2],
-    /// Zero-based deck selected by the quick-FX target selector.
-    pub quick: usize,
+    /// Independently armed Instant FX targets, A-D.
+    pub quick: [bool; 4],
     pub vinyl: [bool; 2],
     pub motor_enabled: [bool; 2],
     /// Physical wheel phase in native ring units, independent of deck/playback state.
@@ -248,7 +248,7 @@ impl Default for LocalState {
             shifted: [false; 2],
             pads: [PadMode::Hotcue; 2],
             fx: [0, 1],
-            quick: 0,
+            quick: [true, false, false, false],
             vinyl: [true; 2],
             motor_enabled: [false; 2],
             ring_positions: [0; 2],
@@ -408,7 +408,7 @@ impl ButtonRenderer<'_> {
         );
         self.set(
             [17, 40][side],
-            self.palette(color, self.local.motor_enabled[side]),
+            self.palette(Color::Red, self.local.motor_enabled[side]),
         );
         self.set(
             [59, 70][side],
@@ -509,7 +509,7 @@ impl ButtonRenderer<'_> {
                 self.feedback.eq_mode[channel].map_or(0, |neural| {
                     let color = if neural { Color::Cyan } else { Color::White };
                     color.base()
-                        + if self.local.quick == channel {
+                        + if self.local.quick[channel] {
                             self.config.palette_active_intensity
                         } else {
                             self.config.palette_inactive_intensity
@@ -520,9 +520,30 @@ impl ButtonRenderer<'_> {
         }
         for effect in 0..4 {
             let color = [Color::Red, Color::Green, Color::Blue, Color::Yellow][effect];
+            let mut state = None;
+            let mut unknown = false;
+            for deck in 0..4 {
+                if self.local.quick[deck] {
+                    match self.feedback.notes[deck][16 + effect] {
+                        Some(value) if value != 0 => {
+                            state = Some(value);
+                            break;
+                        }
+                        Some(0) => state = Some(0),
+                        _ => unknown = true,
+                    }
+                }
+            }
             self.set(
                 50 + effect,
-                self.state_palette(color, self.feedback.notes[self.local.quick][16 + effect]),
+                self.state_palette(
+                    color,
+                    if unknown && state == Some(0) {
+                        None
+                    } else {
+                        state
+                    },
+                ),
             );
         }
         self.set(
@@ -591,7 +612,7 @@ mod tests {
             let local = LocalState {
                 decks: [2, 3],
                 fx: [3, 2],
-                quick: 1,
+                quick: [false, true, false, false],
                 ..LocalState::default()
             };
             let mut feedback = feedback();
@@ -710,8 +731,8 @@ mod tests {
             }
             assert_eq!(report[1 + 16], Color::Red.base() + 2);
             assert_eq!(report[1 + 39], Color::Red.base() + 2);
-            assert_eq!(report[1 + 17], Color::Yellow.base() + idle);
-            assert_eq!(report[1 + 40], Color::Purple.base() + idle);
+            assert_eq!(report[1 + 17], Color::Red.base() + idle);
+            assert_eq!(report[1 + 40], Color::Red.base() + idle);
             // Selecting decks without feedback cannot inherit C/D's REV or FLX state.
             local.decks = [0, 1];
             let unknown = render_buttons(&config, &feedback, &local);
@@ -730,21 +751,21 @@ mod tests {
         assert_eq!(inactive[17], Color::Red.base() + 2);
         assert_eq!(inactive[40], Color::Red.base() + 2);
         assert_eq!(inactive[18], Color::Red.base());
-        assert_eq!(inactive[41], Color::Blue.base());
+        assert_eq!(inactive[41], Color::Red.base());
 
         local.motor_enabled = [true, true];
         let report = render_buttons(&config, &FeedbackState::default(), &local);
         assert_eq!(report[17], Color::Red.base() + 2);
         assert_eq!(report[40], Color::Red.base() + 2);
         assert_eq!(report[18], Color::Red.base() + 2);
-        assert_eq!(report[41], Color::Blue.base() + 2);
+        assert_eq!(report[41], Color::Red.base() + 2);
 
         local.vinyl = [false, false];
         let report = render_buttons(&config, &FeedbackState::default(), &local);
         assert_eq!(report[17], Color::Blue.base() + 2);
         assert_eq!(report[40], Color::Blue.base() + 2);
         assert_eq!(report[18], Color::Red.base() + 2);
-        assert_eq!(report[41], Color::Blue.base() + 2);
+        assert_eq!(report[41], Color::Red.base() + 2);
     }
 
     #[test]
@@ -856,9 +877,14 @@ mod tests {
         };
         let mut feedback = feedback();
         feedback.eq_mode = [Some(false), Some(true), Some(false), Some(true)];
-        for selected in 0..4 {
+        for quick in [
+            [true, false, false, false],
+            [true, false, true, false],
+            [false; 4],
+            [true; 4],
+        ] {
             let local = LocalState {
-                quick: selected,
+                quick,
                 ..LocalState::default()
             };
             // When the four ON lamps are rendered.
@@ -873,7 +899,7 @@ mod tests {
                 assert_eq!(
                     report[47 + deck],
                     color.base()
-                        + if deck == selected {
+                        + if quick[deck] {
                             config.palette_active_intensity
                         } else {
                             config.palette_inactive_intensity
@@ -881,6 +907,40 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn instant_fx_buttons_aggregate_only_armed_deck_feedback() {
+        let config = config();
+        let mut feedback = feedback();
+        feedback.notes[0][16] = Some(0);
+        feedback.notes[1][16] = Some(127);
+        let mut local = LocalState {
+            quick: [true, true, false, false],
+            ..LocalState::default()
+        };
+
+        let report = render_buttons(&config, &feedback, &local);
+        assert_eq!(report[51], Color::Red.base() + 2);
+
+        // An effect on a disarmed deck cannot light the shared button.
+        local.quick[1] = false;
+        let report = render_buttons(&config, &feedback, &local);
+        assert_eq!(report[51], Color::Red.base());
+
+        // Missing feedback cannot assert that every armed deck is off.
+        local.quick[2] = true;
+        let report = render_buttons(&config, &feedback, &local);
+        assert_eq!(report[51], 0);
+
+        // Known active wins over missing feedback from another armed deck.
+        local.quick[1] = true;
+        let report = render_buttons(&config, &feedback, &local);
+        assert_eq!(report[51], Color::Red.base() + 2);
+
+        local.quick = [false; 4];
+        let report = render_buttons(&config, &feedback, &local);
+        assert_eq!(report[51], 0);
     }
 
     #[test]

@@ -119,6 +119,11 @@ mixing, EQ, headphone cue, loops, browsing, hotcues, samples, Neural Mix, and
 effects. A/C and B/D select the deck controlled by each side. Software feedback
 drives button and pad LEDs, channel meters, and jog-ring decoration.
 
+**Current-source control updates:** TT stays red, with brightness indicating
+selection. Channel ON independently arms/disarms decks for mixer Instant FX,
+so one held effect can apply to several tracks together. Only A starts armed.
+These updates are not in the published download and do not require a new mapping.
+
 These are intentional custom mappings. Djay's loop, Neural Mix, and effect
 models differ from Traktor's, so the same labels don't always mean the same
 thing.
@@ -134,7 +139,7 @@ thing.
 | **Sync / Shift+Sync**              | Normal Sync is deck-specific. Shift+Sync on either side cycles Djay's tempo-fader range **globally for all decks**, rather than locking one deck's tempo fader as in Traktor. Djay determines the ranges and their order.             |
 | **Channel FX1 / FX2**              | Choose the deck controlled by the left / right FX strip. These are per-deck control targets, not Traktor's shared FX buses or audio-routing assignments.                                                                              |
 | **FX strips**                      | Control three manual effects on the target deck. Current-source app + mapping: Shift + parameter knob browses previous/next effects; release Shift for parameter pickup. Shift + effect button retains next-effect selection. See the bank-enable limitation below. |
-| **Channel ON and mixer FX**        | ON selects the Instant FX target. ON is white for normal EQ, cyan for Neural Mix EQ, and brighter on the target deck. An active Instant FX overrides that deck's ON with its effect-button color. |
+| **Channel ON and mixer FX**        | Current source: ON independently arms/disarms each deck; held mixer FX apply to all armed decks. ON is white for normal EQ, cyan for Neural Mix EQ, and brighter when armed. An active Instant FX overrides that deck's ON with its effect-button color. |
 | **Filter, then channel ON**        | Filter flashes cyan awaiting a deck; the next ON toggles only that deck's Neural Mix EQ without changing the Instant FX target. Filter again cancels. Idle Filter is dim cyan; it no longer resets a filter. |
 | **STEMS / MUTE**                   | Both select the same Neural Mix layer: four mute pads and four solo pads; Shift with pads 1-4 provides exclusive solo. MUTE isn't a held Traktor-style modifier.                                                                      |
 | **REC**                            | Assigned to Djay's Record Sample action. Algoriddim has confirmed a bug with this action; a fix and retest are pending. It is not the set recorder. |

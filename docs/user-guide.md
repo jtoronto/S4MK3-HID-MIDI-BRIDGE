@@ -17,6 +17,11 @@ published release. It requires a newly generated matching mapping, installed
 under a new name. EXT lamp locations are confirmed; integrated control
 acceptance is tracked in the [validation record](ext-input-validation.md).
 
+Current source also keeps TT red and supports multiple armed decks for mixer
+Instant FX. These changes are not in the published download. They use the
+existing Instant FX mapping; a mapping reinstall is not needed for these two
+changes alone.
+
 The DJ laptop needs the standalone app, not Rust, Cargo or this repository.
 
 ## Contents
@@ -225,12 +230,13 @@ assignment changed**; choose **Keep** to retain the physical assignments.
 2. Press that channel's **ON** button to toggle its normal/Neural Mix EQ mode.
 3. To cancel without changing a deck, press Filter again.
 
-This does not change the Instant FX target. Outside this selection workflow,
-channel ON chooses the Instant FX target; it is not a channel mute button.
+This does not change the armed Instant FX decks. Outside this selection workflow,
+channel ON independently arms/disarms that deck for Instant FX; it is not a
+channel mute button.
 Filter no longer resets the software filter.
 
-ON is white for normal EQ and cyan for Neural Mix EQ, brighter on the selected
-Instant FX target. An active Instant FX temporarily takes over its color.
+ON is white for normal EQ and cyan for Neural Mix EQ, brighter on each armed
+Instant FX deck. An active Instant FX temporarily takes over its color.
 Dark/unknown feedback is not proof the deck is muted.
 
 ### External audio through a deck
@@ -361,14 +367,21 @@ when you need to turn the other slots off.
 
 These are separate from the two manual FX strips:
 
-1. Press a channel **ON** without Filter selection armed to choose the target.
-   **FX SELECT** also cycles the central target.
-2. Hold a mixer FX button 1-4 to apply its assigned Djay Instant FX.
-3. Release to end the held action.
+1. Press each channel **ON** without Filter selection armed to arm that deck.
+   Press again to disarm it. Several decks can be armed together.
+2. Hold a mixer FX button 1-4 to apply its assigned Djay Instant FX to all armed
+   decks at once.
+3. Release to end the effect on every deck where that press began.
 
-The target defaults to A. Selecting a target does not route audio into a shared
-effect bus. A held effect stays with the deck where it began until release;
-changing targets does not move that held effect to the new deck.
+Only A starts armed. For A and B together, press B's ON; press A's ON too if
+you want B alone. You can disarm all four decks: an FX press then does nothing
+until you release it and make a new press with a deck armed.
+
+Changing the armed decks during a hold affects the next FX press, not the
+effect already held. Bridge Stop also releases every held effect. The central
+FX button lights when Djay reports that effect active on any armed deck;
+each channel's ON can still show an active effect after that deck is disarmed.
+These are per-deck effects, not routing into a shared effect bus.
 
 ## Pads and sample banks
 
@@ -402,12 +415,14 @@ TT mode starts with Vinyl off. Jog settings have separate startup preferences
 for the two modes. Switching modes restores that mode's last Vinyl choice
 for the current bridge session.
 TT enables motorized playback on that physical side and starts off each time
-the bridge starts. Rotation follows actual playback feedback for the selected
+the bridge starts. Its lamp is always red: bright when enabled, dim when
+disabled unless inactive lamps are set dark. It does not inherit the deck color.
+Rotation follows actual playback feedback for the selected
 deck, not a press of Play. Install/select the newly generated mapping under
 a new filename: it adds explicit Internal-mode feedback required by this experiment.
 The selected deck must be loaded, playing and confirmed Internal, not THRU
 or DVS. Shift+jog seeks.
-If TT lights blue but the platter stays still, open Diagnostics at **Info**
+If TT is bright red but the platter stays still, open Diagnostics at **Info**
 log detail. `MOTOR_TT_SELECTION` confirms the press; `MOTOR_PLAYBACK_GATE`
 lists the selected deck and blocking conditions. `internal_mode_unknown`
 means Internal-mode feedback has not arrived: install and select this app's

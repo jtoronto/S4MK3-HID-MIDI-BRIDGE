@@ -1,6 +1,6 @@
 # S4 MK3 bridge issues
 
-Current checklist as of October 30, 2026. This is the source of truth for issue
+Current checklist as of November 1, 2026. This is the source of truth for issue
 status; [the mapping audit](mapping-audit.md) retains detailed findings and
 historical snapshots.
 
@@ -11,6 +11,13 @@ Keep completed items and add their completion date and a short evidence note.
 
 ## Completed
 
+- [x] **First-gig TT and Instant FX changes** - TT stays red with brightness
+  indicating motor-mode selection. Channel ON buttons independently arm multiple
+  decks for held Instant FX, retaining the original deck set until release or
+  Stop. The user accepted the current test build on November 1, 2026. Software
+  regressions and package checks passed; this is general build acceptance, not
+  an exhaustive per-control or fault-path test. See the
+  [evidence and limits](led-fx-state-fixes-validation.md#first-gig-tt-and-multi-deck-instant-fx-follow-up).
 - [x] **Preview encoder scrubbing** - Preview toggles playback and
   Shift+BROWSER emits directional preview seek pulses. The user confirmed
   the current scrubber works on October 21, 2026. A proposed one-handed
@@ -143,6 +150,15 @@ GUI setup. The bridge doesn't detect global DVS enable.
 
 ## Open
 
+- [ ] **Deck-selector contrast in dark venues — pending investigation** -
+  Keep unselected A/C and B/D buttons backlit, but improve the selected/unselected
+  distinction. The newer Traktor motor-driven and tension captures show C/D dim
+  orange (`0x0c`) throughout, with A/B bright blue (`0x2e`). These use the same
+  inactive/active intensity bits, 0/2, as the bridge defaults, but our C/D colors
+  are yellow/purple. The apparent brightness difference may be color-related;
+  this is a hypothesis, not a confirmed cause or hardware brightness limit.
+  A future same-color comparison could isolate it. Marked pending investigation
+  on November 1, 2026; leave colors and brightness unchanged for now.
 - [ ] **Djay coalesces zero-delay jump bursts** - A paused-deck MIDI-only check
   sent normal MOVE CC 2 deltas +4, -4, then four +2/-2 pairs with native one-beat
   size. All ten CCs were emitted, but the native waveform ended two beats behind
@@ -210,6 +226,15 @@ GUI setup. The bridge doesn't detect global DVS enable.
 
 ## Deferred ideas
 
+- [ ] **Linked loop and beatjump length** - Deferred on November 1, 2026 after
+  the first gig. Revisit a shared per-deck size selected with LOOP and used by
+  MOVE, removing the need to press MOVE for size selection. A bridge-owned size
+  with fixed-size loop activation could avoid needing an inactive-size setter,
+  but Djay's inactive loop selector might disagree with the shared size. That
+  trade-off is not accepted. Investigate reliable inactive-size setting/feedback
+  before settling a design; keep the current independent sizes and MOVE
+  selection mode for now. See the
+  [previous probe limits](screen-feedback-investigation.md#loop-and-jump-lengths).
 - [ ] **MUTE button role** - Deferred by the user on October 21, 2026.
   No distinct assignment chosen; revisit after screen support is understood,
   when layered controls may provide a useful role. This defers the design

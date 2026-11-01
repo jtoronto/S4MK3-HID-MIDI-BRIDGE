@@ -163,3 +163,50 @@ The subsequent October 26 report, "Tested on the DJ laptop. All checks out
 good.", establishes general acceptance of the current LED/FX build on the
 intended laptop. This supersedes the pending general physical status above,
 without claiming exhaustive per-control or fault-path coverage.
+
+## First-gig TT and multi-deck Instant FX follow-up
+
+November 1, 2026. The user reported their first gig went well, then requested
+red TT indicators, better deck-selector contrast and multi-deck Instant FX.
+Linked LOOP/MOVE sizing was explicitly deferred and is in
+[the issue backlog](issues.md#deferred-ideas).
+
+Current source fixes TT to red without changing its enabled/disabled intensity
+or JOG's Vinyl colors. Channel ON independently toggles arming on A-D, with only
+A initially armed. Central Instant FX presses address all armed decks and keep
+their original addresses until release or Stop. Empty-target presses are also
+consumed until release. Filter-then-ON preserves the armed set. Shared FX lamps
+aggregate actual armed-deck feedback without inventing missing state.
+
+The TT regression and three multi-deck routing/ownership regressions failed
+against the old behavior. The shared-lamp regression also failed under a
+temporary mutation that ignored armed B-D; that mutation was restored.
+All 477 Rust tests passed under ordinary `cargo test --locked`, with no serial
+override, and all 62 Swift tests passed. Formatting, strict locked all-target/
+all-feature Clippy, locked all-target build, shell syntax, plist lint and diff
+checks passed. The initial Clippy run flagged tuple-to-array syntax in a changed
+test fixture; the fixture was corrected before the complete passing Rust run.
+SwiftPM still reports the two existing unhandled files, `Assets/AppIcon.png`
+and `build-jog-diagnostic.sh`; no Swift source or package definition changed.
+
+The local saved LED preferences and bundled defaults both use inactive palette
+intensity 0, the lowest nonzero level in the current encoding. No lower steady
+backlight level is established. Deck-selector rendering and saved preferences
+were left unchanged. The newer Traktor captures use dim orange for C/D rather
+than our yellow/purple, with the same intensity bits. A color-related perceived
+brightness difference remains a hypothesis. Selector contrast is pending
+investigation; linked loop/jump sizing remains deferred.
+
+The initial software verification did not rebuild or launch an app, install a
+mapping, or start a live HID/MIDI/LED/motor session. The requested test package
+was subsequently built under `dist/first-gig-controls-20261101/`, preserving
+earlier packages, with version 0.2.1-beta.1 (numeric 0.2.1, build 7).
+Build, deep strict signature verification, ZIP integrity and DMG verification
+passed. Bundled defaults and Info.plist match current source; the packaged
+bridge's UUID matches the release executable. All 16 Instant FX mapping
+addresses match the previous test package, so these two changes alone require
+no mapping reinstall.
+
+On November 1, 2026, the user responded to that package with "Looks good. Commit
+it." This records general acceptance of the current test build, not a claim
+that every individual control or fault/recovery path was exercised.

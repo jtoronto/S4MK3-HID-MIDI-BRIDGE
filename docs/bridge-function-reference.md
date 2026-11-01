@@ -7,9 +7,25 @@ snapshot retained later in this document.
 
 ## Logic implemented inside the bridge
 
+### Current-source multi-deck Instant FX
+
+Channel ON independently toggles that deck's Instant FX arming; only A starts
+armed and an empty target set is allowed. Each central FX 1-4 press emits its
+existing Note 16-19 on every armed deck channel 1-4. All addresses are retained
+until release or Stop, even after selection changes. An empty-target press is
+consumed until release. Filter-then-ON still changes one deck's EQ mode without
+changing the armed set. Manual FX-strip targeting is unchanged.
+
+ON lamps show each deck's actual EQ mode and arming, with actual active-effect
+color taking precedence. Central buttons aggregate actual FX state across armed
+decks rather than choosing one deck's feedback. Missing state is not guessed.
+These changes use the existing generated mapping addresses.
+
 ### Current-source motorized playback testing
 
 TT toggles motorized playback independently per physical side, initially off.
+Its lamp stays red across deck changes, bright when selected and dim when off,
+subject to the inactive-display preference.
 JOG toggles Vinyl red/on or blue/off. Normal-mode `vinyl_enabled_at_startup`
 defaults true; `tt_vinyl_enabled_at_startup` defaults false. Each mode remembers
 its own Vinyl choice during the session.
