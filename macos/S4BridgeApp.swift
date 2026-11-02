@@ -437,6 +437,7 @@ final class BridgeController: ObservableObject {
         "MOTOR_JOG_BEND",
         "MOTOR_JOG_POSITION",
         "MOTOR_SCRATCH_HANDOFF",
+        "MOTOR_REGULATOR",
         "MOTOR_TT_SELECTION",
         "MOTOR_PLAYBACK_GATE",
         "MOTOR_TT_STATE",

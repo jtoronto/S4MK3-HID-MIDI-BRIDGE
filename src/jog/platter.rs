@@ -57,12 +57,18 @@ pub struct State {
     pub commanded_rpm: f64,
     /// Measured speed once a complete sensor window is available.
     pub measured_rpm: Option<f64>,
+    /// Signed encoder travel used by the latest speed measurement.
+    pub window_counts: Option<i64>,
+    /// Sensor ticks spanned by the latest speed measurement.
+    pub window_ticks: Option<u64>,
     /// Difference between target and measured speed.
     pub error_rpm: Option<f64>,
     /// Feed-forward component of the force command.
     pub feed_forward_force: f64,
     /// Integral component of the force command.
     pub integral_force: f64,
+    /// Proportional component of the force command.
+    pub proportional_force: f64,
     /// Force before output clamping.
     pub unclamped_force: f64,
     /// Clamped force command.
@@ -148,7 +154,10 @@ impl Controller {
             .context("rotation interval conversion")?
             / 1_000_000.0;
         self.updated_us = now_us;
-        self.update(measured, elapsed, dt, settings)
+        self.update(measured, elapsed, dt, settings)?;
+        self.state.window_counts = Some(counts - first_counts);
+        self.state.window_ticks = Some(span_ticks);
+        Ok(())
     }
 
     /// Apply the regulator law to a measured speed and elapsed intervals.
@@ -206,9 +215,12 @@ impl Controller {
         self.state = State {
             commanded_rpm: commanded,
             measured_rpm: Some(measured),
+            window_counts: None,
+            window_ticks: None,
             error_rpm: Some(error),
             feed_forward_force,
             integral_force,
+            proportional_force: proportional,
             unclamped_force,
             force,
             at_force_cap: force == settings.max_force,

@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 
 use anyhow::{Context as _, ensure};
 use num_traits::ToPrimitive as _;
+use serde::Serialize;
 
 use crate::jog::{
     decode::{Motion, Status},
@@ -13,13 +14,34 @@ use crate::jog::{
 /// Measured relative encoder scale, independent of the jog-ring LED period.
 pub const COUNTS_PER_REVOLUTION: u32 = 2880;
 
+const ASSIST_CONFIRMATION_US: u64 = 100_000;
+
 /// Authorization from real cached Djay feedback and local gesture ownership.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct PlaybackState {
     pub enabled: [bool; 2],
     pub owned: [bool; 2],
     /// Keep the motor assist active through touch and owned scratch gestures.
     pub continuous: [bool; 2],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum Mode {
+    Disabled,
+    Qualifying,
+    Regulating,
+    Assisting,
+}
+
+#[derive(Serialize)]
+pub(super) struct Diagnostic {
+    pub mode: Mode,
+    motor_rpm: Option<f64>,
+    assistance_rpm: Option<f64>,
+    window_counts: Option<i64>,
+    window_ticks: Option<u64>,
+    regulator: Option<crate::jog::platter::State>,
 }
 
 pub(super) struct Wheel {
@@ -32,6 +54,8 @@ pub(super) struct Wheel {
     last_timer: Option<u32>,
     sensor_ticks: u64,
     measured_rpm: Option<f64>,
+    assistance_rpm: Option<f64>,
+    window: Option<(i64, u64)>,
     qualified: bool,
 }
 
@@ -43,10 +67,12 @@ impl Wheel {
             counts: 0,
             allowed: false,
             continuous_assist: false,
-            samples: VecDeque::with_capacity(32),
+            samples: VecDeque::with_capacity(64),
             last_timer: None,
             sensor_ticks: 0,
             measured_rpm: None,
+            assistance_rpm: None,
+            window: None,
             qualified: false,
         }
     }
@@ -60,6 +86,8 @@ impl Wheel {
         self.last_timer = None;
         self.sensor_ticks = 0;
         self.measured_rpm = None;
+        self.assistance_rpm = None;
+        self.window = None;
         self.qualified = false;
     }
 
@@ -99,16 +127,20 @@ impl Wheel {
                 if rpm >= f64::from(self.settings.target_rpm) - 0.75 {
                     self.qualified = true;
                 }
-                // MIDI Scratch ownership does not imply physical contact, especially
-                // at the upper handoff. Only contact bypasses speed regulation.
+                // A brief sensor-speed dip is not proof of deliberate rim braking.
+                // Confirm new underspeed assistance with the longer encoder window;
+                // contact/reverse and recovery of an existing assist stay immediate.
                 let assisting = motion.touch[side]
                     || rpm < 0.0
-                    || ((self.qualified || self.continuous_assist || owned)
-                        && if self.continuous_assist {
-                            rpm < f64::from(self.settings.target_rpm) - 0.75
-                        } else {
-                            rpm < f64::from(self.settings.target_rpm) - 2.0
-                        });
+                    || if self.continuous_assist {
+                        rpm < f64::from(self.settings.target_rpm) - 0.75
+                    } else {
+                        (self.qualified || owned)
+                            && rpm < f64::from(self.settings.target_rpm) - 2.0
+                            && self
+                                .assistance_rpm
+                                .is_some_and(|rpm| rpm < f64::from(self.settings.target_rpm) - 2.0)
+                    };
                 if assisting != self.continuous_assist {
                     self.controller = Controller::default();
                     self.continuous_assist = assisting;
@@ -132,32 +164,82 @@ impl Wheel {
             self.sensor_ticks += u64::from(timer.wrapping_sub(previous));
         }
         self.samples.push_back((self.sensor_ticks, self.counts));
-        let window = crate::jog::platter::WINDOW_US * crate::jog::platter::SENSOR_TICKS_PER_US;
+        let clock = self.sensor_ticks;
+        let counter = self.counts;
+        let short_window =
+            crate::jog::platter::WINDOW_US * crate::jog::platter::SENSOR_TICKS_PER_US;
+        let long_window = ASSIST_CONFIRMATION_US * crate::jog::platter::SENSOR_TICKS_PER_US;
         while self
             .samples
             .get(1)
-            .is_some_and(|(ticks, _)| self.sensor_ticks - ticks >= window)
+            .is_some_and(|(ticks, _)| clock - ticks >= long_window)
         {
             self.samples.pop_front();
         }
-        let &(first, counts) = self
-            .samples
-            .front()
-            .context("continuous motor speed baseline")?;
-        let elapsed = self.sensor_ticks - first;
-        if elapsed >= window {
-            let rpm = (self.counts - counts)
+        let speed = |&(first, counts): &(u64, i64)| -> anyhow::Result<f64> {
+            Ok((counter - counts)
                 .to_f64()
                 .context("continuous motor counts")?
                 * 6_000_000_000.0
-                / elapsed.to_f64().context("continuous motor interval")?
-                / f64::from(COUNTS_PER_REVOLUTION);
+                / (clock - first)
+                    .to_f64()
+                    .context("continuous motor interval")?
+                / f64::from(COUNTS_PER_REVOLUTION))
+        };
+        let short = self
+            .samples
+            .iter()
+            .rev()
+            .find(|(ticks, _)| clock - ticks >= short_window);
+        self.measured_rpm = short.map(speed).transpose()?;
+        self.window = short.map(|&(ticks, counts)| (counter - counts, clock - ticks));
+        self.assistance_rpm = self
+            .samples
+            .front()
+            .filter(|(ticks, _)| clock - ticks >= long_window)
+            .map(speed)
+            .transpose()?;
+        if let Some(rpm) = self.measured_rpm {
             if let Some(limit) = self.settings.effective_overspeed_limit_rpm() {
                 ensure!(rpm <= f64::from(limit), "continuous motor overspeed");
             }
-            self.measured_rpm = Some(rpm);
         }
         Ok(())
+    }
+
+    pub(super) fn diagnostic(&self, continuous: bool) -> Diagnostic {
+        let mode = if !self.allowed {
+            Mode::Disabled
+        } else if self.measured_rpm.is_none() && continuous {
+            Mode::Qualifying
+        } else if self.continuous_assist {
+            Mode::Assisting
+        } else if self.controller.state.measured_rpm.is_none() {
+            Mode::Qualifying
+        } else {
+            Mode::Regulating
+        };
+        let (motor_rpm, window_counts, window_ticks) = if continuous {
+            (
+                self.measured_rpm,
+                self.window.map(|(counts, _)| counts),
+                self.window.map(|(_, ticks)| ticks),
+            )
+        } else {
+            (
+                self.controller.state.measured_rpm,
+                self.controller.state.window_counts,
+                self.controller.state.window_ticks,
+            )
+        };
+        Diagnostic {
+            mode,
+            motor_rpm,
+            assistance_rpm: self.assistance_rpm,
+            window_counts,
+            window_ticks,
+            regulator: (mode == Mode::Regulating).then_some(self.controller.state),
+        }
     }
 
     pub(super) fn force(&self, continuous: bool) -> anyhow::Result<i32> {

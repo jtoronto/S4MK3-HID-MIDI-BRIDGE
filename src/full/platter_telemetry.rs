@@ -30,6 +30,7 @@ pub(super) struct Wheel {
 
 #[derive(Debug, Serialize)]
 pub(super) struct Frame {
+    host_us: u128,
     wheels: [Wheel; 2],
 }
 
@@ -127,7 +128,10 @@ impl Telemetry {
         });
         self.bend_steps = [0; 2];
         self.published = Some(now);
-        Some(Frame { wheels })
+        Some(Frame {
+            host_us: now.as_micros(),
+            wheels,
+        })
     }
 }
 
@@ -173,6 +177,7 @@ mod tests {
         let frame = telemetry
             .frame(&state, Duration::from_millis(100))
             .ok_or_else(|| anyhow::anyhow!("diagnostic frame missing"))?;
+        assert_eq!(frame.host_us, 100_000);
         assert!((frame.wheels[0].bend_counts_per_second + 1280.0).abs() < 1e-9);
         assert!((frame.wheels[1].bend_counts_per_second - 320.0).abs() < 1e-9);
         let next = telemetry

@@ -534,9 +534,18 @@ With the starting settings, full assistance is 5280 force units, capped by
 maximum force. It reaches zero at or above measured target speed, including
 the fallback after top-touch release. Light contact must not accelerate the
 wheel above target. These are requested force units, not measured torque.
-The speed regulator does not accumulate error against your hand. Normal tension
-and backspin motor assistance do not add to it. Sensor loss clears force and
+While assistance owns the motor, the speed regulator does not accumulate error
+against your hand. Normal tension and backspin motor assistance do not add to it.
+Sensor loss clears force and
 requires a new baseline and fresh 20 ms sensor window before recovery.
+Automatic rim-braking assistance now requires underspeed confirmation from both
+the 20 ms motor estimate and a separate 100 ms encoder window. Brief speed
+ripple alone should not restart the regulator. Top touch and reverse movement
+retain the short-window response; assistance already active still releases
+using that short window. A brief, light rim brake can therefore feel more
+resistance while the longer window confirms it. Motor tuning and the MIDI
+quiet band are unchanged; physical stability and braking feel need comparison.
+See the [admission correction and verification limits](tt-assistance-admission-validation.md).
 In the current relative-pitchbend test build, when TT is authorized and the
 wheel is not touch-owned, only deviation from the configured target RPM produces
 signed relative Pitch Bend CC 4 steps for the selected deck's `pitchBendMove`
@@ -645,6 +654,14 @@ actual configuration loaded by each bridge launch, not unsaved editor values.
 `MOTOR_TT_STATE` records touch, playback authorization, ownership and requested
 force; it does not measure applied torque. There is no runtime
 `MOTOR_SCRATCH_MODE` emitter.
+
+The RPM-investigation build also captures `MOTOR_REGULATOR`: sampled encoder
+counts, sensor timing, motor-speed measurements, regulation/assistance mode and
+requested-force components. Its timestamps can be aligned with the live platter
+snapshots. `assistance_rpm` shows the longer admission estimate, or no value until
+a complete window is available. Diagnostics do not establish physical stability.
+For a clean untouched baseline, follow the
+[hands-free RPM procedure](tt-rpm-baseline.md); keep all tuning settings fixed.
 
 **For this testing build, turn TT off or Stop bridge before quitting Djay.**
 Playback authorization is cached from real feedback; silence from Djay does

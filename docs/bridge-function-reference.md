@@ -58,6 +58,20 @@ receipt per launch and bounded `MOTOR_TT_STATE` reports for touch, authorization
 owner and requested force. Requested force is not applied torque. The app
 retains the receipt for a capture started after launch. `MOTOR_SCRATCH_MODE`
 is not a runtime emitter.
+The RPM diagnostic adds Debug-only `MOTOR_REGULATOR data={...}` JSON samples
+at most every 20 ms per side, plus regulator-mode edges. Side 0 is left and
+side 1 is right. Records include raw encoder counter/timer, current report
+delta/status, authorization/contact flags, the motor window's signed count
+travel and sensor-tick span, measured motor RPM and requested force after sample
+arbitration. A regulating record also contains the actual PI state: baseline,
+proportional, integral, unclamped and rate-limited/clamped force. PI state is
+null when inactive; qualifying can include the existing assistance fallback
+while the regulator rebuilds its window. This is sampled telemetry, not every
+input report or proof of a successful motor write. Sensor ticks are 100 per
+microsecond; the motor window is at least 20 ms. `S4_PLATTER_STATUS` now includes
+`host_us` in the same bridge-start clock domain, supplying the separate 100 ms
+RPM estimate and sent bend rate at 10 Hz. See the
+[hands-free baseline](tt-rpm-baseline.md).
 JOG toggles Vinyl red/on or blue/off. Normal-mode `vinyl_enabled_at_startup`
 defaults true; `tt_vinyl_enabled_at_startup` defaults false. Each mode remembers
 its own Vinyl choice during the session.
@@ -90,7 +104,22 @@ In `src/tension/playback.rs`, hold assistance uses
 scaled by `clamp((target_rpm - measured_rpm) / min(2, target_rpm), 0, 1)`.
 This preserves full stopped/reverse assistance, tapers the final 2 RPM below
 target, and gives zero assistance at/above measured target, including the
-touch-release fallback. The PI controller must not integrate against the hand.
+touch-release fallback. The PI controller does not integrate while assistance
+owns the motor.
+New automatic underspeed assistance requires both the existing 20 ms motor RPM
+and a separate sensor-clock window of at least 100 ms to be strictly below
+`target_rpm - 2`. Qualification remains short RPM at least `target_rpm - 0.75`;
+MIDI ownership can bypass qualification, not either admission-speed check.
+Touch or negative short RPM bypasses long-window confirmation. Once assistance
+is active, it continues below `target_rpm - 0.75` or during touch/reverse; the
+long estimate cannot delay release when current speed recovers.
+Both windows use signed count travel over actual sensor time. Real assistance
+transitions still reset the PI controller; rejected short dips do not. Existing
+full resets discard both histories. The 20 ms regulator, force taper, startup,
+overspeed check, authorization and freshness rules are unchanged.
+`MOTOR_REGULATOR` exposes the new `assistance_rpm` admission estimate separately
+from `motor_rpm`. This reduces false admission in the recorded hands-free
+fixture; it is not proof that all physical ripple or recovery chatter is fixed.
 Saved floor/gain values persist; the response changes require no mapping export.
 The floor still needs actual CC4/audio calibration;
 see the [diagnostic runbook](tt-speed-scratch-diagnostic.md).

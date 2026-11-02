@@ -13,6 +13,7 @@ use crate::jog::{
 };
 
 mod backspin;
+mod diagnostics;
 mod playback;
 
 pub use crate::jog::neutral_report;
@@ -102,6 +103,7 @@ pub struct Engine {
     playback_state: PlaybackState,
     sensor_seen_us: [u64; 2],
     last_tt_diagnostic: Option<TtDiagnosticState>,
+    last_regulator_diagnostic: [Option<(u64, playback::Mode)>; 2],
 }
 
 #[cfg(test)]
@@ -159,6 +161,7 @@ impl Engine {
             playback_state: PlaybackState::default(),
             sensor_seen_us: [0; 2],
             last_tt_diagnostic: None,
+            last_regulator_diagnostic: [None; 2],
         }
     }
 
@@ -322,6 +325,7 @@ impl Engine {
         }
         let immediate_zero =
             (0..2).any(|side| decision.torque[side] == 0 && self.last_torque[side] != 0);
+        self.log_regulator(&motion, decision.torque);
         if sensor_gap {
             Ok(Some(neutral_report()))
         } else if immediate_zero {

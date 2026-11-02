@@ -130,6 +130,7 @@ final class BridgeTests: XCTestCase {
         model.appendLog(records)
         model.appendLog(
             "2026-10-29T13:33:37.999000Z DEBUG MOTOR_JOG_BEND side=\"right\" deck=2 steps=1\n" +
+            "2026-10-29T13:33:38.000500Z DEBUG MOTOR_REGULATOR data={\"host_us\":123456,\"side\":1,\"mode\":\"assisting\",\"counter\":702,\"sensor_timer\":12345600,\"motor_rpm\":0.0,\"requested_force\":5280,\"regulator\":null}\n" +
             "2026-10-29T13:33:38.000000Z  INFO MOTOR_PLAYBACK_GATE side=\"right\" playback_gate_open=true\n" +
             "2026-10-29T13:33:38.001000Z  INFO MOTOR_TT_STATE host_us=100000 touch=[false, false]"
         )
@@ -143,6 +144,9 @@ final class BridgeTests: XCTestCase {
         XCTAssertTrue(capture.contains("position=0"))
         XCTAssertTrue(capture.contains("position=3"))
         XCTAssertTrue(capture.contains("MOTOR_JOG_BEND"))
+        XCTAssertTrue(capture.contains(
+            "2026-10-29T13:33:38.000500Z DEBUG MOTOR_REGULATOR data={\"host_us\":123456,\"side\":1,\"mode\":\"assisting\",\"counter\":702,\"sensor_timer\":12345600,\"motor_rpm\":0.0,\"requested_force\":5280,\"regulator\":null}"
+        ))
         XCTAssertTrue(capture.contains("MOTOR_PLAYBACK_GATE"))
         XCTAssertTrue(capture.contains("MOTOR_TT_STATE"))
         XCTAssertFalse(capture.contains("MOTOR_SCRATCH_MODE"))
