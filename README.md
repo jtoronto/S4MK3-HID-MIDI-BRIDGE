@@ -107,12 +107,24 @@ acceptance is tracked in the [EXT validation record](docs/ext-input-validation.m
 
 **Current-source testing build:** TT independently enables motorized playback;
 JOG toggles Vinyl red/on and blue/off. Jog settings include a Vinyl startup
-default per mode: normal starts on, TT starts off. With TT Vinyl off, braking
-or nudging past the provisional speed bounds hands off to Scratch. Normal rings
+default per mode: normal starts on, TT starts off. The current-source TT response
+update uses a 2.25 RPM quiet band and smooth bend onset. With TT Vinyl off,
+braking to the provisional lower floor hands off to Scratch; forward nudges
+stay on pitch bend. Holding assistance tapers to zero at target speed. Normal rings
 follow playback and Scratch and hold on pause; TT rings follow the physical
-wheel. Jog settings retain experimental tuning controls. Install the newly generated
-mapping for explicit Internal-mode feedback. These additions are not in the
+wheel. Jog settings retain experimental tuning controls. Use a matching mapping
+with explicit Internal-mode feedback; the response update needs no new export.
+These additions are not in the
 published download; see [testing workflow and limits](docs/user-guide.md#testing-motorized-playback).
+
+Current source also allows stopped TT platter movement to scratch without
+enabling Vinyl. The app's Diagnostics tab shows live physical RPM, signed MIDI
+bend output and routing mode for tuning. These indicators are bridge-output
+diagnostics, not measured audible playback speed.
+The separate TT pitch-bend gain adjusts bend output strength without moving the
+lower Scratch handoff threshold; its default remains 1x and saved values persist.
+The response update needs no mapping export. Physical response and Djay's
+audible slowdown limit remain unverified.
 
 The mapping covers four-deck transport, touch scratching and pitch bending,
 mixing, EQ, headphone cue, loops, browsing, hotcues, samples, Neural Mix, and

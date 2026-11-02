@@ -160,23 +160,23 @@ impl Wheel {
         Ok(())
     }
 
-    pub(super) fn force(&self, continuous: bool) -> i32 {
+    pub(super) fn force(&self, continuous: bool) -> anyhow::Result<i32> {
         if continuous && self.measured_rpm.is_none() {
-            return 0;
+            return Ok(0);
         }
         if continuous && (self.continuous_assist || self.controller.state.measured_rpm.is_none()) {
-            return i32::from(
-                self.settings
-                    .base_force
-                    .saturating_add(
-                        self.settings
-                            .force_per_rpm
-                            .saturating_mul(self.settings.target_rpm),
-                    )
-                    .min(self.settings.max_force),
-            );
+            let target = f64::from(self.settings.target_rpm);
+            let rpm = self.measured_rpm.context("continuous assistance speed")?;
+            let fraction = ((target - rpm) / target.min(2.0)).clamp(0.0, 1.0);
+            let full_force = (u32::from(self.settings.base_force)
+                + u32::from(self.settings.force_per_rpm) * u32::from(self.settings.target_rpm))
+            .min(u32::from(self.settings.max_force));
+            return (f64::from(full_force) * fraction)
+                .round()
+                .to_i32()
+                .context("continuous assistance force");
         }
         // The controller clamps to a u16 cap and only produces clockwise force.
-        i32::from(self.controller.state.force)
+        Ok(i32::from(self.controller.state.force))
     }
 }

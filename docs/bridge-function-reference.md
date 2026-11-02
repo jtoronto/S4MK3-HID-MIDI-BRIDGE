@@ -26,6 +26,38 @@ These changes use the existing generated mapping addresses.
 TT toggles motorized playback independently per physical side, initially off.
 Its lamp stays red across deck changes, bright when selected and dim when off,
 subject to the inactive-display preference.
+Current source also enables Scratch movement for a confirmed paused, loaded
+Internal deck in TT mode, independently of Vinyl and capacitive touch. This does
+not authorize motor force while paused. Physical touch retains its original
+Scratch owner through deck changes; fresh sensor deltas drive untouch-owned
+paused movement. Resume, mode cancellation and stale input release that
+synthetic Scratch owner and require a new bend baseline.
+
+The current `tt_pitch_bend_gain` preference is a 0.1-10 multiplier applied
+before relative-step quantization, default 1.0. It scales only the playback-driven
+TT CC4 route, preserving the existing 2:1 braking/acceleration bias. It does not
+change ordinary jog, Scratch, handoff thresholds or motor control settings.
+Legacy preferences without the field use the default multiplier of 1. It is a
+runtime preference, so Save/restart applies it without regenerating a mapping.
+
+The response-stability law in `src/full/platter_bend.rs` uses a true
+2.25 RPM deadband for qualification and neutral output. There is no active
+bend hysteresis; neutral clears the fractional residual. For error
+`e = measured_rpm - target_rpm`, set `x = clamp((abs(e) - 2.25) / 1.0, 0, 1)`
+and multiply the existing full-error law by `x*x*(3 - 2*x)`.
+Each fresh report contributes
+`e * onset * direction_gain * saved_gain * (2880 / 60) * elapsed_seconds`
+before relative-step quantization. `direction_gain` is 2 for braking and 1 for
+forward nudging. At 3.25 RPM deviation and beyond, onset is 1; it does not
+subtract the deadband from the full-error law.
+Full-profile `S4_PLATTER_STATUS` lines provide a 10 Hz Diagnostics snapshot with
+physical RPM, the successful outgoing CC4 count rate and current routing mode.
+This is MIDI output evidence, not audio-speed feedback.
+The response-stability diagnostic adds an actual-runtime `S4_MOTOR_CONFIG`
+receipt per launch and bounded `MOTOR_TT_STATE` reports for touch, authorization,
+owner and requested force. Requested force is not applied torque. The app
+retains the receipt for a capture started after launch. `MOTOR_SCRATCH_MODE`
+is not a runtime emitter.
 JOG toggles Vinyl red/on or blue/off. Normal-mode `vinyl_enabled_at_startup`
 defaults true; `tt_vinyl_enabled_at_startup` defaults false. Each mode remembers
 its own Vinyl choice during the session.
@@ -33,11 +65,12 @@ The testing `platter_*` preferences use the existing saved Jog configuration.
 Their provisional feel defaults and application steps are in the
 [user guide](user-guide.md#testing-motorized-playback).
 
-The matching generated mapping adds Djay-to-bridge CC22 on deck channels 1-4
+The motorized-playback mapping supplies Djay-to-bridge CC22 on deck channels 1-4
 (one-based) for `turntableN.controlModeIsInternal`. Loaded and raw playing
 feedback plus explicit Internal true and THRU false authorize rotation;
-false THRU alone is insufficient because it may mean DVS. This requires
-installing/selecting a newly generated mapping, preserving custom mappings.
+false THRU alone is insufficient because it may mean DVS. Install/select a
+matching mapping only if the current one lacks that feedback, preserving custom
+mappings. The response-stability update does not change the mapping.
 Active wheel output uses the existing CC4/CC5/Note7 routes. The retained CC8
 absolute-position mapping is experimental and receives no runtime stream;
 see the [archived method](absolute-position-scratch-experiment.md).
@@ -47,11 +80,22 @@ nominal powered motion is removed before jog MIDI translation. The TT diagnostic
 retains bounded forward assistance through touch, braking and Scratch rather
 than summing tension/backspin force. Freshness, playback and deck-owner gates
 still neutralize drive. With TT Vinyl off, the provisional configurable
-`tt_pitch_bend_floor_percent` (50 initially) selects a speed-driven CC4-to-CC5
-Scratch handoff with hysteresis at the floor and the symmetric
-`200% - floor` ceiling. Upper Scratch MIDI ownership alone does not bypass
-above-target motor regulation after touch release. These bounds need actual CC4/audio calibration;
+`tt_pitch_bend_floor_percent` (default 50, range 1-95) selects only the lower
+speed-driven CC4-to-CC5 Scratch handoff in `src/full/platter_gesture.rs`.
+Entry is at or below `floor = target * percent / 100`; exit is at or above
+`floor + min((target - floor) * 0.25, 2)` RPM. Forward nudges no longer trigger
+automatic upper Scratch. Explicit Vinyl-on touch still owns Scratch.
+In `src/tension/playback.rs`, hold assistance uses
+`F0 = min(max_force, base_force + force_per_rpm * target_rpm)`, default 5280,
+scaled by `clamp((target_rpm - measured_rpm) / min(2, target_rpm), 0, 1)`.
+This preserves full stopped/reverse assistance, tapers the final 2 RPM below
+target, and gives zero assistance at/above measured target, including the
+touch-release fallback. The PI controller must not integrate against the hand.
+Saved floor/gain values persist; the response changes require no mapping export.
+The floor still needs actual CC4/audio calibration;
 see the [diagnostic runbook](tt-speed-scratch-diagnostic.md).
+Implementation, package evidence and physical-test limits are
+tracked separately in the [validation record](tt-response-stability-validation.md).
 Cached real playback authorization survives feedback silence in this testing
 build: use TT-off or Stop bridge before quitting Djay.
 See [integration evidence](motorized-playback-integration-validation.md).

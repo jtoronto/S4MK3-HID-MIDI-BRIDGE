@@ -123,9 +123,15 @@ a new filename when bindings change, preserving custom maps. See the focused
 ## Current hardware tension and mixer EQ overlay
 
 Current source also has a separate TT motorized-playback beta: normal and TT
-keep independent Vinyl choices, and provisional lower/upper speed bounds switch
-from pitch bend to Scratch with TT Vinyl off. It retains assistance while held
-and restores speed regulation after a released forward nudge. Normal rings
+keep independent Vinyl choices. The response update uses a true
+2.25 RPM bend deadband and smooth onset across the next 1 RPM. With TT Vinyl
+off, only the provisional lower-speed floor switches pitch bend to Scratch;
+forward nudges no longer enter automatic upper Scratch. Explicit Vinyl-on top
+touch still selects Scratch. Assistance while held tapers over the last 2 RPM
+below target and is zero at/above measured target, including touch release.
+The 50% default floor and 1x default gain are unchanged; saved values persist
+and this response update needs no mapping export. Physical response and Djay's
+audio floor remain unverified. Normal rings
 illustrate playback/Scratch/pause; TT rings track physical rotation.
 This is not Traktor parity or a published-download promise. See the
 [current workflow](user-guide.md#testing-motorized-playback) and

@@ -131,7 +131,7 @@ final class BridgeTests: XCTestCase {
         model.appendLog(
             "2026-10-29T13:33:37.999000Z DEBUG MOTOR_JOG_BEND side=\"right\" deck=2 steps=1\n" +
             "2026-10-29T13:33:38.000000Z  INFO MOTOR_PLAYBACK_GATE side=\"right\" playback_gate_open=true\n" +
-            "2026-10-29T13:33:38.001000Z  INFO MOTOR_SCRATCH_MODE side=\"right\" active=true"
+            "2026-10-29T13:33:38.001000Z  INFO MOTOR_TT_STATE host_us=100000 touch=[false, false]"
         )
         model.stopMotorDiagnosticCapture()
         let capture = String(decoding: try Data(contentsOf: url), as: UTF8.self)
@@ -144,9 +144,114 @@ final class BridgeTests: XCTestCase {
         XCTAssertTrue(capture.contains("position=3"))
         XCTAssertTrue(capture.contains("MOTOR_JOG_BEND"))
         XCTAssertTrue(capture.contains("MOTOR_PLAYBACK_GATE"))
-        XCTAssertTrue(capture.contains("MOTOR_SCRATCH_MODE"))
+        XCTAssertTrue(capture.contains("MOTOR_TT_STATE"))
+        XCTAssertFalse(capture.contains("MOTOR_SCRATCH_MODE"))
         XCTAssertFalse(capture.contains("TENSION_WRITE"))
         XCTAssertTrue(url.path.hasPrefix(model.motorDiagnosticDirectoryURL.path))
+    }
+
+    @MainActor
+    func testMotorCaptureUsesEachLaunchedReceiptAcrossRestartAndBoundedLogs() async throws {
+        let fixture = try makeFixture()
+        let fifo = fixture.appendingPathComponent("control.fifo")
+        XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
+        let descriptor = Darwin.open(fifo.path, O_RDWR)
+        guard descriptor >= 0 else { throw AppError.invalid("Could not open test FIFO.") }
+        defer { XCTAssertEqual(Darwin.close(descriptor), 0) }
+        let executable = fixture.appendingPathComponent("s4mk3-hid-midi-bridge")
+        let script = """
+        #!/bin/sh
+        trap 'exit 0' INT
+        jog=""
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --jog-config) jog="$2"; shift 2;;
+            *) shift;;
+          esac
+        done
+        [ -n "$jog" ] || exit 2
+        jog_json=$(tr -d '[:space:]' < "$jog")
+        printf 'S4_MOTOR_CONFIG {"jog":%s}\\n' "$jog_json"
+        case "$jog_json" in
+          *'"platter_target_rpm":33'*) ready=READY_INITIAL;;
+          *'"platter_target_rpm":45'*) ready=READY_REPLACEMENT;;
+          *) exit 3;;
+        esac
+        exec 3< '\(fifo.path)'
+        printf '%s\\n' "$ready"
+        IFS= read -r line <&3
+        """
+        try Data(script.utf8).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        let model = try testController(resourceURL: fixture, supportURL: fixture.appendingPathComponent("support"))
+        model.run.logLevel = "debug"
+        let firstReady = expectation(description: "first launched receipt reached the app")
+        let replacementReady = expectation(description: "replacement launched with saved jog settings")
+        let stopped = expectation(description: "replacement child acknowledged stop")
+        var finalStop = false
+        var didSeeInitial = false
+        var didSeeReplacement = false
+        let output = model.$log.sink { text in
+            if !didSeeInitial && text.contains("READY_INITIAL") {
+                didSeeInitial = true
+                firstReady.fulfill()
+            }
+            if !didSeeReplacement && text.contains("READY_REPLACEMENT") {
+                didSeeReplacement = true
+                replacementReady.fulfill()
+            }
+        }
+        let state = model.$state.sink { current in
+            if finalStop && current == .stopped {
+                finalStop = false
+                stopped.fulfill()
+            }
+        }
+
+        model.start()
+        await fulfillment(of: [firstReady], timeout: 10)
+        model.appendLog(String(repeating: "bounded display noise\n", count: 4000))
+        model.jog.ttPitchBendGain = 10
+        try model.save()
+        model.startMotorDiagnosticCapture()
+        let captureURL = try XCTUnwrap(model.motorDiagnosticURL)
+        model.jog.platterTargetRpm = 45
+        model.apply()
+        await fulfillment(of: [replacementReady], timeout: 10)
+        XCTAssertTrue(model.log.contains("\"platter_target_rpm\":45"))
+        finalStop = true
+        model.stop()
+        await fulfillment(of: [stopped], timeout: 10)
+        model.stopMotorDiagnosticCapture()
+        withExtendedLifetime((output, state)) {}
+
+        let capture = String(decoding: try Data(contentsOf: captureURL), as: UTF8.self)
+        let receipts = capture.components(separatedBy: "\n").filter {
+            $0.hasPrefix("# S4_MOTOR_CONFIG launchID=") && !$0.hasSuffix("pending")
+        }
+        guard receipts.count == 2 else {
+            XCTFail("Expected two launched configuration receipts, received \(receipts.count).")
+            return
+        }
+        let settings = try receipts.map { line -> [String: Any] in
+            let start = try XCTUnwrap(line.firstIndex(of: "{"))
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(
+                with: Data(line[start...].utf8)
+            ) as? [String: Any])
+            return try XCTUnwrap(payload["jog"] as? [String: Any])
+        }
+        XCTAssertEqual(settings[0]["tt_pitch_bend_gain"] as? Double, 1)
+        XCTAssertEqual(settings[1]["tt_pitch_bend_gain"] as? Double, 10)
+        XCTAssertEqual(settings[0]["platter_target_rpm"] as? Int, 33)
+        XCTAssertEqual(settings[1]["platter_target_rpm"] as? Int, 45)
+        XCTAssertNotEqual(
+            receipts[0].components(separatedBy: " ")[2],
+            receipts[1].components(separatedBy: " ")[2]
+        )
+        XCTAssertLessThanOrEqual(model.log.utf8.count, 60000)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: model.jogURL.path))
+        let saved = try JogPreferences.decode(Data(contentsOf: model.jogURL), defaults: jogDefaultsData())
+        XCTAssertEqual(saved.platterTargetRpm, 45)
     }
 
     @MainActor
@@ -489,6 +594,30 @@ final class BridgeTests: XCTestCase {
             #"{"tt_pitch_bend_floor_percent":true}"#
         ] {
             XCTAssertThrowsError(try JogPreferences.decode(Data(input.utf8), defaults: defaults), input)
+        }
+    }
+
+    func testTurntableGainDefaultsAndRoundTripsWithoutChangingFloor() throws {
+        let defaults = try jogDefaultsData()
+        let legacy = Data(#"{"tt_pitch_bend_floor_percent":1}"#.utf8)
+        let base = try JogPreferences.decode(legacy, defaults: defaults)
+        XCTAssertEqual(base.ttPitchBendGain, 1.0)
+        for gain in [0.1, 1.0, 4.0, 10.0] {
+            var changed = base
+            changed.ttPitchBendGain = gain
+            let reloaded = try JogPreferences.decode(changed.encoded(), defaults: defaults)
+            XCTAssertEqual(reloaded.ttPitchBendGain, gain)
+            XCTAssertEqual(reloaded.ttPitchBendFloorPercent, 1)
+            let encoded = try XCTUnwrap(JSONSerialization.jsonObject(with: reloaded.encoded()) as? [String: Any])
+            XCTAssertEqual(encoded["tt_pitch_bend_gain"] as? Double, gain)
+        }
+        for gain in [0.0, 0.09, 10.1, .nan, .infinity] {
+            var invalid = base
+            invalid.ttPitchBendGain = gain
+            XCTAssertThrowsError(try invalid.validate())
+        }
+        for input in [#"{"tt_pitch_bend_gain":true}"#, #"{"tt_pitch_bend_gain":"2"}"#] {
+            XCTAssertThrowsError(try JogPreferences.decode(Data(input.utf8), defaults: defaults))
         }
     }
 

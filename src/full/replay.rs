@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::ensure;
 use s4mk3_hid_midi_bridge::tension::PlaybackState;
 
-use super::{Control, Translator, feedback, jog, leds, raw};
+use super::{Control, Translator, feedback, jog, leds, platter_telemetry, raw};
 
 pub struct Replay {
     parser: raw::Parser,
@@ -13,6 +13,7 @@ pub struct Replay {
     feedback: feedback::FeedbackState,
     decoder: feedback::Decoder,
     controls: Vec<Control>,
+    platter_telemetry: platter_telemetry::Telemetry,
 }
 
 impl Replay {
@@ -28,6 +29,7 @@ impl Replay {
             feedback: feedback::FeedbackState::default(),
             decoder: feedback::Decoder::default(),
             controls: Vec::with_capacity(128),
+            platter_telemetry: platter_telemetry::Telemetry::default(),
         })
     }
 
@@ -42,10 +44,12 @@ impl Replay {
         now: Duration,
         output: &mut Vec<[u8; 3]>,
     ) -> anyhow::Result<PlaybackState> {
+        let start = output.len();
         self.translator.sync_front_panel(&self.feedback, output)?;
         self.translator.observe_jog(None, now, output)?;
         let playback = self.translator.playback_state();
         self.translator.motorized_bend(None, playback, output)?;
+        self.platter_telemetry.sent(&output[start..]);
         Ok(playback)
     }
 
@@ -55,13 +59,29 @@ impl Replay {
         now: Duration,
         output: &mut Vec<[u8; 3]>,
     ) -> anyhow::Result<()> {
+        let start = output.len();
         self.controls.clear();
         ensure!(
             self.parser.parse(report, now, &mut self.controls)?,
             "replay expects buttons or jog reports"
         );
         self.translator
-            .report(&self.controls, report, now, &self.feedback, output)
+            .report(&self.controls, report, now, &self.feedback, output)?;
+        self.platter_telemetry.observe(
+            report,
+            now,
+            self.translator.jog_config.platter_target_rpm,
+        )?;
+        self.platter_telemetry.sent(&output[start..]);
+        Ok(())
+    }
+
+    pub fn platter_status(&mut self, now: Duration) -> anyhow::Result<Option<serde_json::Value>> {
+        Ok(self
+            .platter_telemetry
+            .frame(&self.translator, now)
+            .map(serde_json::to_value)
+            .transpose()?)
     }
 
     pub fn backspin(&self) -> [bool; 2] {

@@ -187,10 +187,18 @@ fn main() -> anyhow::Result<()> {
         .transpose()?;
     if let Some(jog) = jog {
         jog.validate()?;
+        println!("{}", motor_config_receipt(&jog)?);
     }
     let tension =
         tension.or_else(|| jog.map(|_| s4mk3_hid_midi_bridge::tension::Config::default()));
     open_and_run(&args, tension, jog)
+}
+
+fn motor_config_receipt(config: &full::jog::Config) -> anyhow::Result<String> {
+    Ok(format!(
+        "S4_MOTOR_CONFIG {}",
+        serde_json::to_string(&serde_json::json!({ "jog": config }))?
+    ))
 }
 
 fn open_and_run(
@@ -638,6 +646,22 @@ fn full_control_descriptor(original: &DeviceDescriptor) -> anyhow::Result<Device
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn motor_config_receipt_contains_the_complete_loaded_jog_config() -> anyhow::Result<()> {
+        let mut config = full::jog::DEFAULT;
+        config.platter_target_rpm = 45;
+        config.tt_pitch_bend_gain = 4.0;
+
+        let receipt = motor_config_receipt(&config)?;
+        let payload = receipt
+            .strip_prefix("S4_MOTOR_CONFIG ")
+            .context("receipt prefix missing")?;
+        let value: serde_json::Value = serde_json::from_str(payload)?;
+
+        assert_eq!(value["jog"], serde_json::to_value(config)?);
+        Ok(())
+    }
 
     #[test]
     fn midi_profiles_preserve_the_bare_flag_and_export_is_exclusive() -> anyhow::Result<()> {

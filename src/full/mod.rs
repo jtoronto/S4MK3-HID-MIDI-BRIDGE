@@ -10,6 +10,7 @@ pub mod output;
 mod platter_bend;
 mod platter_gesture;
 mod platter_position;
+mod platter_telemetry;
 mod raw;
 pub mod replay;
 pub mod screens;
@@ -158,12 +159,13 @@ struct Translator {
     touch_decks: [Option<Deck>; 2],
     motor_enabled: [bool; 2],
     playback_authorized: [bool; 4],
+    playback_paused: [bool; 4],
     last_motor_gate: [Option<MotorGateState>; 2],
     platter_position: [platter_position::Position; 2],
     ring_position: [platter_position::Position; 2],
     platter_bend: [platter_bend::Bend; 2],
     platter_scratch: [Option<Deck>; 2],
-    platter_counter: [Option<u32>; 2],
+    platter_paused: [bool; 2],
     grid: [bool; 2],
     wheels: [Option<WheelOwner>; 2],
     wheel_motion: [backspin::Motion; 2],
@@ -203,12 +205,13 @@ impl Default for Translator {
             touch_decks: [None; 2],
             motor_enabled: [false; 2],
             playback_authorized: [false; 4],
+            playback_paused: [false; 4],
             last_motor_gate: [None; 2],
             platter_position: std::array::from_fn(|_| platter_position::Position::default()),
             ring_position: std::array::from_fn(|_| platter_position::Position::default()),
             platter_bend: std::array::from_fn(|_| platter_bend::Bend::default()),
             platter_scratch: [None; 2],
-            platter_counter: [None; 2],
+            platter_paused: [false; 2],
             grid: [false; 2],
             wheels: [None; 2],
             wheel_motion: std::array::from_fn(|_| backspin::Motion::default()),
@@ -245,6 +248,7 @@ pub struct FullBridge {
     controls: Vec<Control>,
     messages: Vec<[u8; 3]>,
     screens: screens::Output,
+    platter_telemetry: platter_telemetry::Telemetry,
 }
 
 impl FullBridge {
@@ -277,6 +281,7 @@ impl FullBridge {
             } else {
                 screens::Output::new(screen_output)
             },
+            platter_telemetry: platter_telemetry::Telemetry::default(),
         })
     }
 
@@ -294,7 +299,7 @@ impl FullBridge {
         self.translator
             .motorized_bend(None, playback, &mut self.messages)?;
         self.translator.log_motor_gate_changes(&self.feedback);
-        let sent = self.send_messages()?;
+        let sent = self.send_messages(now)?;
         if received != 0 {
             self.screens
                 .refresh(screens::pages(&self.translator, &self.feedback));
@@ -345,7 +350,12 @@ impl FullBridge {
             &self.feedback,
             &mut self.messages,
         )?;
-        Ok((received, self.send_messages()?))
+        self.platter_telemetry.observe(
+            report,
+            now,
+            self.translator.jog_config.platter_target_rpm,
+        )?;
+        Ok((received, self.send_messages(now)?))
     }
 
     pub fn publish_screens(&mut self) {
@@ -353,7 +363,7 @@ impl FullBridge {
             .publish(screens::pages(&self.translator, &self.feedback));
     }
 
-    fn send_messages(&mut self) -> anyhow::Result<usize> {
+    fn send_messages(&mut self, now: Duration) -> anyhow::Result<usize> {
         for message in &self.messages {
             self.connection
                 .send(message)
@@ -361,6 +371,10 @@ impl FullBridge {
         }
         if !self.messages.is_empty() {
             debug!(messages = self.messages.len(), "MIDI_FULL_SENT");
+        }
+        self.platter_telemetry.sent(&self.messages);
+        if let Some(frame) = self.platter_telemetry.frame(&self.translator, now) {
+            println!("S4_PLATTER_STATUS {}", serde_json::to_string(&frame)?);
         }
         Ok(self.messages.len())
     }
@@ -1023,7 +1037,7 @@ impl Translator {
                     deck: self.decks[side],
                     action: if self.shifted[side] {
                         "jog_seek"
-                    } else if self.vinyl[side] {
+                    } else if self.vinyl[side] || self.paused_tt(side) {
                         "jog_scratch"
                     } else {
                         "jog_bend"
@@ -1042,7 +1056,7 @@ impl Translator {
                         }
                         self.end_backspin(side, output);
                     }
-                    if !self.vinyl[side] && !self.shifted[side] {
+                    if !self.vinyl[side] && !self.paused_tt(side) && !self.shifted[side] {
                         continue;
                     }
                     self.wheel_motion[side].reset_window();
@@ -1147,7 +1161,11 @@ impl Translator {
                     .iter()
                     .filter(|binding| binding.input == suffix)
                 {
-                    if suffix != "wheel_touch" || self.vinyl[side] || self.shifted[side] {
+                    if suffix != "wheel_touch"
+                        || self.vinyl[side]
+                        || self.paused_tt(side)
+                        || self.shifted[side]
+                    {
                         routes.push((*binding, channel(*binding, deck, self.shifted[side])));
                     }
                 }
@@ -1288,7 +1306,7 @@ impl Translator {
         self.wheels = [None; 2];
         self.touch_decks = [None; 2];
         self.platter_scratch = [None; 2];
-        self.platter_counter = [None; 2];
+        self.platter_paused = [false; 2];
         self.residuals = [0.0; 2];
         self.platter_bend = std::array::from_fn(|_| platter_bend::Bend::default());
         for motion in &mut self.wheel_motion {
@@ -1400,6 +1418,12 @@ impl Translator {
         self.playback_authorized = std::array::from_fn(|deck| {
             feedback.loaded[deck] == Some(true)
                 && feedback.playing[deck] == Some(true)
+                && feedback.internal[deck] == Some(true)
+                && feedback.thru[deck] != Some(true)
+        });
+        self.playback_paused = std::array::from_fn(|deck| {
+            feedback.loaded[deck] == Some(true)
+                && feedback.playing[deck] == Some(false)
                 && feedback.internal[deck] == Some(true)
                 && feedback.thru[deck] != Some(true)
         });

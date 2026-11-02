@@ -19,6 +19,33 @@ pub use crate::jog::neutral_report;
 pub use playback::{COUNTS_PER_REVOLUTION, PlaybackState};
 
 const MAX_ASSIST_FORCE: u16 = 7000;
+const TT_DIAGNOSTIC_INTERVAL_US: u64 = 100_000;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct TtDiagnosticState {
+    host_us: u64,
+    touch: [bool; 2],
+    enabled: [bool; 2],
+    owned: [bool; 2],
+    continuous: [bool; 2],
+    requested_force: [i32; 2],
+}
+
+impl TtDiagnosticState {
+    fn changed_since(self, previous: Self) -> bool {
+        self.touch != previous.touch
+            || self.enabled != previous.enabled
+            || self.owned != previous.owned
+            || self.continuous != previous.continuous
+    }
+}
+
+fn should_log_tt_state(previous: Option<TtDiagnosticState>, current: TtDiagnosticState) -> bool {
+    previous.is_none_or(|previous| {
+        current.changed_since(previous)
+            || current.host_us.saturating_sub(previous.host_us) >= TT_DIAGNOSTIC_INTERVAL_US
+    })
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Config {
@@ -74,6 +101,7 @@ pub struct Engine {
     playback: Option<[playback::Wheel; 2]>,
     playback_state: PlaybackState,
     sensor_seen_us: [u64; 2],
+    last_tt_diagnostic: Option<TtDiagnosticState>,
 }
 
 #[cfg(test)]
@@ -130,6 +158,7 @@ impl Engine {
             playback: None,
             playback_state: PlaybackState::default(),
             sensor_seen_us: [0; 2],
+            last_tt_diagnostic: None,
         }
     }
 
@@ -279,7 +308,7 @@ impl Engine {
                     self.playback_state.owned[side],
                 )?;
                 if allowed {
-                    decision.torque[side] = wheel.force(continuous);
+                    decision.torque[side] = wheel.force(continuous)?;
                 } else if motion.touch[side] && self.playback_state.enabled[side] {
                     // Raw physical touch must suspend playback before MIDI or LEDs.
                     decision.torque[side] = 0;
@@ -335,7 +364,7 @@ impl Engine {
                         || (!self.playback_state.owned[side]
                             && self.motion.is_none_or(|motion| !motion.touch[side])))
                 {
-                    torque[side] = wheel.force(continuous);
+                    torque[side] = wheel.force(continuous)?;
                 }
             }
         }
@@ -345,6 +374,28 @@ impl Engine {
             }
         }
         self.last_torque = torque;
+        if self.playback.is_some() {
+            let current = TtDiagnosticState {
+                host_us: self.last_input_us,
+                touch: self.motion.map_or([false; 2], |motion| motion.touch),
+                enabled: self.playback_state.enabled,
+                owned: self.playback_state.owned,
+                continuous: self.playback_state.continuous,
+                requested_force: torque,
+            };
+            if should_log_tt_state(self.last_tt_diagnostic, current) {
+                tracing::info!(
+                    host_us = current.host_us,
+                    touch = ?current.touch,
+                    enabled = ?current.enabled,
+                    owned = ?current.owned,
+                    continuous = ?current.continuous,
+                    requested_force = ?current.requested_force,
+                    "MOTOR_TT_STATE"
+                );
+                self.last_tt_diagnostic = Some(current);
+            }
+        }
         Ok(report_for(torque))
     }
 
@@ -360,5 +411,52 @@ impl Engine {
             self.last_input_us
         };
         last.saturating_add(FRESHNESS_US)
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+
+    fn state(host_us: u64, touch: [bool; 2], force: [i32; 2]) -> TtDiagnosticState {
+        TtDiagnosticState {
+            host_us,
+            touch,
+            enabled: [true, false],
+            owned: [false; 2],
+            continuous: [false; 2],
+            requested_force: force,
+        }
+    }
+
+    #[test]
+    fn tt_diagnostic_rate_limit_uses_fixed_host_times_and_state_edges() {
+        let first = state(1_000, [false; 2], [100, 200]);
+        assert!(should_log_tt_state(None, first));
+        assert!(!should_log_tt_state(
+            Some(first),
+            state(2_000, [false; 2], [101, 200])
+        ));
+        assert!(!should_log_tt_state(
+            Some(first),
+            state(100_999, [false; 2], [100, 200])
+        ));
+        assert!(should_log_tt_state(
+            Some(first),
+            state(101_000, [false; 2], [100, 200])
+        ));
+        assert!(should_log_tt_state(
+            Some(first),
+            state(2_000, [true, false], [100, 200])
+        ));
+        let mut authorized = first;
+        authorized.enabled[1] = true;
+        assert!(should_log_tt_state(Some(first), authorized));
+        let mut owned = first;
+        owned.owned[0] = true;
+        assert!(should_log_tt_state(Some(first), owned));
+        let mut continuous = first;
+        continuous.continuous[0] = true;
+        assert!(should_log_tt_state(Some(first), continuous));
     }
 }

@@ -814,6 +814,7 @@ mod tests {
             platter_position_sensitivity: 23.4,
             pitch_bend_speed: 1.6,
             pitch_bend_reaction: 25,
+            tt_pitch_bend_gain: 4.0,
             backspin_enabled: false,
             backspin_assist_enabled: true,
             backspin_assist_strength: 37,

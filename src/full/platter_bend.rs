@@ -12,9 +12,9 @@ pub(super) struct Bend {
     samples: VecDeque<(u64, u32)>,
     clock: u64,
     qualified: bool,
-    active: bool,
     residual: f64,
     rpm: Option<f64>,
+    delta: Option<i32>,
 }
 
 impl Default for Bend {
@@ -25,9 +25,9 @@ impl Default for Bend {
             samples: VecDeque::with_capacity(128),
             clock: 0,
             qualified: false,
-            active: false,
             residual: 0.0,
             rpm: None,
+            delta: None,
         }
     }
 }
@@ -39,16 +39,27 @@ impl Bend {
         self.samples.clear();
         self.clock = 0;
         self.qualified = false;
-        self.active = false;
         self.residual = 0.0;
         self.rpm = None;
+        self.delta = None;
+    }
+
+    pub(super) fn fresh(&self, now: Duration) -> bool {
+        self.previous.is_some_and(|(_, _, seen)| {
+            now.saturating_sub(seen) <= Duration::from_micros(FRESHNESS_US)
+        })
+    }
+
+    pub(super) fn measured_rpm(&self, now: Duration) -> Option<f64> {
+        self.fresh(now).then_some(self.rpm).flatten()
+    }
+
+    pub(super) const fn movement(&self) -> Option<i32> {
+        self.delta
     }
 
     pub(super) fn rpm(&self, now: Duration) -> Option<f64> {
-        let (_, _, seen) = self.previous?;
-        (self.qualified && now.saturating_sub(seen) <= Duration::from_micros(FRESHNESS_US))
-            .then_some(self.rpm)
-            .flatten()
+        self.qualified.then(|| self.measured_rpm(now)).flatten()
     }
 
     pub(super) fn observe(
@@ -58,7 +69,9 @@ impl Bend {
         timer: u32,
         now: Duration,
         target_rpm: u16,
+        gain: f64,
     ) -> anyhow::Result<Option<(i32, f64)>> {
+        self.delta = None;
         if self.deck != Some(deck) {
             self.reset();
             self.deck = Some(deck);
@@ -86,6 +99,7 @@ impl Bend {
             self.samples.push_back((0, counter));
             return Ok(None);
         }
+        self.delta = Some(counts);
         self.clock += u64::from(ticks);
         self.samples.push_back((self.clock, counter));
         while self
@@ -108,23 +122,29 @@ impl Bend {
         self.rpm = Some(rpm);
         let error = rpm - f64::from(target_rpm);
         if !self.qualified {
-            // Startup and post-touch acceleration must first reach nominal speed.
-            self.qualified = error.abs() <= 0.75 + 1e-9;
+            self.qualified = error.abs() <= 2.25 + 1e-9;
             return Ok(None);
         }
-        if error.abs() <= 0.75 + 1e-9 {
-            self.active = false;
-        } else if error.abs() > 2.0 + 1e-9 {
-            self.active = true;
-        }
-        if !self.active {
+        if error.abs() <= 2.25 + 1e-9 {
             self.residual = 0.0;
             return Ok(None);
         }
+        // Smooth onset outside the true quiet band, reaching the original law
+        // one RPM later without amplifying saved high-gain preferences.
+        let onset = (error.abs() - 2.25).clamp(0.0, 1.0);
+        let weight = onset * onset * 2.0_f64.mul_add(-onset, 3.0);
+        if self.residual * error < 0.0 {
+            self.residual = 0.0;
+        }
         // Integrate only this fresh report's time, not the whole rolling window.
         // This preserves relative travel without batching 100 ms into one burst.
-        let gain = if error < 0.0 { 2.0 } else { 1.0 };
-        self.residual += error * gain * counts_per_rpm * (f64::from(ticks) / 100_000_000.0);
+        let direction_gain = if error < 0.0 { 2.0 } else { 1.0 };
+        self.residual += error
+            * weight
+            * direction_gain
+            * gain
+            * counts_per_rpm
+            * (f64::from(ticks) / 100_000_000.0);
         let steps = self
             .residual
             .trunc()
@@ -140,9 +160,121 @@ mod tests {
     use super::*;
 
     #[test]
+    fn quiet_rotation_clears_bend_after_braking_and_nudging_at_high_gain() -> anyhow::Result<()> {
+        for gain in [1.0, 5.0, 10.0] {
+            for gesture in [270_u32, 400] {
+                let mut bend = Bend::default();
+                let mut counter = 0_u32;
+                let mut fraction = 0_u32;
+                let mut deliberate = 0;
+                for index in 0_u32..1000 {
+                    let rpm = match index {
+                        0..150 => 330,
+                        150..300 => gesture,
+                        300..600 => 350,
+                        _ => {
+                            if (index / 50) % 2 == 0 {
+                                320
+                            } else {
+                                350
+                            }
+                        }
+                    };
+                    fraction += rpm * 2880 * 2000;
+                    counter += fraction / 600_000_000;
+                    fraction %= 600_000_000;
+                    let output = bend.observe(
+                        0,
+                        counter,
+                        index * 200_000,
+                        Duration::from_micros(u64::from(index) * 2000),
+                        33,
+                        gain,
+                    )?;
+                    if (200..300).contains(&index) {
+                        deliberate += output.map_or(0, |(steps, _)| steps.abs());
+                    }
+                    if index >= 351 {
+                        assert!(
+                            output.is_none(),
+                            "gain {gain}, gesture {gesture}, sample {index}: {output:?}"
+                        );
+                    }
+                }
+                assert!(deliberate > 0, "the fixture must first activate a bend");
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn soft_knee_preserves_deep_braking_and_separates_directional_response() -> anyhow::Result<()> {
+        for (gesture, expected) in [(225_u32, -75), (275, 37), (200, -960), (300, 480)] {
+            let mut bend = Bend::default();
+            let mut counter = 0_u32;
+            let mut fraction = 0_u32;
+            let mut total = 0;
+            for index in 0_u32..1400 {
+                let rpm = if index < 150 { 250 } else { gesture };
+                fraction += rpm * 2880 * 2000;
+                counter += fraction / 600_000_000;
+                fraction %= 600_000_000;
+                let output = bend.observe(
+                    0,
+                    counter,
+                    index * 200_000,
+                    Duration::from_micros(u64::from(index) * 2000),
+                    25,
+                    1.0,
+                )?;
+                if index >= 400 {
+                    total += output.map_or(0, |(steps, _)| steps);
+                }
+            }
+            assert!(
+                (total - expected).abs() <= 1,
+                "{gesture}: {total}, expected {expected}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn quiet_band_startup_qualifies_following_braking() -> anyhow::Result<()> {
+        for baseline in [320_u32, 340] {
+            let mut bend = Bend::default();
+            let mut counter = 0_u32;
+            let mut fraction = 0_u32;
+            let mut braking = Vec::new();
+            for index in 0_u32..300 {
+                let rpm = if index < 150 { baseline } else { 270 };
+                fraction += rpm * 2880 * 2000;
+                counter += fraction / 600_000_000;
+                fraction %= 600_000_000;
+                let correction = bend.observe(
+                    0,
+                    counter,
+                    index * 200_000,
+                    Duration::from_micros(u64::from(index) * 2000),
+                    33,
+                    1.0,
+                )?;
+                if index < 150 {
+                    assert!(correction.is_none(), "quiet baseline must not bend");
+                } else {
+                    braking.extend(correction);
+                }
+            }
+            assert!(!braking.is_empty(), "{baseline}: braking never qualified");
+            assert!(braking.iter().all(|(steps, _)| *steps < 0));
+        }
+        Ok(())
+    }
+
+    #[test]
     fn braking_gain_doubles_negative_travel_without_boosting_forward_nudge() -> anyhow::Result<()> {
-        // Given identical +/-3 RPM gestures after nominal-speed qualification.
-        for (gesture_rpm, expected_steps) in [(300_u32, -288_i32), (360, 144)] {
+        // Given identical +/-4 RPM gestures beyond the smooth onset.
+        for (gesture_rpm, expected_steps) in [(290_u32, -384_i32), (370, 192)] {
             let mut bend = Bend::default();
             let mut counter = 0_u32;
             let mut fraction = 0_u32;
@@ -163,6 +295,7 @@ mod tests {
                     index * 200_000,
                     Duration::from_micros(u64::from(index) * 2000),
                     33,
+                    1.0,
                 )?;
                 if !(250..950).contains(&index) {
                     assert!(movement.is_none());
@@ -201,6 +334,7 @@ mod tests {
                 timer,
                 Duration::from_millis(u64::from(index) * 10),
                 33,
+                1.0,
             )?);
         }
         // Then only positive deviations, not wrap-sized jumps, are emitted.
@@ -214,7 +348,7 @@ mod tests {
     }
 
     #[test]
-    fn startup_and_normal_wobble_are_quiet_with_hysteretic_gesture_release() -> anyhow::Result<()> {
+    fn startup_and_normal_wobble_are_quiet_after_gesture_release() -> anyhow::Result<()> {
         // Given a wheel ramping, settling, wobbling, braking and returning to target.
         let mut bend = Bend::default();
         let mut counter = 0_u32;
@@ -233,14 +367,15 @@ mod tests {
                     index * 200_000,
                     Duration::from_micros(u64::from(index) * 2000),
                     33,
+                    1.0,
                 )? {
                     output.push((phase, sample, steps));
                 }
                 index += 1;
             }
         }
-        // Then startup and baseline stay silent; a brake persists through the
-        // hysteresis band and stops once fresh motion returns inside 0.75 RPM.
+        // Then startup and baseline stay silent; returning to the quiet region
+        // clears the brake even when the wheel settles one RPM below target.
         assert!(
             output
                 .iter()
@@ -248,7 +383,7 @@ mod tests {
         );
         assert!(output.iter().any(|(phase, _, _)| *phase == 3));
         assert!(
-            output
+            !output
                 .iter()
                 .any(|(phase, sample, _)| *phase == 4 && *sample > 100)
         );
@@ -272,26 +407,27 @@ mod tests {
                     index * 1_000_000,
                     Duration::from_millis(u64::from(index) * 10),
                     33,
+                    1.0,
                 )?
                 .is_none()
             );
         }
         // When a duplicate cannot refresh freshness, then a new deck takes over.
         assert!(
-            bend.observe(0, 160, 8_000_000, Duration::from_millis(120), 33)?
+            bend.observe(0, 160, 8_000_000, Duration::from_millis(120), 33, 1.0)?
                 .is_none()
         );
         assert!(
-            bend.observe(0, 180, 9_000_000, Duration::from_millis(140), 33)?
+            bend.observe(0, 180, 9_000_000, Duration::from_millis(140), 33, 1.0)?
                 .is_none()
         );
         assert!(
-            bend.observe(2, 200, 10_000_000, Duration::from_millis(150), 33)?
+            bend.observe(2, 200, 10_000_000, Duration::from_millis(150), 33, 1.0)?
                 .is_none()
         );
         // Then neither the stale window nor the old deck's counts produce a bend.
         assert!(
-            bend.observe(2, 220, 11_000_000, Duration::from_millis(160), 33)?
+            bend.observe(2, 220, 11_000_000, Duration::from_millis(160), 33, 1.0)?
                 .is_none()
         );
         Ok(())

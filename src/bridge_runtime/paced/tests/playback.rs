@@ -80,7 +80,7 @@ fn production_replay_gates_motor_force_and_preserves_original_scratch_owner() ->
     assert!(
         writes
             .iter()
-            .filter(|(at, _)| *at > 16_000_000)
+            .filter(|(at, _)| (16_000_000..16_400_000).contains(at))
             .take(100)
             .all(|(_, report)| force(report, 0) > 0 && force(report, 1) > 0)
     );
@@ -153,17 +153,36 @@ fn powered_platter_uses_relative_jog_bend_and_continues_assist_on_touch() -> any
     let scratch_mode = records
         .iter()
         .filter(|record| {
-            record["event"] == "midi" && record["message"][1] == full::catalog::SCRATCHING_MODE_NOTE
+            record["event"] == "midi"
+                && record["message"][1] == full::catalog::SCRATCHING_MODE_NOTE
+                && record["now_us"].as_u64().is_some_and(|at| at < 16_500_000)
         })
         .collect::<Vec<_>>();
-    // Touch or the deliberate speed-floor gesture may hold Scratch, never nominal rotation.
+    // Pause, touch or deliberate speed gestures may hold Scratch, never nominal rotation.
     assert!(scratch_mode.iter().all(|record| {
         record["now_us"].as_u64().is_some_and(|at| {
-            (200_001..=282_001).contains(&at)
+            (90_001..=110_001).contains(&at)
+                || (200_001..=282_001).contains(&at)
                 || (3_000_000..4_600_000).contains(&at)
                 || (6_000_000..7_700_000).contains(&at)
         })
     }));
+    for (at, message) in [
+        (90_001, serde_json::json!([0x90, 7, 127])),
+        (110_001, serde_json::json!([0x80, 7, 0])),
+    ] {
+        assert!(
+            scratch_mode
+                .iter()
+                .any(|record| { record["now_us"] == at && record["message"] == message })
+        );
+    }
+    assert!(
+        writes
+            .iter()
+            .filter(|(at, _)| (90_001..110_001).contains(at))
+            .all(|(_, report)| force(report, 0) == 0)
+    );
     assert!(scratch_mode.iter().any(|record| {
         record["now_us"] == 200_001 && record["message"] == serde_json::json!([0x90, 7, 127])
     }));
@@ -171,6 +190,7 @@ fn powered_platter_uses_relative_jog_bend_and_continues_assist_on_touch() -> any
         .iter()
         .filter(|record| {
             record["event"] == "midi"
+                && record["now_us"].as_u64().is_some_and(|at| at < 16_500_000)
                 && record["message"][0]
                     .as_u64()
                     .is_some_and(|status| (0xb0..=0xb3).contains(&status))
@@ -208,8 +228,9 @@ fn powered_speed_error_emits_only_the_corresponding_relative_bend() -> anyhow::R
         (316, 0),
         (320, 0),
         (340, 0),
-        (300, -1),
-        (360, 1),
+        (350, 0),
+        (290, -1),
+        (370, 1),
     ] {
         let mut fixture = replay::fixture()?;
         let mut anchor = None;
@@ -235,6 +256,7 @@ fn powered_speed_error_emits_only_the_corresponding_relative_bend() -> anyhow::R
         }
         // When the complete production replay processes that speed.
         let bends = RefCell::new(Vec::new());
+        let reported = RefCell::new(Vec::new());
         replay::execute(full::jog::DEFAULT, fixture, |record| {
             if record["event"] == "midi"
                 && record["now_us"].as_u64().is_some_and(|at| at > 3_000_000)
@@ -246,6 +268,15 @@ fn powered_speed_error_emits_only_the_corresponding_relative_bend() -> anyhow::R
                 bends
                     .borrow_mut()
                     .push((record["now_us"].as_u64(), record["message"][2].as_i64()));
+            }
+            if record["event"] == "platter_status"
+                && record["now_us"]
+                    .as_u64()
+                    .is_some_and(|at| (3_000_000..5_000_000).contains(&at))
+            {
+                reported
+                    .borrow_mut()
+                    .push(record["status"]["wheels"][0].clone());
             }
         })?;
         // Then nominal and the captured steady baseline stay silent, while
@@ -260,8 +291,21 @@ fn powered_speed_error_emits_only_the_corresponding_relative_bend() -> anyhow::R
                 ))
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
+        let readings = reported.into_inner();
+        assert!(!readings.is_empty(), "runtime diagnostics missing");
+        let expected_rpm = f64::from(u32::try_from(rpm_tenths)?) / 10.0;
+        let rates = readings
+            .iter()
+            .map(|wheel| {
+                let rpm = wheel["rpm"].as_f64().context("measured RPM")?;
+                assert!((rpm - expected_rpm).abs() < 0.3);
+                assert_eq!(wheel["mode"], "bend");
+                wheel["bend_counts_per_second"].as_f64().context("CC4 rate")
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
         if direction == 0 {
             assert!(bends.is_empty(), "{rpm_tenths}: {bends:?}");
+            assert!(rates.iter().all(|rate| rate.abs() < f64::EPSILON));
         } else {
             assert!(!bends.is_empty(), "{rpm_tenths}");
             assert!(
@@ -270,6 +314,11 @@ fn powered_speed_error_emits_only_the_corresponding_relative_bend() -> anyhow::R
                     .all(|(_, bend)| bend.signum() == direction && bend.abs() == 1)
             );
             assert!(bends.windows(2).all(|pair| pair[1].0 - pair[0].0 <= 10_000));
+            assert!(
+                rates.iter().any(|rate| {
+                    (*rate < 0.0 && direction < 0) || (*rate > 0.0 && direction > 0)
+                })
+            );
         }
     }
     Ok(())

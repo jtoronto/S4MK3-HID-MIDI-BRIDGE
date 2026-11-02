@@ -52,6 +52,7 @@ pub struct Config {
     #[serde(rename = "tt_vinyl_enabled_at_startup")]
     pub tt_startup_mode: VinylMode,
     pub tt_pitch_bend_floor_percent: u8,
+    pub tt_pitch_bend_gain: f64,
     pub platter_target_rpm: u16,
     pub platter_position_sensitivity: f64,
     pub platter_max_force: u16,
@@ -79,6 +80,7 @@ pub const DEFAULT: Config = Config {
     vinyl_enabled_at_startup: true,
     tt_startup_mode: VinylMode::Bend,
     tt_pitch_bend_floor_percent: 50,
+    tt_pitch_bend_gain: 1.0,
     platter_target_rpm: 33,
     platter_position_sensitivity: 14.0,
     platter_max_force: 20_000,
@@ -169,6 +171,10 @@ impl Config {
         ensure!(
             (1..=95).contains(&self.tt_pitch_bend_floor_percent),
             "tt_pitch_bend_floor_percent must be in 1..=95"
+        );
+        ensure!(
+            self.tt_pitch_bend_gain.is_finite() && (0.1..=10.0).contains(&self.tt_pitch_bend_gain),
+            "tt_pitch_bend_gain must be finite and in 0.1..=10"
         );
         ensure!(
             (1..=45).contains(&self.platter_target_rpm),
@@ -373,6 +379,39 @@ mod tests {
             r#"{"tt_pitch_bend_floor_percent":true}"#,
         ] {
             assert!(serde_json::from_str::<Config>(input).is_err(), "{input}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn tt_gain_defaults_and_round_trips_without_changing_floor() -> Result<()> {
+        let legacy: Config = serde_json::from_str(r#"{"tt_pitch_bend_floor_percent":1}"#)?;
+        assert!((legacy.tt_pitch_bend_gain - 1.0).abs() < f64::EPSILON);
+        for gain in [0.1, 1.0, 4.0, 10.0] {
+            let config = Config {
+                tt_pitch_bend_gain: gain,
+                ..legacy
+            };
+            config.validate()?;
+            let reloaded: Config = serde_json::from_value(serde_json::to_value(config)?)?;
+            assert!((reloaded.tt_pitch_bend_gain - gain).abs() < f64::EPSILON);
+            assert_eq!(reloaded.tt_pitch_bend_floor_percent, 1);
+        }
+        for gain in [0.0, 0.09, 10.1, f64::NAN, f64::INFINITY] {
+            assert!(
+                Config {
+                    tt_pitch_bend_gain: gain,
+                    ..DEFAULT
+                }
+                .validate()
+                .is_err()
+            );
+        }
+        for input in [
+            r#"{"tt_pitch_bend_gain":true}"#,
+            r#"{"tt_pitch_bend_gain":"2"}"#,
+        ] {
+            assert!(serde_json::from_str::<Config>(input).is_err());
         }
         Ok(())
     }

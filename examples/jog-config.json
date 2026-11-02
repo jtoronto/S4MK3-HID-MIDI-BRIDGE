@@ -13,6 +13,7 @@
   "vinyl_enabled_at_startup": true,
   "tt_vinyl_enabled_at_startup": false,
   "tt_pitch_bend_floor_percent": 50,
+  "tt_pitch_bend_gain": 1.0,
   "platter_target_rpm": 33,
   "platter_max_force": 20000,
   "platter_base_force": 1650,

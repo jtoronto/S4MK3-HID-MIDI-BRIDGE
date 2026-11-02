@@ -282,11 +282,21 @@ Hardware tension is independent of them.
 
 TT enables each physical motor independently; JOG selects Vinyl on/red or
 off/blue. Normal mode defaults to Vinyl on and TT to off, with separate saved
-startup choices. Install the matching generated mapping for Internal-mode
-feedback. Steady TT rotation emits no jog correction; measured deviations use
-pitch bend, handing off to Scratch at provisional lower/upper speed bounds.
-Holding or braking retains assistance. Released upper-speed Scratch does not
-override the motor's speed regulator.
+startup choices. Use the existing matching mapping with Internal-mode feedback.
+Steady TT rotation emits no jog correction; measured deviations use
+pitch bend. The response update uses a true 2.25 RPM quiet band with
+smooth onset over the next 1 RPM. Only braking to the provisional lower floor
+automatically enters Scratch; forward nudges remain on pitch bend.
+Holding or braking retains assistance, tapered linearly over the final 2 RPM
+below target to zero at/above measured target, including touch-release fallback.
+The default floor remains 50% and gain 1x; existing saved values persist.
+Save and restart applies changes. This response update needs no mapping export.
+Physical feel and Djay's audio floor remain unverified.
+
+Debug motor captures include the actual loaded configuration for each launch
+through `S4_MOTOR_CONFIG`, alongside bounded `MOTOR_TT_STATE` reports of touch,
+authorization, owner and requested force. Requested force is not measured torque.
+Live RPM and CC4 bend indicators remain bridge diagnostics, not audio feedback.
 
 Normal rings advance with playback, follow Scratch and freeze on pause;
 TT rings follow the physical wheel. These source-only additions are still

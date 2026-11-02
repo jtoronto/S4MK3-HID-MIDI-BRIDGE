@@ -1,6 +1,6 @@
 # S4 MK3 bridge issues
 
-Current checklist as of November 1, 2026. This is the source of truth for issue
+Current checklist as of November 2, 2026. This is the source of truth for issue
 status; [the mapping audit](mapping-audit.md) retains detailed findings and
 historical snapshots.
 
@@ -150,6 +150,17 @@ GUI setup. The bridge doesn't detect global DVS enable.
 
 ## Open
 
+- [ ] **TT response stability and stopped-playback scratching** - The current-source
+  update replaces bend hysteresis with a true 2.25 RPM deadband and smooth
+  onset across the next 1 RPM, removes automatic upper-speed Scratch entry,
+  and tapers hold assistance to zero at measured target. Lower-floor Scratch,
+  full stopped/reverse assistance, paused TT scratching and the 2:1 bend bias
+  remain. Saved floor/gain persist, with defaults 50% and 1x. Runtime config,
+  touch/authorization/owner/requested-force capture supplements RPM and CC4.
+  The November 2 capture had four upper entries near 66 RPM and a 90.3 RPM
+  maximum with a 1% floor; the reported 10x run was not captured. Physical
+  response and Djay's audio floor remain unverified. See the
+  [software evidence and ordered morning test](tt-response-stability-validation.md).
 - [ ] **Deck-selector contrast in dark venues — pending investigation** -
   Keep unselected A/C and B/D buttons backlit, but improve the selected/unselected
   distinction. The newer Traktor motor-driven and tension captures show C/D dim
@@ -239,11 +250,13 @@ GUI setup. The bridge doesn't detect global DVS enable.
   No distinct assignment chosen; revisit after screen support is understood,
   when layered controls may provide a useful role. This defers the design
   decision, not a change to the current STEMS-duplicate behavior.
-- [ ] **Motorized playback beta testing** - Current source implements TT drive,
-  relative bend and lower/upper Scratch handoffs, with continued holding force.
+- [ ] **Motorized playback beta testing** - TT drive and relative bend remain
+  experimental. The current-source response retains only the lower automatic
+  Scratch handoff and tapers holding assistance near target.
   On October 30 the user reported the corrected build much better and began
   extended beta testing; this is not exhaustive fault/recovery acceptance.
-  See [current evidence](tt-normal-ring-recovery-validation.md).
+  See [October 30 evidence](tt-normal-ring-recovery-validation.md) and the
+  [response-stability validation record](tt-response-stability-validation.md).
   Review experimental settings for removal or hiding before release.
   Cue effects and other new haptics remain deferred.
 - [ ] **Jog-ring extended validation** - Normal playback/Scratch/pause

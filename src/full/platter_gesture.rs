@@ -12,6 +12,10 @@ const KEYS: [&str; 2] = ["left_motor_scratch", "right_motor_scratch"];
 mod tests;
 
 impl Translator {
+    pub(super) fn paused_tt(&self, side: usize) -> bool {
+        self.motor_enabled[side] && self.playback_paused[usize::from(self.decks[side].channel())]
+    }
+
     pub(super) fn toggle_motor_mode(&mut self, side: usize) {
         self.mode_vinyl[side][usize::from(self.motor_enabled[side])] = Some(self.vinyl[side]);
         self.motor_enabled[side] = !self.motor_enabled[side];
@@ -37,6 +41,11 @@ impl Translator {
         }
     }
 
+    fn reset_motor_gesture(&mut self, side: usize, output: &mut Vec<[u8; 3]>) {
+        self.end_motor_scratch(side, output);
+        self.platter_bend[side].reset();
+    }
+
     pub(super) fn motorized_bend(
         &mut self,
         report: Option<&[u8]>,
@@ -44,14 +53,19 @@ impl Translator {
         output: &mut Vec<[u8; 3]>,
     ) -> anyhow::Result<()> {
         for (side, offset) in [(0, 8), (1, 36)] {
-            if !state.enabled[side] || self.wheels[side].is_some() {
-                self.end_motor_scratch(side, output);
-                self.platter_bend[side].reset();
-                self.platter_counter[side] = None;
+            let paused = self.paused_tt(side) && !self.shifted[side] && !self.grid[side];
+            if paused != self.platter_paused[side]
+                || self.platter_scratch[side].is_some_and(|deck| deck != self.decks[side])
+            {
+                self.reset_motor_gesture(side, output);
+                self.platter_paused[side] = paused;
+            }
+            if (!state.enabled[side] && !paused) || self.wheels[side].is_some() {
+                self.reset_motor_gesture(side, output);
                 continue;
             }
             let Some(report) = report.filter(|report| report.first() == Some(&3)) else {
-                if self.platter_bend[side].rpm(self.jog_now).is_none() {
+                if !self.platter_bend[side].fresh(self.jog_now) {
                     self.end_motor_scratch(side, output);
                 }
                 continue;
@@ -59,7 +73,6 @@ impl Translator {
             ensure!(report.len() == 60, "full jog report must have 60 bytes");
             let timer = u32::from_le_bytes(report[offset..offset + 4].try_into()?);
             let counter = u32::from_le_bytes(report[offset + 4..offset + 8].try_into()?);
-            let previous = self.platter_counter[side].replace(counter);
             let deck = self.decks[side];
             let target = f64::from(self.jog_config.platter_target_rpm);
             let correction = self.platter_bend[side].observe(
@@ -68,18 +81,17 @@ impl Translator {
                 timer,
                 self.jog_now,
                 self.jog_config.platter_target_rpm,
+                self.jog_config.tt_pitch_bend_gain,
             )?;
-            let Some(rpm) = self.platter_bend[side].rpm(self.jog_now) else {
+            let rpm = self.platter_bend[side].rpm(self.jog_now);
+            if !self.platter_bend[side].fresh(self.jog_now) || (!paused && rpm.is_none()) {
                 self.end_motor_scratch(side, output);
                 continue;
-            };
+            }
             let floor = target * f64::from(self.jog_config.tt_pitch_bend_floor_percent) / 100.0;
-            let ceiling = target.mul_add(2.0, -floor);
             let hysteresis = ((target - floor) * 0.25).min(2.0);
-            let bend_range = (floor + hysteresis)..=(ceiling - hysteresis);
-            if !self.vinyl[side]
-                && self.platter_scratch[side].is_none()
-                && (rpm <= floor || rpm >= ceiling)
+            if self.platter_scratch[side].is_none()
+                && (paused || (!self.vinyl[side] && rpm.is_some_and(|rpm| rpm <= floor)))
             {
                 let address = Address {
                     channel: deck.channel(),
@@ -93,20 +105,19 @@ impl Translator {
                 info!(
                     side,
                     deck = deck.channel() + 1,
-                    rpm,
+                    rpm = ?rpm,
                     floor,
-                    ceiling,
                     active = true,
                     "MOTOR_SCRATCH_HANDOFF"
                 );
-            } else if self.platter_scratch[side].is_some()
-                && (self.vinyl[side] || bend_range.contains(&rpm))
+            } else if !paused
+                && self.platter_scratch[side].is_some()
+                && (self.vinyl[side] || rpm.is_some_and(|rpm| rpm >= floor + hysteresis))
             {
                 self.end_motor_scratch(side, output);
             }
             if let Some(owner) = self.platter_scratch[side] {
-                if let Some(previous) = previous {
-                    let steps = i32::from_le_bytes(counter.wrapping_sub(previous).to_le_bytes());
+                if let Some(steps) = self.platter_bend[side].movement() {
                     relative(
                         Address {
                             channel: owner.channel(),

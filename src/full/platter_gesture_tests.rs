@@ -9,6 +9,7 @@ struct Fixture {
     index: u32,
     counter: u32,
     fraction: i32,
+    side: usize,
 }
 
 impl Fixture {
@@ -28,6 +29,7 @@ impl Fixture {
             index: 0,
             counter: 0,
             fraction: 0,
+            side: 0,
         }
     }
 
@@ -46,7 +48,10 @@ impl Fixture {
                 report[offset + 4..offset + 8].copy_from_slice(&self.counter.to_le_bytes());
             }
             self.translator.report(
-                &[Control::Jog("left_jog_wheel", f64::from(travel) / 1000.0)],
+                &[Control::Jog(
+                    ["left_jog_wheel", "right_jog_wheel"][self.side],
+                    f64::from(travel) / 1000.0,
+                )],
                 &report,
                 Duration::from_micros(u64::from(self.index) * 2000),
                 &self.feedback,
@@ -55,6 +60,177 @@ impl Fixture {
         }
         Ok(output)
     }
+}
+
+#[test]
+fn tt_gain_scales_only_bend_without_changing_measured_rpm() -> anyhow::Result<()> {
+    for (gesture_rpm, direction) in [(300, -1.0), (360, 1.0)] {
+        let mut totals = Vec::new();
+        for gain in [0.5, 1.0, 2.0, 10.0] {
+            let mut fixture = Fixture::new();
+            fixture.translator.jog_config.tt_pitch_bend_gain = gain;
+            fixture.drive(330, 150)?;
+            let output = fixture.drive(gesture_rpm, 600)?;
+            assert!(
+                output
+                    .iter()
+                    .all(|message| message[0] == 0xb0 && message[1] == 4)
+            );
+            let total: i32 = output
+                .iter()
+                .map(|message| i32::from(message[2]) - 64)
+                .sum();
+            totals.push((gain, total));
+            let expected_rpm = f64::from(gesture_rpm) / 10.0;
+            assert!(
+                fixture.translator.platter_bend[0]
+                    .measured_rpm(fixture.translator.jog_now)
+                    .is_some_and(|rpm| (rpm - expected_rpm).abs() < 0.3)
+            );
+        }
+        let baseline = f64::from(totals[1].1);
+        assert!(baseline * direction > 0.0);
+        for (gain, total) in totals {
+            assert!(
+                baseline.mul_add(-gain, f64::from(total)).abs() <= gain + 1.0,
+                "gain {gain}: {total} did not scale baseline {baseline}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn tt_gain_leaves_normal_jog_and_paused_scratch_unchanged() -> anyhow::Result<()> {
+    for paused in [false, true] {
+        let mut outputs = Vec::new();
+        for gain in [1.0, 10.0] {
+            let mut fixture = Fixture::new();
+            fixture.translator.jog_config.tt_pitch_bend_gain = gain;
+            fixture.translator.motor_enabled[0] = paused;
+            fixture.feedback.playing[0] = Some(!paused);
+            outputs.push(fixture.drive(-120, 150)?);
+        }
+        assert!(!outputs[0].is_empty());
+        assert_eq!(outputs[0], outputs[1]);
+    }
+    Ok(())
+}
+
+#[test]
+fn paused_tt_moves_the_track_without_vinyl_or_motor_authorization() -> anyhow::Result<()> {
+    for side in 0..2 {
+        let mut fixture = Fixture::new();
+        fixture.side = side;
+        fixture.translator.motor_enabled = [false; 2];
+        fixture.translator.motor_enabled[side] = true;
+        fixture.translator.vinyl[side] = false;
+        fixture.feedback.loaded[side] = Some(true);
+        fixture.feedback.internal[side] = Some(true);
+        fixture.feedback.playing[side] = Some(false);
+
+        let output = fixture.drive(-120, 150)?;
+        let channel = u8::try_from(side)?;
+        assert!(output.contains(&[0x90 | channel, 7, 127]));
+        assert!(
+            output.iter().any(|message| {
+                message[0] == 0xb0 | channel && message[1] == 5 && message[2] < 64
+            })
+        );
+        assert!(!output.iter().any(|message| message[1] == 4));
+        assert!(!fixture.translator.vinyl[side]);
+        assert!(!fixture.translator.playback_state().enabled[side]);
+    }
+    Ok(())
+}
+
+#[test]
+fn paused_touch_scratch_keeps_its_deck_until_release() -> anyhow::Result<()> {
+    let mut fixture = Fixture::new();
+    fixture.feedback.playing[0] = Some(false);
+    fixture.feedback.playing[2] = Some(false);
+    fixture.drive(120, 20)?;
+    let mut output = Vec::new();
+    fixture.translator.translate(
+        &[Control::Button("left_wheel_touch", true)],
+        None,
+        &mut output,
+    )?;
+    fixture.translator.translate(
+        &[Control::Button("left_deck_switch_c", true)],
+        None,
+        &mut output,
+    )?;
+
+    let held = fixture.drive(-120, 20)?;
+    assert!(
+        held.iter()
+            .any(|message| message[0] == 0xb0 && message[1] == 5)
+    );
+    assert!(
+        !held
+            .iter()
+            .any(|message| message[0] == 0xb2 && message[1] == 5)
+    );
+    assert!(!held.contains(&[0x80, 7, 0]));
+    output.clear();
+    fixture.translator.translate(
+        &[Control::Button("left_wheel_touch", false)],
+        None,
+        &mut output,
+    )?;
+    assert_eq!(output, [[0x80, 7, 0]]);
+
+    let next = fixture.drive(0, 4)?;
+    assert!(next.contains(&[0x92, 7, 127]));
+    output.clear();
+    fixture.translator.release_all(&mut output);
+    assert_eq!(output, [[0x82, 7, 0]]);
+    Ok(())
+}
+
+#[test]
+fn paused_scratch_releases_on_resume_mode_changes_and_freshness_loss() -> anyhow::Result<()> {
+    for cancellation in ["resume", "tt_off", "shift", "grid", "stale", "unknown"] {
+        let mut fixture = Fixture::new();
+        fixture.feedback.playing[0] = Some(false);
+        fixture.drive(120, 20)?;
+        let mut output = Vec::new();
+        match cancellation {
+            "resume" => fixture.feedback.playing[0] = Some(true),
+            "tt_off" => fixture.translator.motor_enabled[0] = false,
+            "shift" => fixture.translator.shifted[0] = true,
+            "grid" => fixture.translator.grid[0] = true,
+            "stale" => fixture.translator.jog_now += Duration::from_millis(51),
+            "unknown" => fixture.feedback.playing[0] = None,
+            _ => unreachable!(),
+        }
+        if cancellation != "stale" {
+            fixture
+                .translator
+                .sync_front_panel(&fixture.feedback, &mut output)?;
+        }
+        fixture.translator.motorized_bend(
+            None,
+            fixture.translator.playback_state(),
+            &mut output,
+        )?;
+        assert_eq!(output, [[0x80, 7, 0]], "{cancellation}");
+        assert!(fixture.translator.platter_scratch[0].is_none());
+    }
+    Ok(())
+}
+
+#[test]
+fn paused_scratch_drops_implausible_counter_jumps() -> anyhow::Result<()> {
+    let mut fixture = Fixture::new();
+    fixture.feedback.playing[0] = Some(false);
+    fixture.drive(120, 20)?;
+    fixture.counter = fixture.counter.wrapping_add(100_000);
+
+    let output = fixture.drive(0, 1)?;
+    assert!(!output.iter().any(|message| message[1] == 5));
+    Ok(())
 }
 
 #[test]
@@ -115,38 +291,54 @@ fn held_stop_and_reverse_stay_in_scratch_until_speed_recovers() -> anyhow::Resul
 }
 
 #[test]
-fn upper_speed_limit_uses_the_same_scratch_handoff_with_hysteresis() -> anyhow::Result<()> {
-    // Given qualified TT at 33 RPM and the symmetric 50%/150% diagnostic bounds.
-    let mut fixture = Fixture::new();
-    fixture.drive(330, 150)?;
-    // When forward movement crosses the ceiling then slows through its exit band.
-    let fast = fixture.drive(600, 150)?;
-    let near_ceiling = fixture.drive(480, 150)?;
-    let recovered = fixture.drive(450, 150)?;
-    // Then upper Scratch suppresses bend, holds through hysteresis and releases once.
-    let entry = fast
-        .iter()
-        .position(|message| *message == [0x90, 7, 127])
-        .context("upper speed Scratch entry")?;
-    assert!(
-        fast[entry + 1..]
-            .iter()
-            .any(|message| message[0] == 0xb0 && message[1] == 5)
-    );
-    assert!(
-        !fast[entry + 1..]
-            .iter()
-            .any(|message| message[0] == 0xb0 && message[1] == 4)
-    );
-    assert!(!near_ceiling.contains(&[0x80, 7, 0]));
-    assert_eq!(
-        recovered
-            .iter()
-            .filter(|message| **message == [0x80, 7, 0])
-            .count(),
-        1
-    );
-    assert!(fixture.translator.platter_scratch[0].is_none());
+fn forward_nudges_never_enter_speed_scratch_at_any_floor() -> anyhow::Result<()> {
+    for floor in [1, 50, 95] {
+        for speed in [600, 667, 903] {
+            let mut fixture = Fixture::new();
+            fixture.translator.jog_config.tt_pitch_bend_floor_percent = floor;
+            fixture.drive(330, 150)?;
+            let fast = fixture.drive(speed, 150)?;
+            assert!(
+                !fast
+                    .iter()
+                    .any(|message| message[1] == 7 || message[1] == 5),
+                "floor {floor}, speed {speed}: forward nudge became Scratch"
+            );
+            assert!(
+                fast.iter()
+                    .any(|message| message[0] == 0xb0 && message[1] == 4 && message[2] > 64)
+            );
+            assert!(fixture.translator.platter_scratch[0].is_none());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn lower_scratch_releases_once_even_above_the_former_ceiling() -> anyhow::Result<()> {
+    for floor in [1, 50, 95] {
+        let mut fixture = Fixture::new();
+        fixture.translator.jog_config.tt_pitch_bend_floor_percent = floor;
+        fixture.drive(330, 150)?;
+        assert!(fixture.drive(0, 150)?.contains(&[0x90, 7, 127]));
+        // One valid (<512-count) sample crosses the old entire exit interval.
+        fixture.counter = fixture.counter.wrapping_add(400);
+        let recovered = fixture.drive(903, 1)?;
+        assert_eq!(
+            recovered
+                .iter()
+                .filter(|message| **message == [0x80, 7, 0])
+                .count(),
+            1
+        );
+        assert!(!recovered.contains(&[0x90, 7, 127]));
+        assert!(
+            recovered
+                .iter()
+                .any(|message| message[0] == 0xb0 && message[1] == 4 && message[2] > 64)
+        );
+        assert!(fixture.translator.platter_scratch[0].is_none());
+    }
     Ok(())
 }
 

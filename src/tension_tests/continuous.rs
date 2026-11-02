@@ -60,6 +60,33 @@ fn upper_scratch_without_touch_keeps_speed_regulation() -> anyhow::Result<()> {
 }
 
 #[test]
+fn touched_overspeed_and_release_never_select_forward_assistance() -> anyhow::Result<()> {
+    let mut engine = running()?;
+    for index in 41..=110 {
+        let report = observe(&mut engine, index, 126 + (index - 40) * 6, index <= 90)?;
+        if index >= 55 {
+            assert_eq!(magnitude(report, 0), 0, "sample {index}");
+            assert_eq!(magnitude(report, 1), 0, "sample {index}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn touched_near_target_tapers_force_from_the_measured_sensor_window() -> anyhow::Result<()> {
+    let mut engine = running()?;
+    let mut report = neutral_report();
+    for index in 41..=90 {
+        report = observe(&mut engine, index, 126 + (index - 40) * 31 / 10, true)?;
+    }
+    // 31 counts / (0.020 seconds * 48 counts/RPM) = 32.291666... RPM.
+    // The remaining 0.708333... RPM over the 2 RPM taper gives 1870.
+    assert_eq!(magnitude(report, 0), 1870);
+    assert_eq!(magnitude(report, 1), 1870);
+    Ok(())
+}
+
+#[test]
 fn reverse_and_held_stop_keep_constant_assistance_without_other_motor_owners() -> anyhow::Result<()>
 {
     // Given qualified TT regulation above maximum positive normal tension.

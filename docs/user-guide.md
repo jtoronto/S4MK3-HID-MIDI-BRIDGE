@@ -422,6 +422,10 @@ deck, not a press of Play. Install/select the newly generated mapping under
 a new filename: it adds explicit Internal-mode feedback required by this experiment.
 The selected deck must be loaded, playing and confirmed Internal, not THRU
 or DVS. Shift+jog seeks.
+With TT selected and the loaded Internal deck confirmed paused, turning the
+platter moves the track in Scratch mode even with Vinyl off, without needing
+top-touch. The motor stays neutral while paused. Playback resumption restores
+the normal TT bend/speed-handoff behavior; your saved Vinyl choice is unchanged.
 If TT is bright red but the platter stays still, open Diagnostics at **Info**
 log detail. `MOTOR_TT_SELECTION` confirms the press; `MOTOR_PLAYBACK_GATE`
 lists the selected deck and blocking conditions. `internal_mode_unknown`
@@ -524,21 +528,26 @@ abort disabled. Save and restart to apply changes; controls are not live.
 
 Unlike the diagnostic's MOVE-armed pulse, TT playback has no 15-second
 duration limit. Switch TT off or pause the selected deck to remove drive.
-In this diagnostic, physical touch and Scratch ownership do not cut TT force.
-Braking, holding and reversing use bounded constant forward assistance; the
-speed regulator does not accumulate error against your hand. With the starting
-settings this assistance is 5280 force units, capped by maximum force, not a
-measured physical torque. Normal tension and backspin motor assistance do not
-add to it. Sensor loss clears force and requires a new baseline and fresh
-20 ms sensor window before recovery.
+The current-source response retains forward assistance for braking,
+holding and reversing, but tapers it linearly over the last 2 RPM below target.
+With the starting settings, full assistance is 5280 force units, capped by
+maximum force. It reaches zero at or above measured target speed, including
+the fallback after top-touch release. Light contact must not accelerate the
+wheel above target. These are requested force units, not measured torque.
+The speed regulator does not accumulate error against your hand. Normal tension
+and backspin motor assistance do not add to it. Sensor loss clears force and
+requires a new baseline and fresh 20 ms sensor window before recovery.
 In the current relative-pitchbend test build, when TT is authorized and the
 wheel is not touch-owned, only deviation from the configured target RPM produces
 signed relative Pitch Bend CC 4 steps for the selected deck's `pitchBendMove`
 mapping. Speed uses a rolling 100 ms measurement, but corrections follow fresh
 input reports rather than arriving in 100 ms bursts. Startup and recovery first
-require measured rotation within 0.75 RPM of the target. Corrections then start
-only beyond 2 RPM deviation and stop when rotation returns within 0.75 RPM.
-This testing filter favors quiet steady rotation over subtle nudges.
+require measured rotation within the 2.25 RPM quiet band around the target.
+A settled 32 RPM wheel at a 33 RPM target can therefore qualify without first
+crossing target speed. Bend output is zero within 2.25 RPM of target on both
+entry and return, with no active-gesture hysteresis or leftover fractional
+correction. Outside that band, output rises smoothly over the next 1 RPM,
+reaching the existing full-error response at 3.25 RPM deviation.
 Slower rotation sends negative corrections; faster rotation sends positive
 corrections. The nominal rotation itself is subtracted.
 The current stronger-braking test doubles negative motorized corrections while
@@ -554,13 +563,11 @@ not been established. Acceleration above the floor plus hysteresis returns
 to pitch bend without needing top-touch release. At the default settings the
 exit is 18.5 RPM. Switching deck or losing playback authorization releases
 the original speed-Scratch owner and neutralizes drive.
-The same setting now defines a symmetric upper ceiling: `200% - floor`.
-At the default 50% floor, reaching 150% of target (49.5 RPM at 33 RPM)
-also enters Scratch; slowing back to 47.5 RPM releases the upper handoff.
-Both bounds are provisional diagnostic values, not measured CC4 limits.
-Above-target rotation without physical touch remains under speed regulation
-even while the upper Scratch MIDI handoff is active; it does not select constant
-forward assistance solely because Scratch is held.
+The floor controls only the lower-speed Scratch entry. A forward nudge stays
+on pitch bend; there is no automatic upper-speed Scratch handoff. Explicit
+Vinyl-on top touch still selects Scratch. The default floor remains 50%, and
+installing this build preserves your saved floor and gain rather than resetting
+them. Keep your current floor for the first comparison and start with gain 1x.
 See the [diagnostic calibration and attended checks](tt-speed-scratch-diagnostic.md).
 There is no absolute CC 8 position stream in this test path. Ordinary top-touch
 Scratch remains on relative CC 5.
@@ -569,6 +576,48 @@ first timed trial and can be adjusted from **0.1 to 100%** independently of
 manual Scratch speed. It controls the generated CC 8 mapping and does not tune
 this relative CC 4 experiment. Tune the Djay Pitch Bend mapping's sensitivity
 for this test.
+
+#### See what braking is doing
+
+Open **Diagnostics > Live platter diagnostics** in the current-source app.
+The Full profile supplies both wheels' values at every log-detail setting;
+Debug is needed only for the separate motor diagnostic capture.
+
+- **Measured speed** is physical RPM from the encoder, including while paused
+  or scratching. Reverse movement has a negative sign.
+- **Bend output** is the recent signed MIDI bend output in counts per second.
+  A negative value confirms the bridge sent a slowing command; zero means no
+  net bend output in that update. This is not a measured percentage change in
+  Djay's audible playback speed.
+- **Mode** distinguishes Bend, Scratch, Paused scratch, Waiting, Blocked,
+  Seek, Grid and TT Off. Waiting can mean the wheel has not yet qualified near
+  target speed. Scratch uses a separate movement route, so zero bend output
+  during Scratch is expected.
+- Stale or stopped indicators do not retain old numbers as current readings.
+  A sensor gap clears current RPM; missing telemetry also expires the display.
+
+**TT pitch-bend gain** in Jog's motorized playback settings controls the
+bridge's RPM-to-MIDI strength, from **0.1x to 10x**, default **1x**. Beyond the
+smooth onset, 1x retains the existing full-error response and stronger braking.
+It scales both slowing and speeding TT bend output, not normal jog, Scratch,
+motor force or measured RPM.
+The floor still only selects when to hand off to Scratch. Save preferences and
+restart the bridge to apply gain changes; no mapping export is needed.
+
+For tuning, let the wheel settle, confirm **Bend**, then brake gently and watch
+RPM and Bend output together. The filter stays quiet within 2.25 RPM even
+after a bend has started. To probe Djay's minimum playback-speed
+response, keep target RPM, floor and the selected mapping fixed, then compare
+gain **1x, 2x and 4x** at the same measured braking RPM. Higher gain should
+increase negative MIDI output; whether audible speed continues to decrease
+must be measured separately. A larger diagnostic number alone does not
+establish Djay's response limit.
+
+**Jog > Pitch Bend > Speed / Reaction** separately controls Djay's interpretation
+of that MIDI. Changing those values still requires exporting and selecting the
+updated mapping, not merely Save and restart. Keep them fixed during a gain
+comparison. **Absolute platter sensitivity** does not affect this bend route.
+
 The retired [absolute-position Scratch experiment](absolute-position-scratch-experiment.md)
 is documented separately for future software compatibility work.
 The touch-scratch direction picker offers **Normal** and **Reversed** for the
@@ -585,11 +634,17 @@ Djay produced the intended audible speed.
 For a longer trace, select the **Full** profile and **Debug** before starting
 the bridge, then choose **Start motor diagnostic capture** before the test and
 stop the capture afterward. The app writes timestamped
-`MOTOR_JOG_BEND`, `MOTOR_JOG_POSITION`, `MOTOR_SCRATCH_MODE`,
-`MOTOR_SCRATCH_HANDOFF`, `MOTOR_TT_SELECTION` and `MOTOR_PLAYBACK_GATE` lines to a separate file under
+`MOTOR_JOG_BEND`, `MOTOR_JOG_POSITION`, `MOTOR_SCRATCH_HANDOFF`,
+`MOTOR_TT_SELECTION`, `MOTOR_PLAYBACK_GATE`, bounded `MOTOR_TT_STATE` reports
+and `S4_PLATTER_STATUS` lines to a separate file under
 `~/Library/Application Support/S4 MK3 Bridge/diagnostics/`; **Show file**
 reveals it in Finder. Unlike the Diagnostics display, this filtered file is
 not limited to 60,000 characters.
+The response-stability capture includes an `S4_MOTOR_CONFIG` receipt for the
+actual configuration loaded by each bridge launch, not unsaved editor values.
+`MOTOR_TT_STATE` records touch, playback authorization, ownership and requested
+force; it does not measure applied torque. There is no runtime
+`MOTOR_SCRATCH_MODE` emitter.
 
 **For this testing build, turn TT off or Stop bridge before quitting Djay.**
 Playback authorization is cached from real feedback; silence from Djay does
@@ -597,6 +652,10 @@ not itself clear a previously reported playing state.
 Integrated physical feel and playing acceptance are tracked separately in
 the [integration validation record](motorized-playback-integration-validation.md).
 This is current-source testing behavior, not a published release.
+The response-stability changes still need physical and Djay audio checks;
+source tests and offline replay cannot establish either. See the
+[ordered morning test and evidence limits](tt-response-stability-validation.md).
+These response changes use the existing mapping; no export is needed.
 The Testing settings remain available during beta testing. Before release,
 the settings exposed to ordinary users will be reviewed; no options are removed
 by this documentation update.

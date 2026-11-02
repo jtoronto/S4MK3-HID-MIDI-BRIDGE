@@ -49,10 +49,10 @@ pub fn fixture() -> anyhow::Result<Vec<Step>> {
             | InputItemDesc::Touch(_) => None,
         })
         .collect();
-    let mut steps = Vec::with_capacity(8202);
+    let mut steps = Vec::with_capacity(12_502);
     let mut counters = [10_000_u32; 2];
-    let mut fractions = [0_u32; 2];
-    for index in 0_u32..=8200 {
+    let mut fractions = [0_u64; 2];
+    for index in 0_u32..=12_500 {
         let now_us = u64::from(index) * 2000 + 1;
         let mut buffers = [[0; 128]; 3];
         buffers[0][0] = 1;
@@ -81,21 +81,12 @@ pub fn fixture() -> anyhow::Result<Vec<Step>> {
         if (70..80).contains(&index) || (100..141).contains(&index) {
             buffers[0][17] |= 0x10;
         }
+        if (10_500..11_250).contains(&index) || (11_750..12_250).contains(&index) {
+            buffers[0][17] |= 0x30;
+        }
         for side in 0..2 {
-            let rpm_tenths: i32 = if side == 0 {
-                match index {
-                    1500..1800 => 120,
-                    1800..2000 => 0,
-                    2000..2200 => -60,
-                    3000..3300 => 600,
-                    3300..3500 => 480,
-                    3500..3800 => 450,
-                    _ => 330,
-                }
-            } else {
-                330
-            };
-            fractions[side] += rpm_tenths.unsigned_abs() * 2880 * 2000;
+            let rpm_tenths = fixture_rpm(index, side);
+            fractions[side] += u64::from(rpm_tenths.unsigned_abs()) * 2880 * 2000;
             let nominal = i32::try_from(fractions[side] / 600_000_000)? * rpm_tenths.signum();
             fractions[side] %= 600_000_000;
             let delta = if side == 0 && (100..=200).contains(&index) {
@@ -125,6 +116,40 @@ pub fn fixture() -> anyhow::Result<Vec<Step>> {
         });
     }
     Ok(steps)
+}
+
+const fn fixture_rpm(index: u32, side: usize) -> i32 {
+    if index < 8500 {
+        return if side == 0 {
+            match index {
+                1500..1800 => 120,
+                1800..2000 => 0,
+                2000..2200 => -60,
+                3000..3300 => 600,
+                3300..3500 => 480,
+                3500..3800 => 450,
+                _ => 330,
+            }
+        } else {
+            330
+        };
+    }
+    match index {
+        8500..8750 => 270,
+        8750..9500 | 9750..10_500 => {
+            if (index / 50) % 2 == 0 {
+                320
+            } else {
+                350
+            }
+        }
+        9500..9750 => 400,
+        10_500..10_750 => 300,
+        11_000..11_500 => 660,
+        11_750..12_000 => 0,
+        12_000..12_250 => -120,
+        _ => 330,
+    }
 }
 
 fn feedback_step(index: u32) -> (Vec<u8>, &'static str) {
@@ -165,10 +190,22 @@ fn feedback_step(index: u32) -> (Vec<u8>, &'static str) {
         1800 => (vec![], "speed_scratch_stationary_hold"),
         2000 => (vec![], "speed_scratch_reverse"),
         2200 => (vec![], "speed_scratch_recovery"),
-        3000 => (vec![], "speed_scratch_upper_entry"),
-        3300 => (vec![], "speed_scratch_upper_hysteresis"),
-        3500 => (vec![], "speed_scratch_upper_recovery"),
+        3000 => (vec![], "forward_nudge"),
+        3300 => (vec![], "forward_nudge_slowing"),
+        3500 => (vec![], "forward_nudge_recovery"),
         8000 => (vec![], "continuous_playback_beyond_15_seconds"),
+        8500 => (vec![], "both_braking"),
+        8750 => (vec![], "quiet_wobble_after_braking"),
+        9500 => (vec![], "both_nudging"),
+        9750 => (vec![], "quiet_wobble_after_nudging"),
+        10_500 => (vec![], "both_touch_below_target"),
+        10_750 => (vec![], "both_touch_at_target"),
+        11_000 => (vec![], "both_touch_overspeed"),
+        11_250 => (vec![], "both_release_overspeed"),
+        11_500 => (vec![], "both_nominal_recovery"),
+        11_750 => (vec![], "both_touch_stopped"),
+        12_000 => (vec![], "both_touch_reverse"),
+        12_250 => (vec![], "both_release_recovery"),
         _ => (vec![], ""),
     }
 }
@@ -182,6 +219,7 @@ pub fn execute(
     steps: Vec<Step>,
     emit: impl Fn(serde_json::Value),
 ) -> anyhow::Result<()> {
+    emit(json!({"event":"config","now_us":0,"jog":config}));
     let replay = RefCell::new(full::replay::Replay::new(config)?);
     let mut engine =
         Engine::with_backspin_strength(Config::default(), config.backspin_assist_strength)?;
@@ -216,7 +254,15 @@ pub fn execute(
                     emit(json!({"event":"midi","now_us":at,"message":message}));
                 }
             }
-            Action::Initialize | Action::Feedback(_) | Action::Screens => {}
+            Action::Feedback(at) => {
+                if let Some(status) = replay
+                    .borrow_mut()
+                    .platter_status(Duration::from_micros(at))?
+                {
+                    emit(json!({"event":"platter_status","now_us":at,"status":status}));
+                }
+            }
+            Action::Initialize | Action::Screens => {}
         }
         Ok(())
     })?;
