@@ -568,9 +568,18 @@ switches from CC 4 to held Scratch mode and raw relative CC 5 movement.
 The initial diagnostic floor is **50% of target RPM** (16.5 RPM at 33 RPM);
 it is adjustable from 1 to 95% in Testing. This is provisional: the supplied
 tone recording reached half speed, but the CC 4 mapping's actual floor has
-not been established. Acceleration above the floor plus hysteresis returns
-to pitch bend without needing top-touch release. At the default settings the
-exit is 18.5 RPM. Switching deck or losing playback authorization releases
+not been established. Once Scratch has engaged, keeping your hand on the top
+holds Scratch through fast forward and reverse strokes, even above the exit
+speed. Lift your hand to allow the usual speed-based return to pitch bend.
+If the wheel is still below the exit speed when released, Scratch remains until
+rotation recovers. At the default settings the exit is 18.5 RPM.
+An abrupt stop from normal speed has a faster path: at least 4 ms of fresh
+zero-motion sensor time engages Scratch without waiting for the 100 ms RPM
+average. A duplicate or lone 2 ms zero-count report cannot trigger it.
+Gradual slowing still uses the saved floor; startup and stale-input recovery
+still need normal-speed qualification. This is bridge detection timing, not a
+guarantee of audio latency in Djay.
+Switching deck or losing playback authorization releases
 the original speed-Scratch owner and neutralizes drive.
 The floor controls only the lower-speed Scratch entry. A forward nudge stays
 on pitch bend; there is no automatic upper-speed Scratch handoff. Explicit
@@ -578,6 +587,8 @@ Vinyl-on top touch still selects Scratch. The default floor remains 50%, and
 installing this build preserves your saved floor and gain rather than resetting
 them. Keep your current floor and response for the first comparison.
 See the [diagnostic calibration and attended checks](tt-speed-scratch-diagnostic.md).
+The [touch-hold and abrupt-stop validation record](tt-touch-stop-validation.md)
+separates software regression evidence from the pending physical trial.
 There is no absolute CC 8 position stream in this test path. Ordinary top-touch
 Scratch remains on relative CC 5.
 **Absolute platter sensitivity** in Testing starts at **14.0%** based on the

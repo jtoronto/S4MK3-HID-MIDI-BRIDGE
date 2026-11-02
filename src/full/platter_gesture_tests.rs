@@ -314,6 +314,205 @@ fn speed_handoff_stops_bend_and_routes_raw_scratch_without_touch() -> anyhow::Re
 }
 
 #[test]
+fn abrupt_stop_enters_scratch_after_fresh_confirmation_not_bend_averaging() -> anyhow::Result<()> {
+    for side in 0..2 {
+        for floor in [1, 50, 95] {
+            for touched in [false, true] {
+                let mut fixture = Fixture::new();
+                fixture.side = side;
+                fixture.translator.motor_enabled = [false; 2];
+                fixture.translator.motor_enabled[side] = true;
+                fixture.translator.vinyl[side] = false;
+                fixture.translator.jog_config.tt_pitch_bend_floor_percent = floor;
+                fixture.feedback.loaded[side] = Some(true);
+                fixture.feedback.playing[side] = Some(true);
+                fixture.feedback.internal[side] = Some(true);
+                // Stopped startup must still qualify at normal speed first.
+                assert!(fixture.drive(0, 100)?.is_empty());
+                fixture.drive(330, 150)?;
+                let mut output = Vec::new();
+                if touched {
+                    fixture.translator.translate(
+                        &[Control::Button(
+                            ["left_wheel_touch", "right_wheel_touch"][side],
+                            true,
+                        )],
+                        None,
+                        &mut output,
+                    )?;
+                }
+
+                // A single 2ms zero-travel sample, even replayed, is not a stop.
+                assert!(fixture.drive(0, 1)?.is_empty());
+                let mut duplicate = [0_u8; 60];
+                duplicate[0] = 3;
+                for offset in [8, 36] {
+                    duplicate[offset..offset + 4]
+                        .copy_from_slice(&(fixture.index * 200_000).to_le_bytes());
+                    duplicate[offset + 4..offset + 8]
+                        .copy_from_slice(&fixture.counter.to_le_bytes());
+                }
+                fixture.translator.report(
+                    &[],
+                    &duplicate,
+                    Duration::from_micros(u64::from(fixture.index) * 2000 + 1000),
+                    &fixture.feedback,
+                    &mut output,
+                )?;
+                assert!(output.is_empty());
+
+                // The next fresh sample completes 4ms at rest, long before
+                // the 100ms average reaches even the 95% floor.
+                let channel = u8::try_from(side)?;
+                assert_eq!(fixture.drive(0, 1)?, [[0x90 | channel, 7, 127]]);
+                assert!(fixture.drive(0, 10)?.is_empty());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn gradual_low_speed_zero_counts_do_not_bypass_the_saved_scratch_floor() -> anyhow::Result<()> {
+    let mut fixture = Fixture::new();
+    fixture.translator.jog_config.tt_pitch_bend_floor_percent = 1;
+    fixture.drive(330, 150)?;
+    let mut output = Vec::new();
+    fixture.translator.translate(
+        &[Control::Button("left_wheel_touch", true)],
+        None,
+        &mut output,
+    )?;
+
+    // Slow deceleration leaves multiple zero-count reports between encoder
+    // increments at 1 RPM, still above the saved 0.33 RPM entry floor.
+    for speed in [300, 270, 240, 210, 180, 150, 120, 90, 60, 30, 20, 10] {
+        output.extend(fixture.drive(speed, 100)?);
+    }
+    assert!(
+        output
+            .iter()
+            .all(|message| message[0] == 0xb0 && message[1] == 4)
+    );
+    assert!(output.iter().any(|message| message[2] < 64));
+    Ok(())
+}
+
+#[test]
+fn floor_scratch_stays_through_touched_fast_strokes_until_release() -> anyhow::Result<()> {
+    for side in 0..2 {
+        for floor in [1, 50, 95] {
+            for touch_before_entry in [false, true] {
+                let mut fixture = Fixture::new();
+                fixture.side = side;
+                fixture.translator.motor_enabled = [false; 2];
+                fixture.translator.motor_enabled[side] = true;
+                fixture.translator.vinyl[side] = false;
+                fixture.translator.jog_config.tt_pitch_bend_floor_percent = floor;
+                fixture.feedback.loaded[side] = Some(true);
+                fixture.feedback.playing[side] = Some(true);
+                fixture.feedback.internal[side] = Some(true);
+                fixture.drive(330, 150)?;
+                let touch = ["left_wheel_touch", "right_wheel_touch"][side];
+                let channel = u8::try_from(side)?;
+                let mut output = Vec::new();
+                if touch_before_entry {
+                    fixture.translator.translate(
+                        &[Control::Button(touch, true)],
+                        None,
+                        &mut output,
+                    )?;
+                    assert!(output.is_empty());
+                    assert!(fixture.drive(330, 100)?.is_empty());
+                }
+                let entry = fixture.drive(0, 150)?;
+                assert_eq!(
+                    entry
+                        .iter()
+                        .filter(|message| **message == [0x90 | channel, 7, 127])
+                        .count(),
+                    1
+                );
+                if !touch_before_entry {
+                    fixture.translator.translate(
+                        &[Control::Button(touch, true)],
+                        None,
+                        &mut output,
+                    )?;
+                }
+
+                // Full measurement windows cross the floor in both directions
+                // while the same top contact remains held.
+                for speed in [600, -600, 900] {
+                    output.extend(fixture.drive(speed, 100)?);
+                }
+                assert!(
+                    output
+                        .iter()
+                        .all(|message| message[0] == 0xb0 | channel && message[1] == 5),
+                    "side {side}, floor {floor}: touched Scratch changed routes"
+                );
+                for direction in [std::cmp::Ordering::Less, std::cmp::Ordering::Greater] {
+                    assert!(
+                        output
+                            .iter()
+                            .any(|message| message[2].cmp(&64) == direction)
+                    );
+                }
+
+                output.clear();
+                fixture.translator.translate(
+                    &[Control::Button(touch, false)],
+                    None,
+                    &mut output,
+                )?;
+                output.extend(fixture.drive(900, 100)?);
+                let release = output
+                    .iter()
+                    .position(|message| *message == [0x80 | channel, 7, 0])
+                    .context("released top contact must allow recovered-speed exit")?;
+                assert_eq!(output.iter().filter(|message| message[1] == 7).count(), 1);
+                assert!(
+                    output[release + 1..]
+                        .iter()
+                        .all(|message| { message[0] == 0xb0 | channel && message[1] == 4 })
+                );
+                assert!(output[release + 1..].iter().any(|message| message[2] > 64));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn floor_scratch_touch_release_below_exit_waits_for_speed_recovery() -> anyhow::Result<()> {
+    let mut fixture = Fixture::new();
+    fixture.drive(330, 150)?;
+    fixture.drive(0, 150)?;
+    let mut output = Vec::new();
+    for touched in [true, false] {
+        fixture.translator.translate(
+            &[Control::Button("left_wheel_touch", touched)],
+            None,
+            &mut output,
+        )?;
+    }
+
+    output.extend(fixture.drive(0, 100)?);
+    assert!(output.is_empty());
+    let recovered = fixture.drive(330, 150)?;
+    assert_eq!(
+        recovered
+            .iter()
+            .filter(|message| message[1] == 7)
+            .copied()
+            .collect::<Vec<_>>(),
+        [[0x80, 7, 0]]
+    );
+    Ok(())
+}
+
+#[test]
 fn held_stop_and_reverse_stay_in_scratch_until_speed_recovers() -> anyhow::Result<()> {
     // Given speed-owned Scratch without capacitive touch.
     let mut fixture = Fixture::new();
@@ -397,12 +596,19 @@ fn lower_scratch_releases_once_even_above_the_former_ceiling() -> anyhow::Result
 
 #[test]
 fn deck_switch_and_stale_input_release_the_original_speed_owner() -> anyhow::Result<()> {
-    for stale in [false, true] {
+    for (stale, touched) in [(false, false), (true, false), (false, true), (true, true)] {
         // Given deck A speed-owned Scratch with C also authorized.
         let mut fixture = Fixture::new();
         fixture.drive(330, 150)?;
         fixture.drive(120, 150)?;
         let mut output = Vec::new();
+        if touched {
+            fixture.translator.translate(
+                &[Control::Button("left_wheel_touch", true)],
+                None,
+                &mut output,
+            )?;
+        }
         // When selection changes or the last real sensor sample becomes stale.
         if stale {
             fixture.translator.jog_now += Duration::from_millis(51);

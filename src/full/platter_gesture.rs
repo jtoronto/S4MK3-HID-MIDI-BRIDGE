@@ -1,4 +1,4 @@
-//! TT-only speed-to-Scratch handoff, independent of capacitive touch.
+//! TT-only speed-to-Scratch entry, retained through capacitive top contact.
 
 use super::{Address, Translator, catalog, relative};
 use anyhow::ensure;
@@ -89,8 +89,10 @@ impl Translator {
             }
             let floor = target * f64::from(self.jog_config.tt_pitch_bend_floor_percent) / 100.0;
             let hysteresis = ((target - floor) * 0.25).min(2.0);
+            let stopped = self.platter_bend[side].abruptly_stopped();
             if self.platter_scratch[side].is_none()
-                && (paused || (!self.vinyl[side] && rpm.is_some_and(|rpm| rpm <= floor)))
+                && (paused
+                    || (!self.vinyl[side] && (stopped || rpm.is_some_and(|rpm| rpm <= floor))))
             {
                 let address = Address {
                     channel: deck.channel(),
@@ -106,12 +108,15 @@ impl Translator {
                     deck = deck.channel() + 1,
                     rpm = ?rpm,
                     floor,
+                    stopped,
                     active = true,
                     "MOTOR_SCRATCH_HANDOFF"
                 );
             } else if !paused
                 && self.platter_scratch[side].is_some()
-                && (self.vinyl[side] || rpm.is_some_and(|rpm| rpm >= floor + hysteresis))
+                && self.touch_decks[side].is_none()
+                && (self.vinyl[side]
+                    || (!stopped && rpm.is_some_and(|rpm| rpm >= floor + hysteresis)))
             {
                 self.end_motor_scratch(side, output);
             }

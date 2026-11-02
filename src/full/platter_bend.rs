@@ -17,6 +17,7 @@ pub(super) struct Bend {
     residual: f64,
     rpm: Option<f64>,
     delta: Option<i32>,
+    abrupt_stop_ticks: Option<u64>,
 }
 
 impl Default for Bend {
@@ -30,6 +31,7 @@ impl Default for Bend {
             residual: 0.0,
             rpm: None,
             delta: None,
+            abrupt_stop_ticks: None,
         }
     }
 }
@@ -44,6 +46,7 @@ impl Bend {
         self.residual = 0.0;
         self.rpm = None;
         self.delta = None;
+        self.abrupt_stop_ticks = None;
     }
 
     pub(super) fn fresh(&self, now: Duration) -> bool {
@@ -58,6 +61,10 @@ impl Bend {
 
     pub(super) const fn movement(&self) -> Option<i32> {
         self.delta
+    }
+
+    pub(super) fn abruptly_stopped(&self) -> bool {
+        self.qualified && self.abrupt_stop_ticks.is_some_and(|ticks| ticks >= 400_000)
     }
 
     pub(super) fn rpm(&self, now: Duration) -> Option<f64> {
@@ -101,6 +108,19 @@ impl Bend {
             return Ok(None);
         }
         self.delta = Some(counts);
+        let target = f64::from(preferences.platter_target_rpm);
+        // Confirm 4ms of fresh stationary sensor time after normal-speed
+        // rotation. Duplicates cannot advance this, and gradual low-speed
+        // count quantization must not become an abrupt-stop detector.
+        self.abrupt_stop_ticks = if counts != 0 {
+            None
+        } else if let Some(stopped) = self.abrupt_stop_ticks {
+            Some(stopped + u64::from(ticks))
+        } else {
+            self.rpm
+                .filter(|rpm| (*rpm - target).abs() <= 2.25 + 1e-9)
+                .map(|_| u64::from(ticks))
+        };
         self.clock += u64::from(ticks);
         self.samples.push_back((self.clock, counter));
         while self
@@ -121,7 +141,6 @@ impl Bend {
         let window_counts = i32::from_le_bytes(counter.wrapping_sub(first_counter).to_le_bytes());
         let rpm = f64::from(window_counts) / (seconds * counts_per_rpm);
         self.rpm = Some(rpm);
-        let target = f64::from(preferences.platter_target_rpm);
         let error = rpm - target;
         if !self.qualified {
             self.qualified = error.abs() <= 2.25 + 1e-9;

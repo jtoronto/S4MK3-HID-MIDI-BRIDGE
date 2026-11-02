@@ -285,8 +285,12 @@ off/blue. Normal mode defaults to Vinyl on and TT to off, with separate saved
 startup choices. Use the existing matching mapping with Internal-mode feedback.
 Steady TT rotation emits no jog correction; measured deviations use
 pitch bend. The response update uses a true 2.25 RPM quiet band with
-smooth onset over the next 1 RPM. Only braking to the provisional lower floor
-automatically enters Scratch; forward nudges remain on pitch bend.
+smooth onset over the next 1 RPM. Braking to the provisional lower floor or a
+confirmed abrupt stop enters Scratch; forward nudges remain on pitch bend.
+After entry, top contact holds Scratch through fast forward/reverse strokes;
+release allows the usual speed-based exit. An abrupt stop from normal rotation
+can enter after 4 ms of fresh no-motion sensor time instead of waiting for the
+100 ms bend average. Actual audio latency and scratch feel need physical checks.
 Holding or braking retains assistance, tapered linearly over the final 2 RPM
 below target to zero at/above measured target, including touch-release fallback.
 The default floor remains 50%; existing saved values persist. Current source

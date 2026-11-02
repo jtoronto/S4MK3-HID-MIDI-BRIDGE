@@ -16,11 +16,18 @@ historical, including their upper-speed handoff behavior.
   MIDI. Slowing below the configured floor holds Scratch Note 7 and sends raw
   relative movement through CC5 instead of sending CC4 pitch bend. A stopped
   wheel keeps Scratch held without invented movement. Reverse movement stays
-  signed. Acceleration through the exit threshold releases Scratch.
+  signed. Once entered, top contact holds Scratch through fast strokes across
+  the exit threshold. After release, speed recovery allows the usual exit;
+  release below the exit threshold keeps Scratch until recovery.
 - The initial floor is 50% of target speed: 16.5 RPM at 33 RPM. Exit is 18.5 RPM
   at those settings. Entry uses the existing 100 ms speed window after normal
-  speed qualification; it is not an instantaneous touch detector.
-- Only the lower floor triggers automatic Scratch. Forward nudges remain on
+  speed qualification; top touch alone with Vinyl off does not enter Scratch.
+  An abrupt stop from normal speed has a separate 4 ms fresh zero-count
+  confirmation, avoiding the 100 ms average's delay. Duplicate reports do not
+  advance this confirmation, and gradual low-speed count quantization does not
+  qualify as an abrupt stop. This is bridge detection timing, not measured
+  audible response.
+- There is no upper-speed automatic Scratch trigger. Forward nudges remain on
   CC4 regardless of upper speed; explicit Vinyl-on top touch still selects
   Scratch. Exit is `floor + min((target - floor) * 0.25, 2)` RPM.
 - Bend has a true +/-2.25 RPM deadband with no active hysteresis. Neutral

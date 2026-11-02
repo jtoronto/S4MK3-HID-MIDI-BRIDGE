@@ -114,9 +114,20 @@ than summing tension/backspin force. Freshness, playback and deck-owner gates
 still neutralize drive. With TT Vinyl off, the provisional configurable
 `tt_pitch_bend_floor_percent` (default 50, range 1-95) selects only the lower
 speed-driven CC4-to-CC5 Scratch handoff in `src/full/platter_gesture.rs`.
-Entry is at or below `floor = target * percent / 100`; exit is at or above
-`floor + min((target - floor) * 0.25, 2)` RPM. Forward nudges no longer trigger
-automatic upper Scratch. Explicit Vinyl-on touch still owns Scratch.
+Entry is at or below `floor = target * percent / 100`. A qualified abrupt stop
+from the normal-speed quiet band can also enter after 4 ms of fresh zero-count
+sensor time, before the 100 ms RPM average falls through the floor. The candidate
+starts from a measured speed within 2.25 RPM of target; valid nonzero movement
+or a measurement reset clears it. Duplicate reports cannot advance confirmation,
+and gradual low-speed count quantization does not start a candidate.
+Top touch retains floor-entered Scratch across fast threshold crossings.
+Without top contact, exit is at or above
+`floor + min((target - floor) * 0.25, 2)` RPM, unless the abrupt stop remains
+confirmed. Releasing below exit speed waits for recovery. Playback/mode/deck
+cancellation and stale-input release still take precedence over touch.
+Forward nudges do not trigger automatic upper Scratch. Explicit Vinyl-on touch
+still owns Scratch.
+See [touch retention and abrupt-stop verification](tt-touch-stop-validation.md).
 In `src/tension/playback.rs`, hold assistance uses
 `F0 = min(max_force, base_force + force_per_rpm * target_rpm)`, default 5280,
 scaled by `clamp((target_rpm - measured_rpm) / min(2, target_rpm), 0, 1)`.
