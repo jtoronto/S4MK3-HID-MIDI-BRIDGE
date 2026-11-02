@@ -33,23 +33,35 @@ Scratch owner through deck changes; fresh sensor deltas drive untouch-owned
 paused movement. Resume, mode cancellation and stale input release that
 synthetic Scratch owner and require a new bend baseline.
 
-The current `tt_pitch_bend_gain` preference is a 0.1-10 multiplier applied
-before relative-step quantization, default 1.0. It scales only the playback-driven
-TT CC4 route, preserving the existing 2:1 braking/acceleration bias. It does not
-change ordinary jog, Scratch, handoff thresholds or motor control settings.
-Legacy preferences without the field use the default multiplier of 1. It is a
-runtime preference, so Save/restart applies it without regenerating a mapping.
+Current-source Jog settings provide independent braking and nudge curves for
+the playback-driven TT CC4 route. Optional `tt_brake_gain` accepts 0.1-20 and
+`tt_nudge_gain` accepts 0.1-10. Missing or null gains inherit the existing
+`tt_pitch_bend_gain` (default 1, range 0.1-10), multiplied by 2 for braking
+and unchanged for nudging. Explicit gains replace that combined strength;
+there is no additional braking multiplier. Thus legacy shared gain 5 retains
+effective strengths 10 for braking and 5 for nudging.
+`tt_brake_curve_exponent` and `tt_nudge_curve_exponent` each accept 0.25-4,
+defaulting to 1. All non-null values must be finite numbers.
+Save/restart applies these runtime preferences without regenerating a mapping.
+They do not change ordinary jog, Scratch, handoff thresholds or motor control.
 
 The response-stability law in `src/full/platter_bend.rs` uses a true
 2.25 RPM deadband for qualification and neutral output. There is no active
 bend hysteresis; neutral clears the fractional residual. For error
 `e = measured_rpm - target_rpm`, set `x = clamp((abs(e) - 2.25) / 1.0, 0, 1)`
 and multiply the existing full-error law by `x*x*(3 - 2*x)`.
-Each fresh report contributes
-`e * onset * direction_gain * saved_gain * (2880 / 60) * elapsed_seconds`
-before relative-step quantization. `direction_gain` is 2 for braking and 1 for
-forward nudging. At 3.25 RPM deviation and beyond, onset is 1; it does not
-subtract the deadband from the full-error law.
+For selected strength `G`, selected exponent `P`, target RPM `T`, and
+`q = min(abs(e) / T, 1)`, each fresh report contributes
+`e * onset * G * q^(P - 1) * (2880 / 60) * elapsed_seconds`
+before relative-step quantization. Exponent 1 preserves the earlier response;
+higher exponents soften small deviations and lower exponents strengthen them.
+At 3.25 RPM deviation and beyond, onset is 1; it does not subtract the deadband.
+Above 100% target-speed deviation, the shape factor stays 1 for linear
+continuation rather than unbounded power extrapolation. Qualification, sign
+change/neutral residual clearing, report timing and speed measurement are
+unchanged. The native graph evaluates this rate in signed CC4 counts/second;
+it does not predict Djay's audible tempo.
+See [curve implementation and verification limits](tt-response-curves-validation.md).
 Full-profile `S4_PLATTER_STATUS` lines provide a 10 Hz Diagnostics snapshot with
 physical RPM, the successful outgoing CC4 count rate and current routing mode.
 This is MIDI output evidence, not audio-speed feedback.
@@ -58,6 +70,12 @@ receipt per launch and bounded `MOTOR_TT_STATE` reports for touch, authorization
 owner and requested force. Requested force is not applied torque. The app
 retains the receipt for a capture started after launch. `MOTOR_SCRATCH_MODE`
 is not a runtime emitter.
+Normal/Info logging emits TT-state initialization and boolean-state transitions
+only. Debug additionally emits periodic TT-state force samples at the bounded
+100 ms cadence. The native app keeps log and live-platter observation separate
+from preference observation, and only mounts the Diagnostics tab while selected.
+See [idle logging and Settings performance validation](idle-ui-performance-validation.md)
+for evidence and measurement limits.
 The RPM diagnostic adds Debug-only `MOTOR_REGULATOR data={...}` JSON samples
 at most every 20 ms per side, plus regulator-mode edges. Side 0 is left and
 side 1 is right. Records include raw encoder counter/timer, current report

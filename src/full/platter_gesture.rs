@@ -80,8 +80,7 @@ impl Translator {
                 counter,
                 timer,
                 self.jog_now,
-                self.jog_config.platter_target_rpm,
-                self.jog_config.tt_pitch_bend_gain,
+                &self.jog_config,
             )?;
             let rpm = self.platter_bend[side].rpm(self.jog_now);
             if !self.platter_bend[side].fresh(self.jog_now) || (!paused && rpm.is_none()) {

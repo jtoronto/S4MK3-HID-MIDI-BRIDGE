@@ -289,14 +289,22 @@ smooth onset over the next 1 RPM. Only braking to the provisional lower floor
 automatically enters Scratch; forward nudges remain on pitch bend.
 Holding or braking retains assistance, tapered linearly over the final 2 RPM
 below target to zero at/above measured target, including touch-release fallback.
-The default floor remains 50% and gain 1x; existing saved values persist.
-Save and restart applies changes. This response update needs no mapping export.
+The default floor remains 50%; existing saved values persist. Current source
+provides separate braking and nudge Strength/Shape controls with live MIDI-rate
+graphs. Defaults are 2x braking / 1x nudge, both Shape 1. A legacy shared gain
+keeps its response: saved 5x appears as 10x braking / 5x nudge because braking
+already included an extra 2x weight. No additional multiplier is applied.
+Save and restart applies changes; no mapping export is needed.
 Physical feel and Djay's audio floor remain unverified.
 
 Debug motor captures include the actual loaded configuration for each launch
 through `S4_MOTOR_CONFIG`, alongside bounded `MOTOR_TT_STATE` reports of touch,
 authorization, owner and requested force. Requested force is not measured torque.
 Live RPM and CC4 bend indicators remain bridge diagnostics, not audio feedback.
+Normal log detail records TT-state transitions without repeating unchanged
+idle state; Debug retains periodic motor samples. Log and live-platter updates
+are isolated from preference editors, and diagnostic views render only while
+their tab is selected.
 
 Normal rings advance with playback, follow Scratch and freeze on pause;
 TT rings follow the physical wheel. These source-only additions are still

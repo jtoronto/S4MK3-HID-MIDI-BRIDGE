@@ -14,7 +14,7 @@ let package = Package(
                 "S4BridgeApp.swift", "PlatterDiagnostics.swift", "ScreenPreferences.swift",
                 "ScreenSupport.swift", "ScreenSupport+Control.swift", "ScreenSettingsView.swift",
                 "BridgeController+Screens.swift", "ScreenPrompts.swift", "NIHardwareAgent.swift",
-                "NIHardwareAgentNative.swift", "BridgeStatusMenu.swift"
+                "NIHardwareAgentNative.swift", "BridgeStatusMenu.swift", "TTResponseCurveView.swift"
             ]
         ),
         .testTarget(name: "S4BridgeTests", dependencies: ["S4Bridge"], path: "Tests")

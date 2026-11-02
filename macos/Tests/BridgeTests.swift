@@ -92,6 +92,34 @@ final class BridgeTests: XCTestCase {
     }
 
     @MainActor
+    func testDiagnosticTrafficDoesNotInvalidateSettings() throws {
+        let fixture = try makeFixture()
+        let model = try testController(resourceURL: fixture, supportURL: fixture.appendingPathComponent("support"))
+        var settingsUpdates = 0
+        let subscription = model.objectWillChange.sink { settingsUpdates += 1 }
+        var logUpdates = 0
+        var platterUpdates = 0
+        let logSubscription = model.logOutput.$text.dropFirst().sink { _ in logUpdates += 1 }
+        let platterSubscription = model.livePlatter.$state.dropFirst().sink { _ in platterUpdates += 1 }
+        let status = #"S4_PLATTER_STATUS {"wheels":[{"deck":1,"rpm":33,"bend_counts_per_second":0,"mode":"off"},{"deck":2,"rpm":0,"bend_counts_per_second":0,"mode":"off"}]}"#
+
+        for _ in 0..<100 {
+            model.appendLog("ordinary output")
+            model.acceptPlatterStatus(status)
+        }
+
+        XCTAssertTrue(model.log.contains("ordinary output"))
+        XCTAssertEqual(model.platterDiagnostics.latest?.left.rpm, 33)
+        model.acceptPlatterStatus("S4_PLATTER_STATUS invalid")
+        XCTAssertEqual(logUpdates, 100)
+        XCTAssertEqual(platterUpdates, 100)
+        XCTAssertEqual(settingsUpdates, 0)
+        model.jog.ttNudgeCurveExponent = 2
+        XCTAssertEqual(settingsUpdates, 1)
+        withExtendedLifetime((subscription, logSubscription, platterSubscription)) {}
+    }
+
+    @MainActor
     func testMotorDiagnosticCaptureRequiresDebugLogLevel() throws {
         // Given the default info-level bridge configuration.
         let fixture = try makeFixture()
@@ -195,7 +223,7 @@ final class BridgeTests: XCTestCase {
         var finalStop = false
         var didSeeInitial = false
         var didSeeReplacement = false
-        let output = model.$log.sink { text in
+        let output = model.logOutput.$text.sink { text in
             if !didSeeInitial && text.contains("READY_INITIAL") {
                 didSeeInitial = true
                 firstReady.fulfill()
@@ -329,7 +357,7 @@ final class BridgeTests: XCTestCase {
         let exited = expectation(description: "child acknowledged SIGINT and exited")
         var didSignalReady = false
         var sawStopping = false
-        let output = model.$log.sink { text in
+        let output = model.logOutput.$text.sink { text in
             if !didSignalReady && text.contains("HELPER_READY") {
                 didSignalReady = true
                 ready.fulfill()
@@ -625,6 +653,171 @@ final class BridgeTests: XCTestCase {
         }
     }
 
+    func testTurntableBrakingAndNudgeCurvePreferencesInheritLegacyAndValidateIndependently() throws {
+        let defaults = try jogDefaultsData()
+        let legacy = Data(#"{"tt_pitch_bend_gain":5.0}"#.utf8)
+        let inherited = try JogPreferences.decode(legacy, defaults: defaults)
+        XCTAssertEqual(inherited.ttPitchBendGain, 5.0)
+        XCTAssertNil(inherited.ttBrakeGain)
+        XCTAssertNil(inherited.ttNudgeGain)
+        XCTAssertEqual(inherited.effectiveTTBrakeGain, 10.0)
+        XCTAssertEqual(inherited.effectiveTTNudgeGain, 5.0)
+        XCTAssertEqual(inherited.ttBrakeCurveExponent, 1.0)
+        XCTAssertEqual(inherited.ttNudgeCurveExponent, 1.0)
+
+        let inheritedKeys = try XCTUnwrap(JSONSerialization.jsonObject(with: inherited.encoded()) as? [String: Any])
+        XCTAssertNil(inheritedKeys["tt_brake_gain"])
+        XCTAssertNil(inheritedKeys["tt_nudge_gain"])
+        XCTAssertEqual(inheritedKeys["tt_brake_curve_exponent"] as? Double, 1.0)
+        XCTAssertEqual(inheritedKeys["tt_nudge_curve_exponent"] as? Double, 1.0)
+
+        let nullOptional = Data(#"{"tt_pitch_bend_gain":4.0,"tt_brake_gain":null,"tt_nudge_gain":null}"#.utf8)
+        let decodedNull = try JogPreferences.decode(nullOptional, defaults: defaults)
+        XCTAssertNil(decodedNull.ttBrakeGain)
+        XCTAssertNil(decodedNull.ttNudgeGain)
+        XCTAssertEqual(decodedNull.effectiveTTBrakeGain, 8.0)
+        XCTAssertEqual(decodedNull.effectiveTTNudgeGain, 4.0)
+
+        var explicit = inherited
+        explicit.ttBrakeGain = 10.0
+        explicit.ttNudgeGain = 2.5
+        explicit.ttBrakeCurveExponent = 0.75
+        explicit.ttNudgeCurveExponent = 1.8
+        let reloaded = try JogPreferences.decode(explicit.encoded(), defaults: defaults)
+        XCTAssertEqual(reloaded, explicit)
+        XCTAssertEqual(reloaded.effectiveTTBrakeGain, 10.0)
+        XCTAssertEqual(reloaded.effectiveTTNudgeGain, 2.5)
+        let explicitKeys = try XCTUnwrap(JSONSerialization.jsonObject(with: reloaded.encoded()) as? [String: Any])
+        XCTAssertEqual(explicitKeys["tt_brake_gain"] as? Double, 10.0)
+        XCTAssertEqual(explicitKeys["tt_nudge_gain"] as? Double, 2.5)
+        XCTAssertEqual(explicitKeys["tt_brake_curve_exponent"] as? Double, 0.75)
+        XCTAssertEqual(explicitKeys["tt_nudge_curve_exponent"] as? Double, 1.8)
+
+        for brakeGain in [0.1, 20.0] {
+            var valid = inherited
+            valid.ttBrakeGain = brakeGain
+            XCTAssertEqual(try JogPreferences.decode(valid.encoded(), defaults: defaults).ttBrakeGain, brakeGain)
+        }
+        for nudgeGain in [0.1, 10.0] {
+            var valid = inherited
+            valid.ttNudgeGain = nudgeGain
+            XCTAssertEqual(try JogPreferences.decode(valid.encoded(), defaults: defaults).ttNudgeGain, nudgeGain)
+        }
+        for exponent in [0.25, 1.0, 4.0] {
+            var valid = inherited
+            valid.ttBrakeCurveExponent = exponent
+            valid.ttNudgeCurveExponent = exponent
+            let roundTripped = try JogPreferences.decode(valid.encoded(), defaults: defaults)
+            XCTAssertEqual(roundTripped.ttBrakeCurveExponent, exponent)
+            XCTAssertEqual(roundTripped.ttNudgeCurveExponent, exponent)
+        }
+
+        for invalidBrake in [0.0, 0.09, 20.1, .nan, .infinity] {
+            var invalid = inherited
+            invalid.ttBrakeGain = invalidBrake
+            XCTAssertThrowsError(try invalid.validate())
+        }
+        for invalidNudge in [0.0, 0.09, 10.1, .nan, .infinity] {
+            var invalid = inherited
+            invalid.ttNudgeGain = invalidNudge
+            XCTAssertThrowsError(try invalid.validate())
+        }
+        for invalidExponent in [0.0, 0.24, 4.01, .nan, .infinity] {
+            var invalidBrakeExp = inherited
+            invalidBrakeExp.ttBrakeCurveExponent = invalidExponent
+            XCTAssertThrowsError(try invalidBrakeExp.validate())
+            var invalidNudgeExp = inherited
+            invalidNudgeExp.ttNudgeCurveExponent = invalidExponent
+            XCTAssertThrowsError(try invalidNudgeExp.validate())
+        }
+        for input in [
+            #"{"tt_brake_gain":true}"#,
+            #"{"tt_brake_gain":"10"}"#,
+            #"{"tt_nudge_gain":false}"#,
+            #"{"tt_nudge_gain":"5"}"#,
+            #"{"tt_brake_curve_exponent":true}"#,
+            #"{"tt_brake_curve_exponent":null}"#,
+            #"{"tt_nudge_curve_exponent":"1.0"}"#,
+            #"{"tt_nudge_curve_exponent":null}"#
+        ] {
+            XCTAssertThrowsError(try JogPreferences.decode(Data(input.utf8), defaults: defaults), input)
+        }
+    }
+
+    func testTTResponseCurveMatchesFormulaQuietBandSmoothOnsetExponentsAndLowTargetRpm() {
+        let asymmetricParams = TTResponseParameters(
+            targetRpm: 33,
+            brakeGain: 10.0,
+            brakeExponent: 0.5,
+            nudgeGain: 5.0,
+            nudgeExponent: 2.0
+        )
+        for measured in [33.0, 33.0 - 2.25, 33.0 + 2.25, 33.0 - (2.25 + 1e-9), 33.0 + (2.25 + 1e-9)] {
+            XCTAssertEqual(
+                TTResponseCurve.signedCc4Rate(parameters: asymmetricParams, measuredRpm: measured),
+                0.0,
+                accuracy: 1e-12
+            )
+        }
+
+        let legacy5xParams = TTResponseParameters(
+            targetRpm: 33,
+            brakeGain: 10.0,
+            brakeExponent: 1.0,
+            nudgeGain: 5.0,
+            nudgeExponent: 1.0
+        )
+        let midOnsetBraking = TTResponseCurve.signedCc4Rate(
+            parameters: legacy5xParams,
+            measuredRpm: 33.0 - 2.75
+        )
+        XCTAssertEqual(midOnsetBraking, -2.75 * 0.5 * 10.0 * 48.0, accuracy: 1e-9)
+
+        let fullStopLegacy5x = TTResponseCurve.signedCc4Rate(
+            parameters: legacy5xParams,
+            measuredRpm: 0.0
+        )
+        XCTAssertEqual(fullStopLegacy5x, -33.0 * 10.0 * 48.0, accuracy: 1e-9)
+
+        let halfTargetError = 16.5
+        let brakeShape1 = TTResponseCurve.signedCc4Rate(
+            parameters: legacy5xParams,
+            measuredRpm: 33.0 - halfTargetError
+        )
+        let brakeSoft = TTResponseCurve.signedCc4Rate(
+            parameters: TTResponseParameters(targetRpm: 33, brakeGain: 10.0, brakeExponent: 2.0, nudgeGain: 5.0, nudgeExponent: 1.0),
+            measuredRpm: 33.0 - halfTargetError
+        )
+        let brakeStrong = TTResponseCurve.signedCc4Rate(
+            parameters: TTResponseParameters(targetRpm: 33, brakeGain: 10.0, brakeExponent: 0.5, nudgeGain: 5.0, nudgeExponent: 1.0),
+            measuredRpm: 33.0 - halfTargetError
+        )
+        XCTAssertEqual(brakeSoft, brakeShape1 * 0.5, accuracy: 1e-9)
+        XCTAssertEqual(brakeStrong, brakeShape1 * pow(0.5, -0.5), accuracy: 1e-9)
+        XCTAssertLessThan(abs(brakeSoft), abs(brakeShape1))
+        XCTAssertGreaterThan(abs(brakeStrong), abs(brakeShape1))
+
+        let nudgeAboveTarget = TTResponseCurve.signedCc4Rate(
+            parameters: TTResponseParameters(targetRpm: 33, brakeGain: 10.0, brakeExponent: 0.5, nudgeGain: 3.0, nudgeExponent: 3.5),
+            measuredRpm: 33.0 + 40.0
+        )
+        XCTAssertEqual(nudgeAboveTarget, 40.0 * 1.0 * 3.0 * 1.0 * 48.0, accuracy: 1e-9)
+
+        let lowTargetBrakingSamples = TTResponseCurve.samples(
+            direction: .braking,
+            parameters: TTResponseParameters(targetRpm: 1, brakeGain: 10.0, brakeExponent: 0.5, nudgeGain: 5.0, nudgeExponent: 1.0),
+            steps: 16
+        )
+        XCTAssertTrue(lowTargetBrakingSamples.allSatisfy {
+            $0.signedCc4Rate == 0.0 && $0.magnitudeCc4Rate == 0.0 && $0.signedCc4Rate.isFinite
+        })
+        let lowTargetHighNudge = TTResponseCurve.signedCc4Rate(
+            parameters: TTResponseParameters(targetRpm: 1, brakeGain: 10.0, brakeExponent: 0.5, nudgeGain: 2.0, nudgeExponent: 2.5),
+            measuredRpm: 4.5
+        )
+        XCTAssertEqual(lowTargetHighNudge, 3.5 * 1.0 * 2.0 * 1.0 * 48.0, accuracy: 1e-9)
+    }
+
     func testMotorizedPlatterBoundsAndIntegerJSONTypes() throws {
         let defaults = try jogDefaultsData()
         let fields: [(String, WritableKeyPath<JogPreferences, Int>, ClosedRange<Int>)] = [
@@ -910,7 +1103,7 @@ final class BridgeTests: XCTestCase {
         let stopped = expectation(description: "restarted helper exited after final stop")
         var readyCount = 0
         var finalStop = false
-        let output = model.$log.sink { text in
+        let output = model.logOutput.$text.sink { text in
             let count = text.components(separatedBy: "TENSION_READY").count - 1
             if count > readyCount {
                 readyCount = count
@@ -987,7 +1180,7 @@ final class BridgeTests: XCTestCase {
         let stopped = expectation(description: "restarted helper exited after final stop")
         var readyCount = 0
         var finalStop = false
-        let output = model.$log.sink { text in
+        let output = model.logOutput.$text.sink { text in
             let count = text.components(separatedBy: "JOG_READY").count - 1
             if count > readyCount {
                 readyCount = count

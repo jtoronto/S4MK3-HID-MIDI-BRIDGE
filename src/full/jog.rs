@@ -53,6 +53,12 @@ pub struct Config {
     pub tt_startup_mode: VinylMode,
     pub tt_pitch_bend_floor_percent: u8,
     pub tt_pitch_bend_gain: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tt_brake_gain: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tt_nudge_gain: Option<f64>,
+    pub tt_brake_curve_exponent: f64,
+    pub tt_nudge_curve_exponent: f64,
     pub platter_target_rpm: u16,
     pub platter_position_sensitivity: f64,
     pub platter_max_force: u16,
@@ -81,6 +87,10 @@ pub const DEFAULT: Config = Config {
     tt_startup_mode: VinylMode::Bend,
     tt_pitch_bend_floor_percent: 50,
     tt_pitch_bend_gain: 1.0,
+    tt_brake_gain: None,
+    tt_nudge_gain: None,
+    tt_brake_curve_exponent: 1.0,
+    tt_nudge_curve_exponent: 1.0,
     platter_target_rpm: 33,
     platter_position_sensitivity: 14.0,
     platter_max_force: 20_000,
@@ -176,6 +186,26 @@ impl Config {
             self.tt_pitch_bend_gain.is_finite() && (0.1..=10.0).contains(&self.tt_pitch_bend_gain),
             "tt_pitch_bend_gain must be finite and in 0.1..=10"
         );
+        for (name, gain, maximum) in [
+            ("tt_brake_gain", self.tt_brake_gain, 20.0),
+            ("tt_nudge_gain", self.tt_nudge_gain, 10.0),
+        ] {
+            if let Some(gain) = gain {
+                ensure!(
+                    gain.is_finite() && (0.1..=maximum).contains(&gain),
+                    "{name} must be finite and in 0.1..={maximum}"
+                );
+            }
+        }
+        for (name, exponent) in [
+            ("tt_brake_curve_exponent", self.tt_brake_curve_exponent),
+            ("tt_nudge_curve_exponent", self.tt_nudge_curve_exponent),
+        ] {
+            ensure!(
+                exponent.is_finite() && (0.25..=4.0).contains(&exponent),
+                "{name} must be finite and in 0.25..=4"
+            );
+        }
         ensure!(
             (1..=45).contains(&self.platter_target_rpm),
             "platter_target_rpm must be in 1..=45"
@@ -412,6 +442,80 @@ mod tests {
             r#"{"tt_pitch_bend_gain":"2"}"#,
         ] {
             assert!(serde_json::from_str::<Config>(input).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn tt_response_overrides_round_trip_and_validate_independently() -> Result<()> {
+        let legacy: Config = serde_json::from_str(r#"{"tt_pitch_bend_gain":5}"#)?;
+        assert_eq!(legacy.tt_brake_gain, None);
+        assert_eq!(legacy.tt_nudge_gain, None);
+        let configured = Config {
+            tt_brake_gain: Some(3.0),
+            tt_nudge_gain: Some(1.5),
+            tt_brake_curve_exponent: 2.0,
+            tt_nudge_curve_exponent: 0.5,
+            ..legacy
+        };
+        let reloaded: Config = serde_json::from_slice(&serde_json::to_vec(&configured)?)?;
+        reloaded.validate()?;
+        assert_eq!(reloaded, configured);
+        let inherited: Config = serde_json::from_str(
+            r#"{"tt_pitch_bend_gain":5,"tt_brake_gain":null,"tt_nudge_gain":null}"#,
+        )?;
+        assert_eq!(inherited, legacy);
+        for (brake, nudge, shape) in [(0.1, 0.1, 0.25), (20.0, 10.0, 4.0)] {
+            Config {
+                tt_brake_gain: Some(brake),
+                tt_nudge_gain: Some(nudge),
+                tt_brake_curve_exponent: shape,
+                tt_nudge_curve_exponent: shape,
+                ..legacy
+            }
+            .validate()?;
+        }
+        for input in [
+            r#"{"tt_brake_gain":0.09}"#,
+            r#"{"tt_brake_gain":20.1}"#,
+            r#"{"tt_nudge_gain":0.09}"#,
+            r#"{"tt_nudge_gain":10.1}"#,
+            r#"{"tt_brake_curve_exponent":0.24}"#,
+            r#"{"tt_brake_curve_exponent":4.01}"#,
+            r#"{"tt_nudge_curve_exponent":0.24}"#,
+            r#"{"tt_nudge_curve_exponent":4.01}"#,
+        ] {
+            assert!(serde_json::from_str::<Config>(input)?.validate().is_err());
+        }
+        for input in [
+            r#"{"tt_brake_gain":true}"#,
+            r#"{"tt_nudge_gain":"2"}"#,
+            r#"{"tt_brake_curve_exponent":null}"#,
+            r#"{"tt_nudge_curve_exponent":false}"#,
+        ] {
+            assert!(serde_json::from_str::<Config>(input).is_err());
+        }
+        for value in [f64::NAN, f64::INFINITY] {
+            for config in [
+                Config {
+                    tt_brake_gain: Some(value),
+                    ..legacy
+                },
+                Config {
+                    tt_nudge_gain: Some(value),
+                    ..legacy
+                },
+                Config {
+                    tt_brake_curve_exponent: value,
+                    ..legacy
+                },
+                Config {
+                    tt_nudge_curve_exponent: value,
+                    ..legacy
+                },
+            ] {
+                assert!(config.validate().is_err());
+            }
         }
         Ok(())
     }

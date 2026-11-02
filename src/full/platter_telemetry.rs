@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 
-use super::{Translator, platter_bend};
+use super::{Translator, jog, platter_bend};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -69,8 +69,10 @@ impl Telemetry {
                 u32::from_le_bytes(report[offset + 4..offset + 8].try_into()?),
                 u32::from_le_bytes(report[offset..offset + 4].try_into()?),
                 now,
-                target_rpm,
-                1.0,
+                &jog::Config {
+                    platter_target_rpm: target_rpm,
+                    ..jog::DEFAULT
+                },
             )?;
         }
         Ok(())

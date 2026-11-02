@@ -1,5 +1,5 @@
 use super::*;
-use crate::full::{Control, Deck, feedback};
+use crate::full::{Control, Deck, feedback, jog};
 use anyhow::Context as _;
 use std::time::Duration;
 
@@ -101,12 +101,65 @@ fn tt_gain_scales_only_bend_without_changing_measured_rpm() -> anyhow::Result<()
 }
 
 #[test]
+fn independent_curves_shape_bend_in_both_directions_and_continue_linearly() -> anyhow::Result<()> {
+    // Explicit gains override legacy 5x independently; a complete 100ms window
+    // at 20, 30 or 75 RPM has exact integer travel, avoiding estimator rounding.
+    for side in 0..2 {
+        for (rpm_tenths, expected) in [(200, -144), (300, 805), (750, 3600)] {
+            let mut fixture = Fixture::new();
+            fixture.side = side;
+            fixture.translator.motor_enabled = [false; 2];
+            fixture.translator.motor_enabled[side] = true;
+            fixture.translator.jog_config = jog::Config {
+                platter_target_rpm: 25,
+                tt_pitch_bend_gain: 5.0,
+                tt_brake_gain: Some(3.0),
+                tt_nudge_gain: Some(1.5),
+                tt_brake_curve_exponent: 2.0,
+                tt_nudge_curve_exponent: 0.5,
+                ..jog::DEFAULT
+            };
+            fixture.feedback.loaded[side] = Some(true);
+            fixture.feedback.playing[side] = Some(true);
+            fixture.feedback.internal[side] = Some(true);
+            fixture.drive(250, 150)?;
+            fixture.drive(rpm_tenths, 100)?;
+            // Exactly one settled second through real decoding/routing:
+            // +/-5 RPM, gains3/1.5, shapes2/.5, 48 counts/s/RPM.
+            // At +50 RPM the shape factor stays1 rather than extrapolating it.
+            let output = fixture.drive(rpm_tenths, 500)?;
+            let channel = u8::try_from(side)?;
+            assert!(
+                output
+                    .iter()
+                    .all(|message| message[0] == 0xb0 | channel && message[1] == 4)
+            );
+            let total: i32 = output
+                .iter()
+                .map(|message| i32::from(message[2]) - 64)
+                .sum();
+            assert!(
+                (total - expected).abs() <= 1,
+                "side {side}, speed {rpm_tenths}: {total}, expected {expected}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn tt_gain_leaves_normal_jog_and_paused_scratch_unchanged() -> anyhow::Result<()> {
     for paused in [false, true] {
         let mut outputs = Vec::new();
         for gain in [1.0, 10.0] {
             let mut fixture = Fixture::new();
             fixture.translator.jog_config.tt_pitch_bend_gain = gain;
+            if gain > 1.0 {
+                fixture.translator.jog_config.tt_brake_gain = Some(20.0);
+                fixture.translator.jog_config.tt_nudge_gain = Some(0.1);
+                fixture.translator.jog_config.tt_brake_curve_exponent = 4.0;
+                fixture.translator.jog_config.tt_nudge_curve_exponent = 0.25;
+            }
             fixture.translator.motor_enabled[0] = paused;
             fixture.feedback.playing[0] = Some(!paused);
             outputs.push(fixture.drive(-120, 150)?);

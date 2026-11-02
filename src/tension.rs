@@ -41,11 +41,21 @@ impl TtDiagnosticState {
     }
 }
 
-fn should_log_tt_state(previous: Option<TtDiagnosticState>, current: TtDiagnosticState) -> bool {
-    previous.is_none_or(|previous| {
-        current.changed_since(previous)
-            || current.host_us.saturating_sub(previous.host_us) >= TT_DIAGNOSTIC_INTERVAL_US
-    })
+fn should_log_tt_info_state(
+    previous: Option<TtDiagnosticState>,
+    current: TtDiagnosticState,
+) -> bool {
+    previous.is_none_or(|previous| current.changed_since(previous))
+}
+
+fn should_log_tt_debug_state(
+    previous: Option<TtDiagnosticState>,
+    last_debug_us: Option<u64>,
+    current: TtDiagnosticState,
+) -> bool {
+    previous.is_none_or(|previous| current.changed_since(previous))
+        || last_debug_us
+            .is_none_or(|last| current.host_us.saturating_sub(last) >= TT_DIAGNOSTIC_INTERVAL_US)
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -103,6 +113,7 @@ pub struct Engine {
     playback_state: PlaybackState,
     sensor_seen_us: [u64; 2],
     last_tt_diagnostic: Option<TtDiagnosticState>,
+    last_tt_debug_us: Option<u64>,
     last_regulator_diagnostic: [Option<(u64, playback::Mode)>; 2],
 }
 
@@ -161,6 +172,7 @@ impl Engine {
             playback_state: PlaybackState::default(),
             sensor_seen_us: [0; 2],
             last_tt_diagnostic: None,
+            last_tt_debug_us: None,
             last_regulator_diagnostic: [None; 2],
         }
     }
@@ -387,8 +399,24 @@ impl Engine {
                 continuous: self.playback_state.continuous,
                 requested_force: torque,
             };
-            if should_log_tt_state(self.last_tt_diagnostic, current) {
+            if should_log_tt_info_state(self.last_tt_diagnostic, current) {
                 tracing::info!(
+                    host_us = current.host_us,
+                    touch = ?current.touch,
+                    enabled = ?current.enabled,
+                    owned = ?current.owned,
+                    continuous = ?current.continuous,
+                    "MOTOR_TT_STATE"
+                );
+            }
+            if tracing::enabled!(tracing::Level::DEBUG)
+                && should_log_tt_debug_state(
+                    self.last_tt_diagnostic,
+                    self.last_tt_debug_us,
+                    current,
+                )
+            {
+                tracing::debug!(
                     host_us = current.host_us,
                     touch = ?current.touch,
                     enabled = ?current.enabled,
@@ -397,8 +425,9 @@ impl Engine {
                     requested_force = ?current.requested_force,
                     "MOTOR_TT_STATE"
                 );
-                self.last_tt_diagnostic = Some(current);
+                self.last_tt_debug_us = Some(current.host_us);
             }
+            self.last_tt_diagnostic = Some(current);
         }
         Ok(report_for(torque))
     }
@@ -434,33 +463,59 @@ mod diagnostic_tests {
     }
 
     #[test]
-    fn tt_diagnostic_rate_limit_uses_fixed_host_times_and_state_edges() {
+    fn tt_info_diagnostic_requires_initial_state_or_boolean_transition() {
         let first = state(1_000, [false; 2], [100, 200]);
-        assert!(should_log_tt_state(None, first));
-        assert!(!should_log_tt_state(
+        assert!(should_log_tt_info_state(None, first));
+        assert!(!should_log_tt_info_state(
             Some(first),
             state(2_000, [false; 2], [101, 200])
         ));
-        assert!(!should_log_tt_state(
+        assert!(!should_log_tt_info_state(
             Some(first),
             state(100_999, [false; 2], [100, 200])
         ));
-        assert!(should_log_tt_state(
-            Some(first),
-            state(101_000, [false; 2], [100, 200])
-        ));
-        assert!(should_log_tt_state(
+        assert!(
+            !should_log_tt_info_state(Some(first), state(101_000, [false; 2], [100, 200])),
+            "unchanged TT booleans must not generate periodic INFO state events"
+        );
+        assert!(should_log_tt_info_state(
             Some(first),
             state(2_000, [true, false], [100, 200])
         ));
         let mut authorized = first;
         authorized.enabled[1] = true;
-        assert!(should_log_tt_state(Some(first), authorized));
+        assert!(should_log_tt_info_state(Some(first), authorized));
         let mut owned = first;
         owned.owned[0] = true;
-        assert!(should_log_tt_state(Some(first), owned));
+        assert!(should_log_tt_info_state(Some(first), owned));
         let mut continuous = first;
         continuous.continuous[0] = true;
-        assert!(should_log_tt_state(Some(first), continuous));
+        assert!(should_log_tt_info_state(Some(first), continuous));
+    }
+
+    #[test]
+    fn tt_debug_diagnostic_keeps_bounded_force_telemetry_and_state_edges() {
+        let first = state(1_000, [false; 2], [100, 200]);
+        assert!(should_log_tt_debug_state(None, None, first));
+        assert!(!should_log_tt_debug_state(
+            Some(first),
+            Some(first.host_us),
+            state(100_999, [false; 2], [100, 200])
+        ));
+        assert!(should_log_tt_debug_state(
+            Some(first),
+            Some(first.host_us),
+            state(101_000, [false; 2], [100, 200])
+        ));
+        assert!(!should_log_tt_debug_state(
+            Some(first),
+            Some(first.host_us),
+            state(2_000, [false; 2], [101, 200])
+        ));
+        assert!(should_log_tt_debug_state(
+            Some(first),
+            Some(first.host_us),
+            state(2_000, [true, false], [100, 200])
+        ));
     }
 }

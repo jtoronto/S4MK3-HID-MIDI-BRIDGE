@@ -6,6 +6,8 @@ use anyhow::Context as _;
 use num_traits::ToPrimitive as _;
 use s4mk3_hid_midi_bridge::{jog::decode::FRESHNESS_US, tension::COUNTS_PER_REVOLUTION};
 
+use super::jog;
+
 pub(super) struct Bend {
     deck: Option<u8>,
     previous: Option<(u32, u32, Duration)>,
@@ -68,8 +70,7 @@ impl Bend {
         counter: u32,
         timer: u32,
         now: Duration,
-        target_rpm: u16,
-        gain: f64,
+        preferences: &jog::Config,
     ) -> anyhow::Result<Option<(i32, f64)>> {
         self.delta = None;
         if self.deck != Some(deck) {
@@ -120,7 +121,8 @@ impl Bend {
         let window_counts = i32::from_le_bytes(counter.wrapping_sub(first_counter).to_le_bytes());
         let rpm = f64::from(window_counts) / (seconds * counts_per_rpm);
         self.rpm = Some(rpm);
-        let error = rpm - f64::from(target_rpm);
+        let target = f64::from(preferences.platter_target_rpm);
+        let error = rpm - target;
         if !self.qualified {
             self.qualified = error.abs() <= 2.25 + 1e-9;
             return Ok(None);
@@ -138,13 +140,26 @@ impl Bend {
         }
         // Integrate only this fresh report's time, not the whole rolling window.
         // This preserves relative travel without batching 100 ms into one burst.
-        let direction_gain = if error < 0.0 { 2.0 } else { 1.0 };
-        self.residual += error
-            * weight
-            * direction_gain
-            * gain
-            * counts_per_rpm
-            * (f64::from(ticks) / 100_000_000.0);
+        let (gain, exponent) = if error < 0.0 {
+            (
+                preferences
+                    .tt_brake_gain
+                    .unwrap_or(2.0 * preferences.tt_pitch_bend_gain),
+                preferences.tt_brake_curve_exponent,
+            )
+        } else {
+            (
+                preferences
+                    .tt_nudge_gain
+                    .unwrap_or(preferences.tt_pitch_bend_gain),
+                preferences.tt_nudge_curve_exponent,
+            )
+        };
+        // Shape only the configured target-speed span; retain linear continuation
+        // beyond it instead of raising extreme high-speed inputs to a power.
+        let shape = (error.abs() / target).min(1.0).powf(exponent - 1.0);
+        self.residual +=
+            error * weight * gain * shape * counts_per_rpm * (f64::from(ticks) / 100_000_000.0);
         let steps = self
             .residual
             .trunc()
@@ -188,8 +203,10 @@ mod tests {
                         counter,
                         index * 200_000,
                         Duration::from_micros(u64::from(index) * 2000),
-                        33,
-                        gain,
+                        &jog::Config {
+                            tt_pitch_bend_gain: gain,
+                            ..jog::DEFAULT
+                        },
                     )?;
                     if (200..300).contains(&index) {
                         deliberate += output.map_or(0, |(steps, _)| steps.abs());
@@ -224,8 +241,10 @@ mod tests {
                     counter,
                     index * 200_000,
                     Duration::from_micros(u64::from(index) * 2000),
-                    25,
-                    1.0,
+                    &jog::Config {
+                        platter_target_rpm: 25,
+                        ..jog::DEFAULT
+                    },
                 )?;
                 if index >= 400 {
                     total += output.map_or(0, |(steps, _)| steps);
@@ -256,8 +275,7 @@ mod tests {
                     counter,
                     index * 200_000,
                     Duration::from_micros(u64::from(index) * 2000),
-                    33,
-                    1.0,
+                    &jog::DEFAULT,
                 )?;
                 if index < 150 {
                     assert!(correction.is_none(), "quiet baseline must not bend");
@@ -294,8 +312,7 @@ mod tests {
                     counter,
                     index * 200_000,
                     Duration::from_micros(u64::from(index) * 2000),
-                    33,
-                    1.0,
+                    &jog::DEFAULT,
                 )?;
                 if !(250..950).contains(&index) {
                     assert!(movement.is_none());
@@ -333,8 +350,7 @@ mod tests {
                 counter,
                 timer,
                 Duration::from_millis(u64::from(index) * 10),
-                33,
-                1.0,
+                &jog::DEFAULT,
             )?);
         }
         // Then only positive deviations, not wrap-sized jumps, are emitted.
@@ -366,8 +382,7 @@ mod tests {
                     counter,
                     index * 200_000,
                     Duration::from_micros(u64::from(index) * 2000),
-                    33,
-                    1.0,
+                    &jog::DEFAULT,
                 )? {
                     output.push((phase, sample, steps));
                 }
@@ -406,29 +421,40 @@ mod tests {
                     index * 20,
                     index * 1_000_000,
                     Duration::from_millis(u64::from(index) * 10),
-                    33,
-                    1.0,
+                    &jog::DEFAULT,
                 )?
                 .is_none()
             );
         }
         // When a duplicate cannot refresh freshness, then a new deck takes over.
         assert!(
-            bend.observe(0, 160, 8_000_000, Duration::from_millis(120), 33, 1.0)?
+            bend.observe(0, 160, 8_000_000, Duration::from_millis(120), &jog::DEFAULT)?
                 .is_none()
         );
         assert!(
-            bend.observe(0, 180, 9_000_000, Duration::from_millis(140), 33, 1.0)?
+            bend.observe(0, 180, 9_000_000, Duration::from_millis(140), &jog::DEFAULT)?
                 .is_none()
         );
         assert!(
-            bend.observe(2, 200, 10_000_000, Duration::from_millis(150), 33, 1.0)?
-                .is_none()
+            bend.observe(
+                2,
+                200,
+                10_000_000,
+                Duration::from_millis(150),
+                &jog::DEFAULT
+            )?
+            .is_none()
         );
         // Then neither the stale window nor the old deck's counts produce a bend.
         assert!(
-            bend.observe(2, 220, 11_000_000, Duration::from_millis(160), 33, 1.0)?
-                .is_none()
+            bend.observe(
+                2,
+                220,
+                11_000_000,
+                Duration::from_millis(160),
+                &jog::DEFAULT
+            )?
+            .is_none()
         );
         Ok(())
     }

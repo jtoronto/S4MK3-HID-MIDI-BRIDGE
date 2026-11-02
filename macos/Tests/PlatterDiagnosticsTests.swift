@@ -132,13 +132,13 @@ final class PlatterDiagnosticsTests: XCTestCase {
         var didFulfillLog = false
         var sawStopping = false
 
-        let platterSub = model.$platterDiagnostics.sink { state in
+        let platterSub = model.livePlatter.$state.sink { state in
             if !didFulfillPlatter, state.latest != nil {
                 didFulfillPlatter = true
                 platterReceived.fulfill()
             }
         }
-        let logSub = model.$log.sink { text in
+        let logSub = model.logOutput.$text.sink { text in
             if !didFulfillLog, text.contains("ORDINARY_READY") {
                 didFulfillLog = true
                 ordinaryLogged.fulfill()

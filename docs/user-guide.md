@@ -556,13 +556,13 @@ A settled 32 RPM wheel at a 33 RPM target can therefore qualify without first
 crossing target speed. Bend output is zero within 2.25 RPM of target on both
 entry and return, with no active-gesture hysteresis or leftover fractional
 correction. Outside that band, output rises smoothly over the next 1 RPM,
-reaching the existing full-error response at 3.25 RPM deviation.
+reaching the selected curve's full onset weight at 3.25 RPM deviation.
 Slower rotation sends negative corrections; faster rotation sends positive
 corrections. The nominal rotation itself is subtracted.
-The current stronger-braking test doubles negative motorized corrections while
-leaving forward nudging at its original strength. This is a command multiplier,
-not a guaranteed percentage of audible slowdown. Manual TT-off jog and top-touch
-Scratch keep their existing response.
+Imported preferences retain the earlier stronger-braking response. The current
+source adds independent braking and nudge controls, described below. These tune
+MIDI commands, not a guaranteed percentage of audible slowdown. Manual TT-off
+jog and top-touch Scratch keep their existing response.
 With TT selected and Vinyl off, slowing to the **TT pitch-bend floor**
 switches from CC 4 to held Scratch mode and raw relative CC 5 movement.
 The initial diagnostic floor is **50% of target RPM** (16.5 RPM at 33 RPM);
@@ -576,7 +576,7 @@ The floor controls only the lower-speed Scratch entry. A forward nudge stays
 on pitch bend; there is no automatic upper-speed Scratch handoff. Explicit
 Vinyl-on top touch still selects Scratch. The default floor remains 50%, and
 installing this build preserves your saved floor and gain rather than resetting
-them. Keep your current floor for the first comparison and start with gain 1x.
+them. Keep your current floor and response for the first comparison.
 See the [diagnostic calibration and attended checks](tt-speed-scratch-diagnostic.md).
 There is no absolute CC 8 position stream in this test path. Ordinary top-touch
 Scratch remains on relative CC 5.
@@ -605,19 +605,50 @@ Debug is needed only for the separate motor diagnostic capture.
 - Stale or stopped indicators do not retain old numbers as current readings.
   A sensor gap clears current RPM; missing telemetry also expires the display.
 
-**TT pitch-bend gain** in Jog's motorized playback settings controls the
-bridge's RPM-to-MIDI strength, from **0.1x to 10x**, default **1x**. Beyond the
-smooth onset, 1x retains the existing full-error response and stronger braking.
-It scales both slowing and speeding TT bend output, not normal jog, Scratch,
-motor force or measured RPM.
-The floor still only selects when to hand off to Scratch. Save preferences and
-restart the bridge to apply gain changes; no mapping export is needed.
+#### Adjust braking and nudge separately
+
+Current-source builds show **Braking (slow down)** and **Nudge (speed up)** in
+**Jog > Testing: Motorized playback**. Each has **Strength**, **Shape**, and a
+graph that updates as you edit:
+
+- **Strength** changes the amount of MIDI bend: 0.1-20x for braking, 0.1-10x
+  for nudging. Lower nudge strength without changing braking.
+- **Shape 1** keeps the existing response. Values above 1 make small movements
+  gentler relative to deep movements; values below 1 make them stronger.
+  The range is 0.25-4.
+- The horizontal axis is physical speed deviation from the target. The vertical
+  extent is the displayed MIDI count rate, not an audio-speed percentage.
+  Each graph scales independently, so compare the count labels as well as shape.
+  The shaded area is the fixed 2.25 RPM quiet band.
+
+The preview is the bend law before whole-count quantization and Scratch routing.
+Below the saved floor with Vinyl off, Scratch takes over instead of sending the
+braking preview's CC4 commands.
+
+Existing settings load with the same response. The old shared gain included an
+extra 2x braking weight, now included in the displayed braking strength. For
+example, a saved **5x** loads as **10x braking / 5x nudge**, both Shape 1.
+This display change does not double the old braking response again.
+New installations start at **2x braking / 1x nudge**, both Shape 1.
+
+To soften nudging, leave braking unchanged, reduce only nudge Strength, then use
+**Save and restart**. Let the wheel settle and repeat the same gentle nudge.
+Change Shape separately if you want a gentler onset relative to larger nudges.
+Saving while stopped applies on the next Start; the controls do not change a
+running bridge until applied. No mapping export is needed.
+After saving these curve settings, keep using a curve-capable build; older
+diagnostic apps can reject the added preference fields.
+
+These settings change TT bend only, not normal jog, Scratch, motor force,
+measured RPM, the quiet band or the lower-speed Scratch handoff floor. The graph
+updates immediately; the actual feel still needs a controller comparison.
 
 For tuning, let the wheel settle, confirm **Bend**, then brake gently and watch
 RPM and Bend output together. The filter stays quiet within 2.25 RPM even
 after a bend has started. To probe Djay's minimum playback-speed
 response, keep target RPM, floor and the selected mapping fixed, then compare
-gain **1x, 2x and 4x** at the same measured braking RPM. Higher gain should
+braking Strength **2x, 4x and 8x**, with Shape 1, at the same measured RPM.
+These correspond to the earlier shared gains 1x, 2x and 4x. Higher strength should
 increase negative MIDI output; whether audible speed continues to decrease
 must be measured separately. A larger diagnostic number alone does not
 establish Djay's response limit.
@@ -654,6 +685,12 @@ actual configuration loaded by each bridge launch, not unsaved editor values.
 `MOTOR_TT_STATE` records touch, playback authorization, ownership and requested
 force; it does not measure applied torque. There is no runtime
 `MOTOR_SCRATCH_MODE` emitter.
+At **Normal** log detail, TT-state records appear at startup and when touch,
+authorization or ownership flags change, rather than repeating unchanged idle
+state. **Debug** retains periodic TT-state samples for motor captures.
+Live platter readings and log output update only their Diagnostics views;
+they do not refresh the preference editors. Diagnostics rendering is suspended
+while another Settings tab is selected.
 
 The RPM-investigation build also captures `MOTOR_REGULATOR`: sampled encoder
 counts, sensor timing, motor-speed measurements, regulation/assistance mode and

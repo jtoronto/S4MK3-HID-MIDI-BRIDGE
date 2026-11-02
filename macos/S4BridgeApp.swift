@@ -166,6 +166,10 @@ struct JogPreferences: Codable, Equatable {
     var ttVinylEnabledAtStartup = false
     var ttPitchBendFloorPercent = 50
     var ttPitchBendGain = 1.0
+    var ttBrakeGain: Double?
+    var ttNudgeGain: Double?
+    var ttBrakeCurveExponent = 1.0
+    var ttNudgeCurveExponent = 1.0
     var platterTargetRpm = 33
     var platterPositionSensitivity = 14.0
     var platterMaxForce = 20000
@@ -177,6 +181,16 @@ struct JogPreferences: Codable, Equatable {
     var platterStartupForceRisePerSecond = 0
     var platterStartupMs = 200
     var platterOverspeedLimitRpm = 0
+
+    var effectiveTTBrakeGain: Double {
+        ttBrakeGain ?? (2.0 * ttPitchBendGain)
+    }
+
+    var effectiveTTNudgeGain: Double {
+        ttNudgeGain ?? ttPitchBendGain
+    }
+
+    private static let optionalGainKeys: Set<String> = ["tt_brake_gain", "tt_nudge_gain"]
 
     private static let integerFields: [(key: String, label: String, range: ClosedRange<Int>)] = [
         ("scratch_reaction", "Scratch reaction", 0...150),
@@ -201,7 +215,7 @@ struct JogPreferences: Codable, Equatable {
               let overrides = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AppError.invalid("Jog preferences must be a JSON object.")
         }
-        let allowed = Set(base.keys).union(defaultValues.keys)
+        let allowed = Set(base.keys).union(defaultValues.keys).union(optionalGainKeys)
         for object in [base, overrides] {
             let unknown = Set(object.keys).subtracting(allowed)
             guard unknown.isEmpty else {
@@ -261,6 +275,24 @@ struct JogPreferences: Codable, Equatable {
         }
         guard ttPitchBendGain.isFinite, (0.1...10).contains(ttPitchBendGain) else {
             throw AppError.invalid("TT pitch-bend gain must be between 0.1 and 10.")
+        }
+        if let ttBrakeGain {
+            guard ttBrakeGain.isFinite, (0.1...20).contains(ttBrakeGain) else {
+                throw AppError.invalid("TT braking strength must be between 0.1 and 20.")
+            }
+        }
+        if let ttNudgeGain {
+            guard ttNudgeGain.isFinite, (0.1...10).contains(ttNudgeGain) else {
+                throw AppError.invalid("TT nudge strength must be between 0.1 and 10.")
+            }
+        }
+        for (exponent, label) in [
+            (ttBrakeCurveExponent, "TT braking curve shape"),
+            (ttNudgeCurveExponent, "TT nudge curve shape")
+        ] {
+            guard exponent.isFinite, (0.25...4.0).contains(exponent) else {
+                throw AppError.invalid("\(label) must be between 0.25 and 4.")
+            }
         }
         guard (1...45).contains(platterTargetRpm) else {
             throw AppError.invalid("Platter target RPM must be an integer from 1 to 45.")
@@ -374,14 +406,26 @@ final class OutputBuffer: @unchecked Sendable {
 }
 
 @MainActor
+final class BridgeLog: ObservableObject {
+    @Published var text = ""
+}
+
+@MainActor
+final class LivePlatterDiagnostics: ObservableObject {
+    @Published var state = PlatterDiagnosticsState()
+}
+
+@MainActor
 final class BridgeController: ObservableObject {
     @Published var run = RunPreferences()
     @Published var leds: LedPreferences
     @Published var jog: JogPreferences
     @Published var tension: TensionPreferences
     @Published private(set) var state: BridgeState = .stopped
-    @Published private(set) var platterDiagnostics = PlatterDiagnosticsState()
-    @Published private(set) var log = ""
+    let livePlatter = LivePlatterDiagnostics()
+    let logOutput = BridgeLog()
+    var platterDiagnostics: PlatterDiagnosticsState { livePlatter.state }
+    var log: String { logOutput.text }
     @Published private(set) var motorDiagnosticURL: URL?
     @Published private(set) var isCapturingMotorDiagnostic = false
     @Published private(set) var message = ""
@@ -488,7 +532,7 @@ final class BridgeController: ObservableObject {
     }
 
     func appendLog(_ text: String) {
-        log = String((log + text + "\n").suffix(60000))
+        logOutput.text = String((log + text + "\n").suffix(60000))
         guard motorDiagnosticFileHandle != nil else { return }
         let capturedLines = text.split(whereSeparator: \.isNewline).filter { line in
             Self.motorDiagnosticEvents.contains { line.contains($0) }
@@ -511,7 +555,8 @@ final class BridgeController: ObservableObject {
     }
 
     func acceptPlatterStatus(_ line: String, at now: Date = Date()) {
-        guard platterDiagnostics.acceptLine(line, at: now) else { return }
+        guard let snapshot = PlatterStatusSnapshot.parseLine(line) else { return }
+        livePlatter.state.accept(snapshot, at: now)
         writeMotorDiagnosticLines([line])
     }
 
@@ -687,7 +732,7 @@ final class BridgeController: ObservableObject {
         restartRequested = false
         errorMessage = ""
         message = ""
-        platterDiagnostics.reset()
+        livePlatter.state.reset()
         process = child
         state = diagnostic ? .checking : .starting
         let output = OutputBuffer()
@@ -716,7 +761,7 @@ final class BridgeController: ObservableObject {
                 process = nil
                 activeLogLevel = nil
                 activeProfile = nil
-                platterDiagnostics.reset()
+                livePlatter.state.reset()
                 closeScreenInput()
                 try input?.fileHandleForReading.close()
                 try pipe.fileHandleForWriting.close()
@@ -754,7 +799,7 @@ final class BridgeController: ObservableObject {
         restartRequested = restart
         stopRequested = true
         state = .stopping
-        platterDiagnostics.reset()
+        livePlatter.state.reset()
         guard child.isRunning else { return }
         if kill(child.processIdentifier, SIGINT) != 0 {
             restartRequested = false
@@ -849,7 +894,7 @@ final class BridgeController: ObservableObject {
         process = nil
         activeLogLevel = nil
         activeProfile = nil
-        platterDiagnostics.reset()
+        livePlatter.state.reset()
         closeScreenInput()
         restartRequested = false
         screens.beginOperation()
@@ -1167,7 +1212,13 @@ struct BridgeSettingsView: View {
                 jogTab.tabItem { Label("Jog", systemImage: "rotate.right") }.tag(SettingsTab.jog)
                 ledTab.tabItem { Label("LEDs", systemImage: "lightbulb") }.tag(SettingsTab.leds)
                 paletteTab.tabItem { Label("Palette", systemImage: "paintpalette") }.tag(SettingsTab.palette)
-                diagnosticsTab.tabItem { Label("Diagnostics", systemImage: "terminal") }.tag(SettingsTab.diagnostics)
+                Group {
+                    if selectedTab == .diagnostics {
+                        diagnosticsTab
+                    } else {
+                        Color.clear
+                    }
+                }.tabItem { Label("Diagnostics", systemImage: "terminal") }.tag(SettingsTab.diagnostics)
             }.padding(.horizontal, 16)
             HStack {
                 Text(controller.message).font(.caption).foregroundColor(.secondary)
@@ -1293,9 +1344,7 @@ struct BridgeSettingsView: View {
                     NumberRow(title: "TT pitch-bend floor", value: $controller.jog.ttPitchBendFloorPercent, range: 1...95, unit: "%")
                     Text("Testing: falling below this floor hands off to Scratch. This provisional diagnostic bound is not a verified CC 4 limit.")
                         .font(.caption).foregroundColor(.secondary)
-                    DecimalRow(title: "TT pitch-bend gain", value: $controller.jog.ttPitchBendGain, range: 0.1...10, unit: "x")
-                    Text("1x keeps the current response. Scales TT bend MIDI only, not normal jog, Scratch, motor force or the handoff floor. Save and restart to apply; no mapping export is needed.")
-                        .font(.caption).foregroundColor(.secondary)
+                    TTResponseCurvesSectionView(jog: $controller.jog)
                     NumberRow(title: "Target speed", value: $controller.jog.platterTargetRpm, range: 1...45, unit: "RPM")
                     DecimalRow(title: "Absolute platter sensitivity", value: $controller.jog.platterPositionSensitivity, range: 0.1...100, unit: "%")
                     NumberRow(title: "Maximum force", value: $controller.jog.platterMaxForce, range: 1...25000, step: 500, unit: "force units")
@@ -1451,8 +1500,8 @@ struct BridgeSettingsView: View {
                 .frame(maxWidth: 240)
                 Toggle("Raw HID reports", isOn: $controller.run.rawReports)
             }
-            PlatterDiagnosticsGroupView(
-                diagnostics: controller.platterDiagnostics,
+            LivePlatterDiagnosticsView(
+                model: controller.livePlatter,
                 bridgeRunning: controller.state == .running
             )
             HStack {
@@ -1483,13 +1532,7 @@ struct BridgeSettingsView: View {
             }
             Text(controller.commandPreview).font(.system(.caption, design: .monospaced))
                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-            ScrollView([.vertical, .horizontal]) {
-                Text(controller.log.isEmpty ? "No bridge output yet." : controller.log)
-                    .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .topLeading).padding(12)
-            }
-            .background(Color(NSColor.textBackgroundColor))
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.25)))
+            BridgeLogView(model: controller.logOutput)
         }.padding(16)
     }
 
@@ -1506,6 +1549,29 @@ struct BridgeSettingsView: View {
         alert.addButton(withTitle: "Reset")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn { controller.resetPreferences() }
+    }
+}
+
+struct LivePlatterDiagnosticsView: View {
+    @ObservedObject var model: LivePlatterDiagnostics
+    let bridgeRunning: Bool
+
+    var body: some View {
+        PlatterDiagnosticsGroupView(diagnostics: model.state, bridgeRunning: bridgeRunning)
+    }
+}
+
+struct BridgeLogView: View {
+    @ObservedObject var model: BridgeLog
+
+    var body: some View {
+        ScrollView([.vertical, .horizontal]) {
+            Text(model.text.isEmpty ? "No bridge output yet." : model.text)
+                .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .topLeading).padding(12)
+        }
+        .background(Color(NSColor.textBackgroundColor))
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.25)))
     }
 }
 
