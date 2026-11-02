@@ -407,7 +407,27 @@ final class OutputBuffer: @unchecked Sendable {
 
 @MainActor
 final class BridgeLog: ObservableObject {
-    @Published var text = ""
+    struct Update {
+        let removedUTF16Count: Int
+        let appendedText: String
+    }
+
+    @Published private(set) var text = ""
+    let updates = PassthroughSubject<Update, Never>()
+
+    func append(_ value: String) {
+        let previous = text
+        let addition = value + "\n"
+        let combined = previous + addition
+        let excess = max(0, combined.count - 60000)
+        let removed = String(previous.prefix(excess))
+        let skippedInput = max(0, excess - previous.count)
+        text = String(combined.suffix(60000))
+        updates.send(Update(
+            removedUTF16Count: removed.utf16.count,
+            appendedText: String(addition.dropFirst(skippedInput))
+        ))
+    }
 }
 
 @MainActor
@@ -532,7 +552,7 @@ final class BridgeController: ObservableObject {
     }
 
     func appendLog(_ text: String) {
-        logOutput.text = String((log + text + "\n").suffix(60000))
+        logOutput.append(text)
         guard motorDiagnosticFileHandle != nil else { return }
         let capturedLines = text.split(whereSeparator: \.isNewline).filter { line in
             Self.motorDiagnosticEvents.contains { line.contains($0) }
@@ -1562,16 +1582,101 @@ struct LivePlatterDiagnosticsView: View {
 }
 
 struct BridgeLogView: View {
-    @ObservedObject var model: BridgeLog
+    let model: BridgeLog
 
     var body: some View {
-        ScrollView([.vertical, .horizontal]) {
-            Text(model.text.isEmpty ? "No bridge output yet." : model.text)
-                .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .topLeading).padding(12)
+        IncrementalBridgeLogView(model: model)
+            .background(Color(NSColor.textBackgroundColor))
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.25)))
+    }
+}
+
+private struct IncrementalBridgeLogView: NSViewRepresentable {
+    let model: BridgeLog
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = true
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = NSColor.textBackgroundColor
+
+        let textView = NSTextView(frame: scrollView.contentView.bounds)
+        let font = NSFont.monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        textView.font = font
+        textView.textColor = model.text.isEmpty ? .secondaryLabelColor : .labelColor
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isRichText = false
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: 12, height: 12)
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.textContainer?.widthTracksTextView = false
+
+        let placeholder = "No bridge output yet."
+        let initialText = model.text.isEmpty ? placeholder : model.text
+        let initialColor = model.text.isEmpty ? NSColor.secondaryLabelColor : NSColor.labelColor
+        textView.textStorage?.setAttributedString(NSAttributedString(
+            string: initialText,
+            attributes: [.font: font, .foregroundColor: initialColor]
+        ))
+        scrollView.documentView = textView
+
+        let coordinator = context.coordinator
+        coordinator.textView = textView
+        coordinator.isShowingPlaceholder = model.text.isEmpty
+        coordinator.subscription = model.updates.sink { [weak coordinator] update in
+            coordinator?.apply(update)
         }
-        .background(Color(NSColor.textBackgroundColor))
-        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.25)))
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {}
+
+    @MainActor
+    final class Coordinator {
+        weak var textView: NSTextView?
+        var isShowingPlaceholder = false
+        var subscription: AnyCancellable?
+
+        func apply(_ update: BridgeLog.Update) {
+            guard let textView, let storage = textView.textStorage else { return }
+            storage.beginEditing()
+            if isShowingPlaceholder {
+                storage.setAttributedString(NSAttributedString(string: ""))
+                isShowingPlaceholder = false
+            }
+            let removedCount = min(update.removedUTF16Count, storage.length)
+            if removedCount > 0 {
+                storage.deleteCharacters(in: NSRange(location: 0, length: removedCount))
+            }
+            if !update.appendedText.isEmpty {
+                let font = textView.font ?? NSFont.monospacedSystemFont(
+                    ofSize: NSFont.smallSystemFontSize,
+                    weight: .regular
+                )
+                storage.append(NSAttributedString(
+                    string: update.appendedText,
+                    attributes: [.font: font, .foregroundColor: NSColor.labelColor]
+                ))
+            }
+            storage.endEditing()
+        }
     }
 }
 

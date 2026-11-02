@@ -60,6 +60,108 @@ fn production_tt_handoff_keeps_assistance_through_stop_reverse_and_recovery() ->
 }
 
 #[test]
+fn newly_loaded_tt_track_can_touch_scratch_before_playback_feedback_without_motor_force()
+-> anyhow::Result<()> {
+    for (loaded, internal, thru, admitted) in [
+        (true, Some(true), false, true),
+        (false, Some(true), false, false),
+        (true, Some(false), false, false),
+        (true, None, false, false),
+        (true, Some(true), true, false),
+    ] {
+        // Real loaded/Internal feedback arrives without any playing message.
+        let mut steps: Vec<_> = replay::fixture()?.into_iter().take(80).collect();
+        steps.push(replay::Step {
+            frame: None,
+            feedback: vec![],
+            now_us: 200_001,
+            label: "manual_scratch_after_release",
+        });
+        for (index, step) in steps.iter_mut().enumerate() {
+            step.feedback.clear();
+            if let Some(frame) = &mut step.frame {
+                frame.buffers[0][17] &= !0x30;
+                if (10..70).contains(&index) {
+                    frame.buffers[0][17] |= 0x30;
+                }
+            }
+        }
+        for deck in 0_u8..2 {
+            steps[0]
+                .feedback
+                .extend([0x96, deck, if loaded { 127 } else { 0 }]);
+            steps[0]
+                .feedback
+                .extend([0xb0 | deck, 21, if thru { 127 } else { 0 }]);
+            if let Some(internal) = internal {
+                steps[0]
+                    .feedback
+                    .extend([0xb0 | deck, 22, if internal { 127 } else { 0 }]);
+            }
+        }
+        let records = RefCell::new(Vec::new());
+        replay::execute(full::jog::DEFAULT, steps, |record| {
+            records.borrow_mut().push(record);
+        })?;
+        let records = records.into_inner();
+        let midi: Vec<[u8; 3]> = records
+            .iter()
+            .filter(|record| record["event"] == "midi")
+            .map(|record| serde_json::from_value(record["message"].clone()))
+            .collect::<Result<_, _>>()?;
+        for channel in 0_u8..2 {
+            assert_eq!(
+                midi.iter()
+                    .filter(|message| **message == [0x90 | channel, 7, 127])
+                    .count(),
+                usize::from(admitted),
+                "first-load Scratch entry, loaded={loaded}, internal={internal:?}, thru={thru}"
+            );
+            assert_eq!(
+                midi.iter()
+                    .filter(|message| **message == [0x80 | channel, 7, 0])
+                    .count(),
+                usize::from(admitted)
+            );
+            assert_eq!(
+                midi.iter().any(|message| message[0] == 0xb0 | channel
+                    && message[1] == 5
+                    && message[2] > 64),
+                admitted
+            );
+        }
+        let motors: Vec<_> = records
+            .iter()
+            .filter(|record| record["event"] == "motor")
+            .collect();
+        assert!(!motors.is_empty());
+        for motor in motors {
+            let report: [u8; 11] = serde_json::from_value(motor["report"].clone())?;
+            assert_eq!(&report[4..6], &[0, 0]);
+            assert_eq!(&report[9..11], &[0, 0]);
+        }
+        let ready = records
+            .iter()
+            .find(|record| record["event"] == "platter_status" && record["now_us"] == 200_001)
+            .context("first-load diagnostic state after touch release")?;
+        for wheel in ready["status"]["wheels"]
+            .as_array()
+            .context("wheel states")?
+        {
+            assert_eq!(
+                wheel["mode"],
+                if admitted {
+                    "manual_scratch"
+                } else {
+                    "blocked"
+                }
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn production_tt_tail_rejects_noise_and_bounds_touched_motor_force() -> anyhow::Result<()> {
     let records = RefCell::new(Vec::new());
     replay::execute(

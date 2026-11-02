@@ -487,10 +487,10 @@ fn record_event(
             }
         }
         Event::Slider { name, value, .. } => {
-            info!(control = name, value, "SLIDER");
+            debug!(control = name, value, "SLIDER");
         }
         Event::Encoder { name, delta, .. } => {
-            info!(control = name, delta, "ENCODER");
+            debug!(control = name, delta, "ENCODER");
         }
         Event::EncoderFine { name, delta, .. } => {
             debug!(control = name, delta, "ENCODER_FINE");

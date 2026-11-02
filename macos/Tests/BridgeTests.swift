@@ -92,6 +92,54 @@ final class BridgeTests: XCTestCase {
     }
 
     @MainActor
+    func testBridgeLogEmitsAppendAndPrefixTrimUpdates() {
+        let model = BridgeLog()
+        var updates: [BridgeLog.Update] = []
+        let subscription = model.updates.sink { updates.append($0) }
+
+        model.append(String(repeating: "a", count: 40000))
+        model.append(String(repeating: "b", count: 30000))
+
+        let expected = String(repeating: "a", count: 29998) + "\n"
+            + String(repeating: "b", count: 30000) + "\n"
+        XCTAssertEqual(model.text, expected)
+        XCTAssertEqual(updates.count, 2)
+        XCTAssertEqual(updates[0].removedUTF16Count, 0)
+        XCTAssertEqual(updates[0].appendedText, String(repeating: "a", count: 40000) + "\n")
+        XCTAssertEqual(updates[1].removedUTF16Count, 10002)
+        XCTAssertEqual(updates[1].appendedText, String(repeating: "b", count: 30000) + "\n")
+        withExtendedLifetime(subscription) {}
+
+        // Native text storage uses UTF-16 ranges, including Unicode track names
+        // and one incoming batch larger than the entire retained log.
+        for (prefix, incoming, expected) in [
+            (
+                String(repeating: "\u{1F3A7}", count: 40000),
+                String(repeating: "b", count: 30000),
+                String(repeating: "\u{1F3A7}", count: 29998) + "\n"
+                    + String(repeating: "b", count: 30000) + "\n"
+            ),
+            (
+                String(repeating: "a", count: 30000),
+                String(repeating: "\u{E9}", count: 70000),
+                String(repeating: "\u{E9}", count: 59999) + "\n"
+            )
+        ] {
+            let model = BridgeLog()
+            let displayed = NSMutableString(string: "")
+            let subscription = model.updates.sink { update in
+                displayed.deleteCharacters(in: NSRange(location: 0, length: update.removedUTF16Count))
+                displayed.append(update.appendedText)
+            }
+            model.append(prefix)
+            model.append(incoming)
+            XCTAssertEqual(model.text, expected)
+            XCTAssertTrue((displayed as String) == expected, "Incremental UTF-16 log differs from the expected retained text")
+            withExtendedLifetime(subscription) {}
+        }
+    }
+
+    @MainActor
     func testDiagnosticTrafficDoesNotInvalidateSettings() throws {
         let fixture = try makeFixture()
         let model = try testController(resourceURL: fixture, supportURL: fixture.appendingPathComponent("support"))

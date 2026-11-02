@@ -422,6 +422,16 @@ deck, not a press of Play. Install/select the newly generated mapping under
 a new filename: it adds explicit Internal-mode feedback required by this experiment.
 The selected deck must be loaded, playing and confirmed Internal, not THRU
 or DVS. Shift+jog seeks.
+In TT mode, hold Shift first, then touch and turn the top of the platter to seek.
+Holding Shift alone does not seek from the platter's powered or coasting rotation.
+Release the top to stop seeking, even if the platter is still turning.
+A gesture already held before Shift keeps its original function until release.
+On first loading an Internal track, touch and turn the platter top to Scratch
+even if Djay has not yet reported whether playback is running or paused.
+You do not need to press Play and Pause first. Diagnostics shows **Manual scratch**
+when this touch-only route is ready, and **Scratch** while touched.
+The motor stays neutral until actual playing feedback authorizes it; an unknown
+playback state is not treated as a confirmed pause.
 With TT selected and the loaded Internal deck confirmed paused, turning the
 platter moves the track in Scratch mode even with Vinyl off, without needing
 top-touch. The motor stays neutral while paused. Playback resumption restores
@@ -464,9 +474,10 @@ Haptic cue points remain unavailable.
 
 In **Jog > Backspin**:
 
-- **Detection** recognizes a sharp backward acceleration while you scratch in
-  Turntable mode. Ordinary scratch releases still return immediately to nudge.
-  JOG, Shift-seek and GRID gestures do not start backspin events.
+- **Detection** recognizes sharp backward acceleration during Scratch in Normal
+  Vinyl mode and in TT mode. TT also supports detection with Vinyl off, after
+  the speed-floor handoff has entered Scratch. Slow scratches do not get the
+  backspin speed increase. Bend/nudge, Shift-seek and GRID do not start events.
 - **Acceleration threshold** controls how hard a backward flick must be.
   Higher values need a sharper flick; lower values detect more easily.
   The starting value is **150000 counts/s^2**, using filtered wheel movement.
@@ -476,7 +487,8 @@ In **Jog > Backspin**:
   increase over **2.7%** gives an effective **3.7%** during the backspin.
   Keep the app's normal Scratch speed matched to the mapping selected in Djay.
 - **Motor assistance** is a separate, experimental option, **on by default
-  at 100% strength**.
+  at 100% strength**, for Normal mode only. TT keeps its existing playback motor
+  behavior; detecting a TT backspin does not add this separate assist pulse.
   **Motor assist strength** selects **0-100%** of the existing maximum, only
   for the wheel in a detected backspin. **100%** is the original maximum;
   **0%** bypasses the override, just like switching motor assistance off.
@@ -492,10 +504,16 @@ The wheel's screen shows **BACKSPIN** and its owning deck while detection is
 active, including before release. Use that indicator to spot unwanted
 detections before changing the threshold or adding speed.
 
-After release, movement stays on the deck that started the backspin, even if
-you select another deck. It ends when the wheel settles, reverses direction,
-or you touch it again. **Stop in the bridge app** also releases the scratch
-hold and clears motor force. MIDI movement is not invented after the platter stops.
+For a top-touch-owned backspin, released movement stays on its original deck,
+even if you select another deck. It ends when the wheel settles, reverses
+direction, or you touch it again.
+With TT Vinyl off, the speed-floor Scratch route keeps following real backward
+movement after release. Catching or stopping the wheel clears **BACKSPIN** and
+the extra speed, but Scratch can remain active under the usual TT speed-floor
+rules. Switching decks cancels that speed-owned gesture rather than applying
+it to the new deck. Normal forward-speed recovery returns to bend.
+**Stop in the bridge app** releases all scratch holds and clears motor force.
+MIDI movement is not invented after the platter stops.
 
 With motor assistance enabled, retouching, stopping/reversing the wheel or
 cancelling its mode ends the assist pulse early. The existing input-freshness
@@ -699,9 +717,15 @@ force; it does not measure applied torque. There is no runtime
 At **Normal** log detail, TT-state records appear at startup and when touch,
 authorization or ownership flags change, rather than repeating unchanged idle
 state. **Debug** retains periodic TT-state samples for motor captures.
+Routine slider values, encoder steps and successful screen-frame writes also
+require **Debug**. **Normal** keeps button/mode changes and errors without those
+continuous event streams. This changes logging, not MIDI or screen updates.
 Live platter readings and log output update only their Diagnostics views;
 they do not refresh the preference editors. Diagnostics rendering is suspended
 while another Settings tab is selected.
+The visible log updates incrementally rather than laying out its whole retained
+history for each new batch. **Copy log** still copies the most recent 60,000
+characters; full motor diagnostic captures retain their separate file.
 
 The RPM-investigation build also captures `MOTOR_REGULATOR`: sampled encoder
 counts, sensor timing, motor-speed measurements, regulation/assistance mode and

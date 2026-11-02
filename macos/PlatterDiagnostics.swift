@@ -7,6 +7,7 @@ enum PlatterRoutingMode: String, Codable, CaseIterable, Equatable, Sendable {
     case waiting
     case bend
     case scratch
+    case manualScratch = "manual_scratch"
     case pausedScratch = "paused_scratch"
     case blocked
     case stale
@@ -19,6 +20,7 @@ enum PlatterRoutingMode: String, Codable, CaseIterable, Equatable, Sendable {
         case .waiting: return "Waiting"
         case .bend: return "Bend"
         case .scratch: return "Scratch"
+        case .manualScratch: return "Manual scratch"
         case .pausedScratch: return "Paused scratch"
         case .blocked: return "Blocked"
         case .stale: return "Stale"

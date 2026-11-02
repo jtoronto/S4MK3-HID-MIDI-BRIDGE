@@ -16,7 +16,13 @@ impl Translator {
         self.motor_enabled[side] && self.playback_paused[usize::from(self.decks[side].channel())]
     }
 
+    pub(super) fn touch_scratch_tt(&self, side: usize) -> bool {
+        self.motor_enabled[side]
+            && self.playback_touch_scratch[usize::from(self.decks[side].channel())]
+    }
+
     pub(super) fn toggle_motor_mode(&mut self, side: usize) {
+        self.residuals[side] = 0.0;
         self.mode_vinyl[side][usize::from(self.motor_enabled[side])] = Some(self.vinyl[side]);
         self.motor_enabled[side] = !self.motor_enabled[side];
         self.vinyl[side] = self.mode_vinyl[side][usize::from(self.motor_enabled[side])]
@@ -32,6 +38,7 @@ impl Translator {
     fn end_motor_scratch(&mut self, side: usize, output: &mut Vec<[u8; 3]>) {
         if let Some(deck) = self.platter_scratch[side].take() {
             self.release(KEYS[side], output);
+            self.residuals[side] = 0.0;
             info!(
                 side,
                 deck = deck.channel() + 1,
@@ -122,6 +129,7 @@ impl Translator {
             }
             if let Some(owner) = self.platter_scratch[side] {
                 if let Some(steps) = self.platter_bend[side].movement() {
+                    let steps = self.jog_steps(side, f64::from(steps))?;
                     relative(
                         Address {
                             channel: owner.channel(),

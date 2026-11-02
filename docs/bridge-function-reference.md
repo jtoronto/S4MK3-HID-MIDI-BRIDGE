@@ -26,12 +26,25 @@ These changes use the existing generated mapping addresses.
 TT toggles motorized playback independently per physical side, initially off.
 Its lamp stays red across deck changes, bright when selected and dim when off,
 subject to the inactive-display preference.
+Untouched TT rotation is excluded from raw jog output even while Shift is held.
+Deliberate Shift-then-top-touch movement still emits jog seek CC 6 on the owning
+deck's channel; releasing the top suppresses subsequent coasting seek output.
+Normal-mode Shift+jog and held gesture/deck ownership are unchanged. GRID retains
+its separate route. This does not change the motor's existing Shift gate.
+See [Shift seek regression and validation limits](tt-shift-seek-validation.md).
 Current source also enables Scratch movement for a confirmed paused, loaded
 Internal deck in TT mode, independently of Vinyl and capacitive touch. This does
 not authorize motor force while paused. Physical touch retains its original
 Scratch owner through deck changes; fresh sensor deltas drive untouch-owned
 paused movement. Resume, mode cancellation and stale input release that
 synthetic Scratch owner and require a new bend baseline.
+For a newly loaded, confirmed Internal deck with playing feedback still unknown,
+TT also permits explicit top-touch Scratch with Vinyl off. This uses a separate
+`playback_touch_scratch` permission; `playback_paused` and motor authorization
+still require their actual feedback values. It does not create an untouch-owned
+paused Scratch owner. The telemetry readiness mode is `manual_scratch`, with
+`scratch` during the held gesture. Unloaded, THRU and unknown/non-Internal decks
+do not receive this additional permission.
 
 Current-source Jog settings provide independent braking and nudge curves for
 the playback-driven TT CC4 route. Optional `tt_brake_gain` accepts 0.1-20 and
@@ -165,20 +178,29 @@ mapping export. Installing/selecting the generated mapping in Djay applies
 them; restart alone does not.
 
 Current-source backspin detection uses two 24 ms movement windows to recognize
-backward acceleration while a Turntable-mode scratch owns the wheel. The
+backward acceleration while a Scratch gesture owns the wheel. This includes
+TT physical touch owners and the TT Vinyl-off speed-floor Scratch owner. The
 runtime options share `jog-config.json`: enabled, acceleration threshold
 150000 counts/s^2, and additive speed increase 5.6%. A detected event retains
 its deck/scratch ownership after release until measured near-rest, reversal,
 retouch, mode cancellation or Stop. Input freshness loss also releases the
 synthetic hold. Zero increase preserves measured counts; event gain is
 `(scratch_speed + backspin_speed_increase) / scratch_speed`, with fractional
-residuals confined to the event. JOG, seek and grid actions cannot start it.
+residuals confined to the event. Normal-mode bend, seek and grid actions cannot
+start it.
 Both screen pages show the original owning deck, independently of current deck
 selection. Physical touch data remains unchanged.
 See [backspin evidence and live checks](backspin-detection-validation.md).
+TT floor Scratch shares `jog_steps` scaling with physical jog movement, so the
+same saved additive speed increase applies before and after top release.
+Retouch clears detection without chattering its Scratch note. The TT speed-floor
+owner still cancels on deck change or stale input; clearing BACKSPIN alone does
+not bypass the existing Scratch exit floor. Fractional travel clears with that
+owner and cannot carry into Normal-mode bend.
 
 `backspin_assist_enabled` defaults true. A separately gated per-wheel
-override uses the existing maximum assist ceiling, 7000, and force qualification/
+override is restricted to Normal mode and uses the existing maximum assist
+ceiling, 7000, and force qualification/
 smoothing. `backspin_assist_strength` is an integer 0-100, default 100, scaling
 only that override. Zero behaves as assist off; old saved files retain 100.
 Real release starts a fixed one-second linear fade on the motor output

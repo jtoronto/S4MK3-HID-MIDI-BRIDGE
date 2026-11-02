@@ -14,6 +14,7 @@ pub(super) enum Mode {
     Bend,
     Scratch,
     PausedScratch,
+    ManualScratch,
     Blocked,
     Stale,
     Seek,
@@ -112,6 +113,8 @@ impl Telemetry {
                 || state.platter_scratch[side].is_some()
             {
                 Mode::Scratch
+            } else if state.touch_scratch_tt(side) {
+                Mode::ManualScratch
             } else if !state.playback_state().enabled[side] {
                 Mode::Blocked
             } else if state.platter_bend[side].rpm(now).is_none() {

@@ -160,6 +160,7 @@ struct Translator {
     motor_enabled: [bool; 2],
     playback_authorized: [bool; 4],
     playback_paused: [bool; 4],
+    playback_touch_scratch: [bool; 4],
     last_motor_gate: [Option<MotorGateState>; 2],
     platter_position: [platter_position::Position; 2],
     ring_position: [platter_position::Position; 2],
@@ -206,6 +207,7 @@ impl Default for Translator {
             motor_enabled: [false; 2],
             playback_authorized: [false; 4],
             playback_paused: [false; 4],
+            playback_touch_scratch: [false; 4],
             last_motor_gate: [None; 2],
             platter_position: std::array::from_fn(|_| platter_position::Position::default()),
             ring_position: std::array::from_fn(|_| platter_position::Position::default()),
@@ -518,13 +520,16 @@ impl Translator {
     }
 
     fn backspin_deck(&self, side: usize) -> Option<u8> {
-        let owner = self.wheels[side]?;
+        let deck = match self.wheels[side] {
+            Some(owner) if owner.action == "jog_scratch" => owner.deck,
+            None if self.motor_enabled[side] => self.platter_scratch[side]?,
+            Some(_) | None => return None,
+        };
         (self.jog_config.backspin_enabled
-            && owner.action == "jog_scratch"
             && !self.grid[side]
-            && self.vinyl[side]
+            && (self.vinyl[side] || self.motor_enabled[side])
             && self.wheel_motion[side].qualifies(self.jog_now))
-        .then_some(owner.deck.channel())
+        .then_some(deck.channel())
     }
 
     fn backspin_assist(&self) -> [bool; 2] {
@@ -775,7 +780,7 @@ impl Translator {
                         || (self.jog_config.backspin_enabled
                             && owner.action == "jog_scratch"
                             && !self.grid[side]
-                            && self.vinyl[side]
+                            && (self.vinyl[side] || self.motor_enabled[side])
                             && self.wheel_motion[side].qualifies(self.jog_now)))
                 {
                     if !owner.coasting {
@@ -1007,7 +1012,7 @@ impl Translator {
                 }
             }
             if self.wheels[side].is_some_and(|owner| owner.coasting)
-                && (self.grid[side] || !self.vinyl[side])
+                && (self.grid[side] || (!self.vinyl[side] && !self.motor_enabled[side]))
             {
                 self.end_backspin(side, output);
             } else if self.grid[side] != old_grid || self.vinyl[side] != old_vinyl {
@@ -1028,6 +1033,7 @@ impl Translator {
             if let Control::Button(name, touched) = *input
                 && name == touch
             {
+                let was_touched = self.touch_decks[side].is_some();
                 if touched {
                     self.touch_decks[side].get_or_insert(self.decks[side]);
                 } else {
@@ -1037,7 +1043,7 @@ impl Translator {
                     deck: self.decks[side],
                     action: if self.shifted[side] {
                         "jog_seek"
-                    } else if self.vinyl[side] || self.paused_tt(side) {
+                    } else if self.vinyl[side] || self.touch_scratch_tt(side) {
                         "jog_scratch"
                     } else {
                         "jog_bend"
@@ -1056,14 +1062,20 @@ impl Translator {
                         }
                         self.end_backspin(side, output);
                     }
-                    if !self.vinyl[side] && !self.paused_tt(side) && !self.shifted[side] {
+                    if !self.vinyl[side] && !self.touch_scratch_tt(side) && !self.shifted[side] {
+                        if !was_touched {
+                            self.wheel_motion[side].reset_window();
+                            self.residuals[side] = 0.0;
+                        }
                         continue;
                     }
                     self.wheel_motion[side].reset_window();
                     self.wheels[side] = Some(next);
                 } else if self.wheels[side].is_none_or(|owner| !owner.coasting) {
                     self.wheels[side] = None;
-                    self.wheel_motion[side].reset_window();
+                    if self.backspin_deck(side).is_none() {
+                        self.wheel_motion[side].reset_window();
+                    }
                 }
                 self.residuals[side] = 0.0;
             }
@@ -1163,7 +1175,7 @@ impl Translator {
                 {
                     if suffix != "wheel_touch"
                         || self.vinyl[side]
-                        || self.paused_tt(side)
+                        || self.touch_scratch_tt(side)
                         || self.shifted[side]
                     {
                         routes.push((*binding, channel(*binding, deck, self.shifted[side])));
@@ -1324,15 +1336,28 @@ impl Translator {
         output.extend(addresses.into_iter().map(Address::release));
     }
 
+    fn jog_steps(&mut self, side: usize, counts: f64) -> anyhow::Result<i32> {
+        let scale = if self.grid[side] {
+            0.125
+        } else if self.backspin_deck(side).is_some() {
+            1.0 + self.jog_config.backspin_speed_increase / self.jog_config.scratch_speed
+        } else {
+            1.0
+        };
+        let accumulated = counts.mul_add(scale, self.residuals[side]);
+        let steps = accumulated
+            .trunc()
+            .to_i32()
+            .context("jog delta outside MIDI translation range")?;
+        self.residuals[side] = accumulated - f64::from(steps);
+        Ok(steps)
+    }
+
     fn jog(&mut self, name: &str, delta: f64, output: &mut Vec<[u8; 3]>) -> anyhow::Result<()> {
         let (side, _) = side_name(name).context("unknown jog side")?;
         ensure!(delta.is_finite(), "non-finite jog movement");
-        if self.motor_enabled[side]
-            && !self.grid[side]
-            && !self.shifted[side]
-            && self.wheels[side].is_none()
-        {
-            return Ok(()); // Raw powered rotation is removed by the sensor-speed path.
+        if self.motor_enabled[side] && !self.grid[side] && self.wheels[side].is_none() {
+            return Ok(()); // Untouched TT rotation must not become bend or Shift-seek.
         }
         let owner = self.wheels[side].unwrap_or(WheelOwner {
             deck: self.decks[side],
@@ -1347,19 +1372,7 @@ impl Translator {
         // Recover those integers before truncation can defer a count to a
         // later report (or cancel it when the direction reverses).
         let counts = (delta * 1000.0).round();
-        let scale = if self.grid[side] {
-            0.125
-        } else if self.backspin_deck(side).is_some() {
-            1.0 + self.jog_config.backspin_speed_increase / self.jog_config.scratch_speed
-        } else {
-            1.0
-        };
-        let accumulated = counts.mul_add(scale, self.residuals[side]);
-        let steps = accumulated
-            .trunc()
-            .to_i32()
-            .context("jog delta outside MIDI translation range")?;
-        self.residuals[side] = accumulated - f64::from(steps);
+        let steps = self.jog_steps(side, counts)?;
         if self.grid[side] {
             let binding = catalog::DECK_BINDINGS
                 .iter()
@@ -1424,6 +1437,14 @@ impl Translator {
         self.playback_paused = std::array::from_fn(|deck| {
             feedback.loaded[deck] == Some(true)
                 && feedback.playing[deck] == Some(false)
+                && feedback.internal[deck] == Some(true)
+                && feedback.thru[deck] != Some(true)
+        });
+        // A manual top-touch gesture does not need proof of pause. Unknown
+        // playback stays unknown and never authorizes motor force.
+        self.playback_touch_scratch = std::array::from_fn(|deck| {
+            feedback.loaded[deck] == Some(true)
+                && feedback.playing[deck] != Some(true)
                 && feedback.internal[deck] == Some(true)
                 && feedback.thru[deck] != Some(true)
         });
@@ -2401,35 +2422,47 @@ mod tests {
             (0, "left_wheel_touch", "left_jog_wheel", 0),
             (1, "right_wheel_touch", "right_jog_wheel", 1),
         ] {
-            // Given a touched platter with sustained backward movement.
-            let mut state = Translator::default();
-            prime_backspin(&mut state, side)?;
-            // When the hand releases but the physical platter keeps spinning.
-            let release = run(&mut state, &[Control::Button(touch, false)])?;
-            // Then no touch-off is sent and real movement remains scratch.
-            assert!(
-                release.is_empty(),
-                "backspin released scratch mode: {release:?}"
-            );
-            jog_snapshot(&mut state, side, 70, 600)?;
-            let movement = run(&mut state, &[Control::Jog(wheel, -0.1)])?;
-            assert_eq!(
-                movement,
-                [
-                    [0xb0 | channel, 5, 1],
-                    [0xb0 | channel, 5, 1],
-                    [0xb0 | channel, 5, 1],
-                    [0xb0 | channel, 5, 1],
-                    [0xb0 | channel, 5, 9],
-                ]
-            );
-            for time in [80, 90] {
-                assert!(jog_snapshot(&mut state, side, time, 600)?.is_empty());
+            for (tt, vinyl) in [(false, true), (true, true), (true, false)] {
+                // Given a touched platter with sustained backward movement.
+                let mut state = Translator::default();
+                state.motor_enabled[side] = tt;
+                state.vinyl[side] = vinyl;
+                let mut feedback = feedback::FeedbackState::default();
+                feedback.loaded[side] = Some(true);
+                feedback.playing[side] = Some(false);
+                feedback.internal[side] = Some(true);
+                state.sync_front_panel(&feedback, &mut Vec::new())?;
+                prime_backspin(&mut state, side)?;
+                // When the hand releases but the physical platter keeps spinning.
+                let release = run(&mut state, &[Control::Button(touch, false)])?;
+                // Then no touch-off is sent and real movement remains scratch.
+                assert!(
+                    release.is_empty(),
+                    "backspin released scratch mode: {release:?}"
+                );
+                if tt {
+                    assert_eq!(state.backspin_assist(), [false; 2]);
+                }
+                jog_snapshot(&mut state, side, 70, 600)?;
+                let movement = run(&mut state, &[Control::Jog(wheel, -0.1)])?;
+                assert_eq!(
+                    movement,
+                    [
+                        [0xb0 | channel, 5, 1],
+                        [0xb0 | channel, 5, 1],
+                        [0xb0 | channel, 5, 1],
+                        [0xb0 | channel, 5, 1],
+                        [0xb0 | channel, 5, 9],
+                    ]
+                );
+                for time in [80, 90] {
+                    assert!(jog_snapshot(&mut state, side, time, 600)?.is_empty());
+                }
+                assert_eq!(
+                    jog_snapshot(&mut state, side, 100, 600)?,
+                    [[0x80 | channel, 7, 0]]
+                );
             }
-            assert_eq!(
-                jog_snapshot(&mut state, side, 100, 600)?,
-                [[0x80 | channel, 7, 0]]
-            );
         }
         Ok(())
     }

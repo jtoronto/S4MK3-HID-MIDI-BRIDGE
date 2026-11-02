@@ -63,6 +63,203 @@ impl Fixture {
 }
 
 #[test]
+fn tt_floor_backspin_detects_boosts_and_survives_release_without_motor_assist() -> anyhow::Result<()>
+{
+    for side in 0..2 {
+        for (enabled, threshold, increase, detected, gain) in [
+            (false, 150_000.0, jog::DEFAULT.scratch_speed, false, 1),
+            (true, 1_000_000.0, jog::DEFAULT.scratch_speed, false, 1),
+            (true, 150_000.0, 0.0, true, 1),
+            (true, 150_000.0, jog::DEFAULT.scratch_speed, true, 2),
+        ] {
+            let mut fixture = Fixture::new();
+            fixture.side = side;
+            fixture.translator.motor_enabled = [false; 2];
+            fixture.translator.motor_enabled[side] = true;
+            fixture.translator.vinyl[side] = false;
+            fixture.translator.jog_config.backspin_enabled = enabled;
+            fixture.translator.jog_config.backspin_acceleration = threshold;
+            fixture.translator.jog_config.backspin_speed_increase = increase;
+            fixture.feedback.loaded[side] = Some(true);
+            fixture.feedback.playing[side] = Some(true);
+            fixture.feedback.internal[side] = Some(true);
+            let channel = u8::try_from(side)?;
+            let touch = ["left_wheel_touch", "right_wheel_touch"][side];
+            fixture.drive(330, 150)?;
+            fixture
+                .translator
+                .translate(&[Control::Button(touch, true)], None, &mut Vec::new())?;
+            fixture.drive(0, 50)?;
+            fixture.drive(-1200, 30)?;
+            assert_eq!(
+                fixture.translator.backspin_deck(side),
+                detected.then_some(channel)
+            );
+            assert_eq!(fixture.translator.backspin_assist(), [false; 2]);
+
+            // The detector, screen state and boost follow the synthetic TT
+            // Scratch owner both before and after physical top release.
+            for release in [false, true] {
+                if release {
+                    let mut output = Vec::new();
+                    fixture.translator.translate(
+                        &[Control::Button(touch, false)],
+                        None,
+                        &mut output,
+                    )?;
+                    assert!(output.is_empty());
+                }
+                let before = fixture.counter;
+                let output = fixture.drive(-1200, 10)?;
+                assert_eq!(
+                    fixture.translator.backspin_deck(side),
+                    detected.then_some(channel)
+                );
+                let s4mk3_hid_midi_bridge::screens::page::Page::Info(info) =
+                    crate::full::screens::pages(&fixture.translator, &fixture.feedback)[side]
+                else {
+                    anyhow::bail!("expected info page")
+                };
+                assert_eq!(info.backspin, detected.then_some(channel));
+                assert!(!output.is_empty());
+                assert!(
+                    output
+                        .iter()
+                        .all(|message| message[0] == 0xb0 | channel && message[1] == 5)
+                );
+                let sent: i32 = output
+                    .iter()
+                    .map(|message| i32::from(message[2]) - 64)
+                    .sum();
+                let travel = i32::from_le_bytes(fixture.counter.wrapping_sub(before).to_le_bytes());
+                assert_eq!(sent, travel * gain);
+                assert_eq!(fixture.translator.backspin_assist(), [false; 2]);
+            }
+
+            let mut output = Vec::new();
+            fixture
+                .translator
+                .translate(&[Control::Button(touch, true)], None, &mut output)?;
+            assert_eq!(fixture.translator.backspin_deck(side), None);
+            assert!(output.is_empty()); // Catching the top must not chatter Scratch Note 7.
+            let before = fixture.counter;
+            let caught = fixture.drive(-1200, 20)?;
+            let sent: i32 = caught
+                .iter()
+                .map(|message| i32::from(message[2]) - 64)
+                .sum();
+            assert_eq!(
+                sent,
+                i32::from_le_bytes(fixture.counter.wrapping_sub(before).to_le_bytes())
+            );
+            assert!(fixture.drive(0, 20)?.is_empty());
+            assert_eq!(fixture.translator.backspin_deck(side), None);
+            fixture
+                .translator
+                .translate(&[Control::Button(touch, false)], None, &mut output)?;
+            let recovered = fixture.drive(330, 150)?;
+            assert_eq!(
+                recovered
+                    .iter()
+                    .filter(|message| **message == [0x80 | channel, 7, 0])
+                    .count(),
+                1
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn tt_backspin_fraction_does_not_change_same_frame_normal_mode_motion() -> anyhow::Result<()> {
+    let mut fixture = Fixture::new();
+    fixture.translator.jog_config.backspin_speed_increase = jog::DEFAULT.scratch_speed / 2.0;
+    fixture.drive(330, 150)?;
+    fixture.drive(0, 50)?;
+    fixture.drive(-1200, 30)?;
+    assert_eq!(fixture.translator.backspin_deck(0), Some(0));
+
+    let mut output = Vec::new();
+    fixture.translator.translate(
+        &[
+            Control::Button("left_turntable_mode", true),
+            Control::Jog("left_jog_wheel", 0.001),
+        ],
+        None,
+        &mut output,
+    )?;
+    assert_eq!(output, [[0xb0, 4, 65]]);
+    Ok(())
+}
+
+#[test]
+fn tt_shift_requires_top_contact_for_seek_but_normal_shift_does_not() -> anyhow::Result<()> {
+    for (side, deck) in [(0, Deck::A), (0, Deck::C), (1, Deck::B), (1, Deck::D)] {
+        for motor_enabled in [false, true] {
+            for vinyl in [false, true] {
+                let mut fixture = Fixture::new();
+                fixture.side = side;
+                fixture.translator.decks[side] = deck;
+                fixture.translator.motor_enabled = [false; 2];
+                fixture.translator.motor_enabled[side] = motor_enabled;
+                fixture.translator.vinyl[side] = vinyl;
+                let channel = deck.channel();
+                let index = usize::from(channel);
+                fixture.feedback.loaded[index] = Some(true);
+                fixture.feedback.playing[index] = Some(true);
+                fixture.feedback.internal[index] = Some(true);
+                fixture.drive(330, 150)?;
+                let shift = ["left_shift", "right_shift"][side];
+                let touch = ["left_wheel_touch", "right_wheel_touch"][side];
+                let mut output = Vec::new();
+                fixture
+                    .translator
+                    .translate(&[Control::Button(shift, true)], None, &mut output)?;
+                assert!(output.is_empty());
+
+                // Holding Shift must not seek from untouched TT rotation.
+                let untouched = fixture.drive(330, 100)?;
+                if motor_enabled {
+                    assert!(
+                        untouched.is_empty(),
+                        "untouched TT rotation emitted {untouched:?}"
+                    );
+                } else {
+                    assert!(!untouched.is_empty());
+                    assert!(untouched.iter().all(|message| message[0] == 0xb0 | channel
+                        && message[1] == 6
+                        && message[2] > 64));
+                }
+
+                // Explicit Shift+top contact still seeks in both directions.
+                fixture
+                    .translator
+                    .translate(&[Control::Button(touch, true)], None, &mut output)?;
+                for (speed, direction) in [
+                    (330, std::cmp::Ordering::Greater),
+                    (-330, std::cmp::Ordering::Less),
+                ] {
+                    let seeking = fixture.drive(speed, 100)?;
+                    assert!(!seeking.is_empty());
+                    assert!(seeking.iter().all(|message| message[0] == 0xb0 | channel
+                        && message[1] == 6
+                        && message[2].cmp(&64) == direction));
+                }
+                fixture.translator.translate(
+                    &[Control::Button(touch, false)],
+                    None,
+                    &mut output,
+                )?;
+                if motor_enabled {
+                    assert!(fixture.drive(330, 100)?.is_empty());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn tt_gain_scales_only_bend_without_changing_measured_rpm() -> anyhow::Result<()> {
     for (gesture_rpm, direction) in [(300, -1.0), (360, 1.0)] {
         let mut totals = Vec::new();
@@ -596,7 +793,16 @@ fn lower_scratch_releases_once_even_above_the_former_ceiling() -> anyhow::Result
 
 #[test]
 fn deck_switch_and_stale_input_release_the_original_speed_owner() -> anyhow::Result<()> {
-    for (stale, touched) in [(false, false), (true, false), (false, true), (true, true)] {
+    for (stale, touched, backspin) in [
+        (false, false, false),
+        (true, false, false),
+        (false, true, false),
+        (true, true, false),
+        (false, false, true),
+        (true, false, true),
+        (false, true, true),
+        (true, true, true),
+    ] {
         // Given deck A speed-owned Scratch with C also authorized.
         let mut fixture = Fixture::new();
         fixture.drive(330, 150)?;
@@ -608,6 +814,10 @@ fn deck_switch_and_stale_input_release_the_original_speed_owner() -> anyhow::Res
                 None,
                 &mut output,
             )?;
+        }
+        if backspin {
+            fixture.drive(-1200, 30)?;
+            assert_eq!(fixture.translator.backspin_deck(0), Some(0));
         }
         // When selection changes or the last real sensor sample becomes stale.
         if stale {
@@ -627,6 +837,15 @@ fn deck_switch_and_stale_input_release_the_original_speed_owner() -> anyhow::Res
         assert!(output.contains(&[0x80, 7, 0]));
         assert!(!output.contains(&[0x82, 7, 0]));
         assert!(fixture.translator.platter_scratch[0].is_none());
+        assert_eq!(fixture.translator.backspin_deck(0), None);
+        fixture
+            .translator
+            .selectors(&[Control::Button("left_turntable_mode", true)], &mut output);
+        let mut normal = Vec::new();
+        fixture
+            .translator
+            .jog("left_jog_wheel", 0.001, &mut normal)?;
+        assert_eq!(normal, [[if stale { 0xb0 } else { 0xb2 }, 4, 65]]);
     }
     Ok(())
 }

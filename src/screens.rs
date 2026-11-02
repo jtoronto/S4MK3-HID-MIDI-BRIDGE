@@ -193,7 +193,7 @@ impl UsbScreens {
             completion.actual_len,
             PACKET_BYTES
         );
-        tracing::info!(
+        tracing::debug!(
             ?screen,
             bytes = completion.actual_len,
             "SCREEN_FRAME_WRITTEN"

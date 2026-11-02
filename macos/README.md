@@ -283,6 +283,10 @@ Hardware tension is independent of them.
 TT enables each physical motor independently; JOG selects Vinyl on/red or
 off/blue. Normal mode defaults to Vinyl on and TT to off, with separate saved
 startup choices. Use the existing matching mapping with Internal-mode feedback.
+For TT jog seek, hold Shift before touching and turning the platter top.
+Shift alone does not seek from untouched powered or coasting rotation.
+Newly loaded Internal tracks support top-touch Scratch before the first
+Play/Pause feedback. Manual Scratch readiness does not authorize motor force.
 Steady TT rotation emits no jog correction; measured deviations use
 pitch bend. The response update uses a true 2.25 RPM quiet band with
 smooth onset over the next 1 RPM. Braking to the provisional lower floor or a
@@ -291,6 +295,11 @@ After entry, top contact holds Scratch through fast forward/reverse strokes;
 release allows the usual speed-based exit. An abrupt stop from normal rotation
 can enter after 4 ms of fresh no-motion sensor time instead of waiting for the
 100 ms bend average. Actual audio latency and scratch feel need physical checks.
+TT Scratch also uses the existing backspin detection threshold, additive speed
+increase and BACKSPIN screen indicator, including with Vinyl off after the
+speed-floor handoff. Detection/boost follows real backward travel after release
+and clears on catch or stop. The separate backspin motor-assist pulse remains
+Normal-only; TT playback motor behavior is unchanged.
 Holding or braking retains assistance, tapered linearly over the final 2 RPM
 below target to zero at/above measured target, including touch-release fallback.
 The default floor remains 50%; existing saved values persist. Current source
@@ -306,9 +315,14 @@ through `S4_MOTOR_CONFIG`, alongside bounded `MOTOR_TT_STATE` reports of touch,
 authorization, owner and requested force. Requested force is not measured torque.
 Live RPM and CC4 bend indicators remain bridge diagnostics, not audio feedback.
 Normal log detail records TT-state transitions without repeating unchanged
-idle state; Debug retains periodic motor samples. Log and live-platter updates
+idle state; Debug retains periodic motor samples.
+Routine slider/encoder values and successful screen-frame writes are Debug-only.
+Log and live-platter updates
 are isolated from preference editors, and diagnostic views render only while
 their tab is selected.
+The visible log appends and trims native text storage incrementally, avoiding a
+full 60,000-character SwiftUI layout on every output batch. Copy log remains
+bounded to the same retained history.
 
 Normal rings advance with playback, follow Scratch and freeze on pause;
 TT rings follow the physical wheel. These source-only additions are still

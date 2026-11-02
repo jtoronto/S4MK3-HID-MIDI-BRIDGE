@@ -20,9 +20,14 @@ final class PlatterDiagnosticsTests: XCTestCase {
             XCTAssertEqual(snapshot.right.bendCountsPerSecond, 0.0)
             XCTAssertEqual(snapshot.right.mode, .stale)
         }
+        let manualScratch = #"{"wheels":[{"deck":1,"rpm":0,"bend_counts_per_second":0,"mode":"manual_scratch"},{"deck":2,"rpm":0,"bend_counts_per_second":0,"mode":"off"}]}"#
+        let snapshot = try XCTUnwrap(PlatterStatusSnapshot.parseLine(
+            PlatterStatusSnapshot.prefix + manualScratch
+        ))
+        XCTAssertEqual(snapshot.left.mode.rawValue, "manual_scratch")
     }
 
-    func testPlatterStatusRejectsMalformedPayloadsSidesDecksModesAndTypes() {
+    func testPlatterStatusRejectsMalformedPayloadsSidesDecksModesAndTypes() throws {
         let invalidPayloads = [
             "",
             "{}",
@@ -47,6 +52,7 @@ final class PlatterDiagnosticsTests: XCTestCase {
             XCTAssertNil(PlatterStatusSnapshot.parseLine("S4_PLATTER_STATUS " + payload), payload)
         }
         XCTAssertNil(PlatterStatusSnapshot.parseLine("INFO something else"))
+
     }
 
     func testPlatterDiagnosticsPresentationDistinguishesModesAndExpiresAfterSilence() {
