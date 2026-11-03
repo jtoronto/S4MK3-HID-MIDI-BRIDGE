@@ -18,7 +18,7 @@ under `dist/previous-jog-build-20261103/` before rebuilding at the usual paths.
 
 `docs/release-0.3.0-beta.1.md` is the end-user release body. It covers changes
 since the published `v0.2.1-beta.1`: motorized playback and Vinyl operation,
-Jog tuning/defaults, EXT switching and DVS setup, multi-deck Instant FX,
+Jog tuning, EXT switching and DVS setup, multi-deck Instant FX,
 Diagnostics and native-app CPU improvements, and update instructions.
 
 The Jog image at `docs/images/jog-settings-0.3.0-beta.1.png` is a genuine
@@ -31,6 +31,12 @@ were inspected against their captions and instructions.
 The public README and guide distinguish the upcoming draft from published
 download availability. Notes do not claim Traktor-equivalent feel, exact audio
 speed, complete hardware coverage, or notarization.
+
+After the user's release-note review, the body explicitly presents motorized
+playback as its first public introduction. Internal test-build refinements,
+the numeric "new starting values" comparison and removal of the unpublished
+absolute-position experiment are omitted. Tuning is explained through normal
+use and practical adjustments instead.
 
 ## Verification
 

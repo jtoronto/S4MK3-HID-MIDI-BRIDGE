@@ -1,16 +1,16 @@
 # S4 MK3 Bridge 0.3.0-beta.1
 
-Motorized platters come to Djay Pro, with separate braking and nudge controls,
-a simpler Jog settings page, external-input switching, and Instant FX on
-several decks at once.
+This release introduces motorized platter playback for the S4 MK3 in Djay Pro.
+It also adds controls for adjusting motor strength and feel, external-input
+switching, and Instant FX on several decks at once.
 
 ## Motorized playback with TT
 
 Install this release's mapping and select **Internal / INT** for a loaded
 deck in Djay. Press **TT** on either side to enable motorized playback for
 the deck selected on that side. Start the track and the platter rotates at
-the default **33 RPM**; pause the track
-or turn TT off to stop powered rotation. TT starts off each time you start
+the default **33 RPM**; pause the track or turn TT off to stop powered rotation.
+TT starts off each time you start
 the bridge, so normal jog operation remains available.
 
 **TT and Vinyl are separate controls.** JOG switches touch scratching on or
@@ -29,15 +29,14 @@ during the session. TT stays red and becomes brighter when enabled.
 Let the wheel settle near its target speed before bending. Small movements
 within 2.25 RPM of target are ignored to avoid unwanted pitch changes.
 
-This beta also refines touch release, stop/reverse transitions, backspins and
-motor assistance, and reduces unwanted correction during steady playback.
-Motorized playback remains experimental: platter motion is not a guarantee
-of exact audible track speed, and this is not a claim of Traktor-equivalent feel.
+The motor helps the wheel move forward while you brake, hold or reverse it,
+easing off as it returns to its target speed. The existing wheel-tension and
+backspin-assistance settings do not add extra force in TT mode.
 
 **Turn TT off or Stop bridge before quitting Djay.** Closing Djay alone can
 leave its last reported playing state active.
 
-## Easier Jog tuning
+## Adjust motor strength and feel
 
 Open **Settings > Jog**. The controls most useful for feel are at the top:
 
@@ -58,17 +57,14 @@ its own explanation. **Restore defaults** resets only the Motorized platters
 group in the editor; it leaves wheel tension, Backspin and mapping settings
 alone. Save afterward to apply it.
 
-The new starting values include Base force **7,000**, braking **10x / Shape 1**,
-nudge **3x / Shape 1.6**, and wheel tension **-77**, toward Assist. The extra
-scratch speed for detected backspins is now **5.2%**.
+Start with the supplied settings, then adjust them to suit your hands.
+For example, lower Base force for a gentler motor push, or lower Braking
+Strength if slowing the platter changes the track speed too much.
 
-**Upgrading keeps your saved choices.** To try the new motorized defaults,
-choose Restore defaults, then **Save and restart** if the bridge is running,
-or **Save preferences** before starting. That button does not reset wheel
-tension or Backspin; change those separately if wanted.
-
-The unused absolute platter sensitivity setting has been removed. Ordinary
-touch scratching and the motorized controls remain available.
+Use **Save and restart** to apply changes while the bridge is running, or
+**Save preferences** before starting. Adjustments are not live and do not
+need another mapping export. Your existing saved wheel-tension, Backspin
+and scratch preferences are kept when upgrading.
 
 ## Switch external audio with EXT
 
@@ -101,13 +97,13 @@ This is separate from the left/right FX-strip targets. To change normal EQ
 versus Neural Mix EQ, press **Filter**, then the channel's **ON**, as before.
 An ordinary ON press is not a channel mute.
 
-## Less app overhead and clearer diagnostics
+## Less app overhead and new platter diagnostics
 
 Settings and Diagnostics now avoid unnecessary interface updates, including
 when Settings is hidden. This reduces native-app CPU use without stopping
 the incoming telemetry.
 
-Diagnostics shows each side's physical platter RPM, bend output and current
+Diagnostics now includes each side's physical platter RPM, bend output and current
 mode, helping distinguish bending, scratching, seeking and waiting states.
 These are controller/bridge readings, not an audio-speed measurement.
 
@@ -139,9 +135,9 @@ if macOS blocks it.
 
 ## Still a beta
 
-Motorized playback needs further hardware/audio validation across setups.
-Software and package checks do not establish exact playback-speed accuracy.
-Try it before relying on it for a set.
+Motorized playback is experimental and has not been verified across every
+hardware/audio setup. Platter rotation is not a measurement of the track's
+exact audible speed. Try it before relying on it for a set.
 
 The main FX-strip ON button still duplicates slot 1 rather than bypassing
 the whole bank. Screens do not show artwork, waveforms or track titles.
