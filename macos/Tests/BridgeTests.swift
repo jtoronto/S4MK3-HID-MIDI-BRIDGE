@@ -320,7 +320,7 @@ final class BridgeTests: XCTestCase {
             ) as? [String: Any])
             return try XCTUnwrap(payload["jog"] as? [String: Any])
         }
-        XCTAssertEqual(settings[0]["tt_pitch_bend_gain"] as? Double, 1)
+        XCTAssertEqual(settings[0]["tt_pitch_bend_gain"] as? Double, 5)
         XCTAssertEqual(settings[1]["tt_pitch_bend_gain"] as? Double, 10)
         XCTAssertEqual(settings[0]["platter_target_rpm"] as? Int, 33)
         XCTAssertEqual(settings[1]["platter_target_rpm"] as? Int, 45)
@@ -439,15 +439,15 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(base.pitchBendReaction, 17)
         XCTAssertTrue(base.backspinEnabled)
         XCTAssertEqual(base.backspinAcceleration, 150000.0)
-        XCTAssertEqual(base.backspinSpeedIncrease, 5.6)
+        XCTAssertEqual(base.backspinSpeedIncrease, 5.2)
         XCTAssertTrue(base.backspinAssistEnabled)
         XCTAssertEqual(base.backspinAssistStrength, 100)
         XCTAssertTrue(base.vinylEnabledAtStartup)
         XCTAssertFalse(base.ttVinylEnabledAtStartup)
-        XCTAssertEqual(base.ttPitchBendFloorPercent, 50)
+        XCTAssertEqual(base.ttPitchBendFloorPercent, 1)
         XCTAssertEqual(base.platterTargetRpm, 33)
         XCTAssertEqual(base.platterMaxForce, 20000)
-        XCTAssertEqual(base.platterBaseForce, 1650)
+        XCTAssertEqual(base.platterBaseForce, 7000)
         XCTAssertEqual(base.platterForcePerRpm, 110)
         XCTAssertEqual(base.platterKp, 4000)
         XCTAssertEqual(base.platterKi, 3000)
@@ -465,7 +465,7 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(mergedFourField.pitchBendReaction, 42)
         XCTAssertTrue(mergedFourField.backspinEnabled)
         XCTAssertEqual(mergedFourField.backspinAcceleration, 150000.0)
-        XCTAssertEqual(mergedFourField.backspinSpeedIncrease, 5.6)
+        XCTAssertEqual(mergedFourField.backspinSpeedIncrease, 5.2)
         XCTAssertTrue(mergedFourField.backspinAssistEnabled)
         XCTAssertTrue(mergedFourField.vinylEnabledAtStartup)
         XCTAssertEqual(mergedFourField.platterTargetRpm, 33)
@@ -489,7 +489,7 @@ final class BridgeTests: XCTestCase {
         XCTAssertTrue(mergedNineField.vinylEnabledAtStartup)
         XCTAssertEqual(mergedNineField.platterTargetRpm, 33)
         XCTAssertEqual(mergedNineField.platterMaxForce, 20000)
-        XCTAssertEqual(mergedNineField.platterBaseForce, 1650)
+        XCTAssertEqual(mergedNineField.platterBaseForce, 7000)
         XCTAssertEqual(mergedNineField.platterForcePerRpm, 110)
         XCTAssertEqual(mergedNineField.platterKp, 4000)
         XCTAssertEqual(mergedNineField.platterKi, 3000)
@@ -537,7 +537,7 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(keys["vinyl_enabled_at_startup"] as? Bool, true)
         XCTAssertEqual(keys["platter_target_rpm"] as? Int, 33)
         XCTAssertEqual(keys["platter_max_force"] as? Int, 20000)
-        XCTAssertEqual(keys["platter_base_force"] as? Int, 1650)
+        XCTAssertEqual(keys["platter_base_force"] as? Int, 7000)
         XCTAssertEqual(keys["platter_force_per_rpm"] as? Int, 110)
         XCTAssertEqual(keys["platter_kp"] as? Int, 4000)
         XCTAssertEqual(keys["platter_ki"] as? Int, 3000)
@@ -612,40 +612,81 @@ final class BridgeTests: XCTestCase {
         XCTAssertThrowsError(try nonFiniteIncrease.validate())
     }
 
-    func testAbsolutePlatterTuningIsIndependentAndLegacyDefaultsMerge() throws {
-        let defaults = try jogDefaultsData()
-        let base = try JogPreferences.decode(defaults, defaults: defaults)
-        XCTAssertEqual(base.platterPositionSensitivity, 14.0)
-        XCTAssertEqual(base.scratchDirection, .normal)
+    @MainActor
+    func testRestoreMotorizedDefaultsKeepsOtherEditorsAndSavedPreferences() throws {
+        let fixture = try makeFixture()
+        let support = fixture.appendingPathComponent("support")
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        let model = try testController(resourceURL: fixture, supportURL: support)
+        let defaults = model.jog
+        var expected = defaults
+        expected.scratchSpeed = 4.5
+        expected.scratchReaction = 80
+        expected.scratchDirection = .reversed
+        expected.pitchBendSpeed = 3.1
+        expected.pitchBendReaction = 40
+        expected.backspinEnabled = false
+        expected.backspinAcceleration = 180000
+        expected.backspinSpeedIncrease = 1.5
+        expected.backspinAssistEnabled = false
+        expected.backspinAssistStrength = 37
+        model.jog = expected
+        model.jog.vinylEnabledAtStartup = false
+        model.jog.ttVinylEnabledAtStartup = true
+        model.jog.ttPitchBendFloorPercent = 73
+        model.jog.ttPitchBendGain = 2
+        model.jog.ttBrakeGain = 4
+        model.jog.ttNudgeGain = 6
+        model.jog.ttBrakeCurveExponent = 0.5
+        model.jog.ttNudgeCurveExponent = 2.5
+        model.jog.platterTargetRpm = 45
+        model.jog.platterMaxForce = 18000
+        model.jog.platterBaseForce = 3500
+        model.jog.platterForcePerRpm = 120
+        model.jog.platterKp = 4500
+        model.jog.platterKi = 2500
+        model.jog.platterForceRisePerSecond = 250000
+        model.jog.platterStartupForceRisePerSecond = 50000
+        model.jog.platterStartupMs = 300
+        model.jog.platterOverspeedLimitRpm = 90
+        model.tension.tension = 37
+        model.run.durationSeconds = 45
+        let tension = model.tension
+        let run = model.run
+        let leds = model.leds
+        let saved = try model.jog.encoded()
+        try saved.write(to: model.jogURL)
 
-        let legacy = Data(#"{"scratch_speed":3.5}"#.utf8)
+        model.restoreMotorizedDefaults()
+
+        XCTAssertEqual(model.jog, expected)
+        XCTAssertEqual(model.tension, tension)
+        XCTAssertEqual(model.run, run)
+        XCTAssertEqual(model.leds, leds)
+        XCTAssertEqual(try Data(contentsOf: model.jogURL), saved)
+        XCTAssertEqual(model.state, .stopped)
+        XCTAssertEqual(defaults.effectiveTTBrakeGain, 10)
+        XCTAssertEqual(defaults.effectiveTTNudgeGain, 3)
+    }
+
+    func testRetiredAbsolutePlatterSettingLoadsButIsNotSaved() throws {
+        let defaults = try jogDefaultsData()
+        let legacy = Data(#"{"scratch_speed":3.5,"scratch_direction":"reversed","platter_position_sensitivity":11.5}"#.utf8)
         let merged = try JogPreferences.decode(legacy, defaults: defaults)
         XCTAssertEqual(merged.scratchSpeed, 3.5)
-        XCTAssertEqual(merged.platterPositionSensitivity, 14.0)
-        XCTAssertEqual(merged.scratchDirection, .normal)
-
-        var changed = base
-        changed.scratchSpeed = 4.5
-        changed.platterPositionSensitivity = 22.4
-        changed.scratchDirection = .reversed
-        XCTAssertEqual(try JogPreferences.decode(changed.encoded(), defaults: defaults), changed)
-        let keys = try XCTUnwrap(JSONSerialization.jsonObject(with: changed.encoded()) as? [String: Any])
-        XCTAssertEqual(keys["platter_position_sensitivity"] as? Double, 22.4)
+        XCTAssertEqual(merged.scratchDirection, .reversed)
+        XCTAssertEqual(try JogPreferences.decode(merged.encoded(), defaults: defaults), merged)
+        let keys = try XCTUnwrap(JSONSerialization.jsonObject(with: merged.encoded()) as? [String: Any])
+        XCTAssertNil(keys["platter_position_sensitivity"])
         XCTAssertEqual(keys["scratch_direction"] as? String, "reversed")
 
         for input in [
             #"{"scratch_direction":true}"#,
             #"{"scratch_direction":"sideways"}"#,
-            #"{"platter_position_sensitivity":0}"#,
-            #"{"platter_position_sensitivity":100.1}"#,
-            #"{"platter_position_sensitivity":true}"#,
-            #"{"platter_position_sensitivity":"14"}"#
+            #"{"unrecognized_setting":14}"#
         ] {
             XCTAssertThrowsError(try JogPreferences.decode(Data(input.utf8), defaults: defaults), input)
         }
-        var invalid = base
-        invalid.platterPositionSensitivity = .infinity
-        XCTAssertThrowsError(try invalid.validate())
     }
 
     func testTurntablePreferencesMergeLegacyAndRoundTripIndependently() throws {
@@ -654,7 +695,7 @@ final class BridgeTests: XCTestCase {
         let merged = try JogPreferences.decode(legacy, defaults: defaults)
         XCTAssertFalse(merged.vinylEnabledAtStartup)
         XCTAssertFalse(merged.ttVinylEnabledAtStartup)
-        XCTAssertEqual(merged.ttPitchBendFloorPercent, 50)
+        XCTAssertEqual(merged.ttPitchBendFloorPercent, 1)
 
         var changed = merged
         changed.ttVinylEnabledAtStartup = true
@@ -681,7 +722,7 @@ final class BridgeTests: XCTestCase {
         let defaults = try jogDefaultsData()
         let legacy = Data(#"{"tt_pitch_bend_floor_percent":1}"#.utf8)
         let base = try JogPreferences.decode(legacy, defaults: defaults)
-        XCTAssertEqual(base.ttPitchBendGain, 1.0)
+        XCTAssertEqual(base.ttPitchBendGain, 5.0)
         for gain in [0.1, 1.0, 4.0, 10.0] {
             var changed = base
             changed.ttPitchBendGain = gain
@@ -711,13 +752,13 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(inherited.effectiveTTBrakeGain, 10.0)
         XCTAssertEqual(inherited.effectiveTTNudgeGain, 5.0)
         XCTAssertEqual(inherited.ttBrakeCurveExponent, 1.0)
-        XCTAssertEqual(inherited.ttNudgeCurveExponent, 1.0)
+        XCTAssertEqual(inherited.ttNudgeCurveExponent, 1.6)
 
         let inheritedKeys = try XCTUnwrap(JSONSerialization.jsonObject(with: inherited.encoded()) as? [String: Any])
         XCTAssertNil(inheritedKeys["tt_brake_gain"])
         XCTAssertNil(inheritedKeys["tt_nudge_gain"])
         XCTAssertEqual(inheritedKeys["tt_brake_curve_exponent"] as? Double, 1.0)
-        XCTAssertEqual(inheritedKeys["tt_nudge_curve_exponent"] as? Double, 1.0)
+        XCTAssertEqual(inheritedKeys["tt_nudge_curve_exponent"] as? Double, 1.6)
 
         let nullOptional = Data(#"{"tt_pitch_bend_gain":4.0,"tt_brake_gain":null,"tt_nudge_gain":null}"#.utf8)
         let decodedNull = try JogPreferences.decode(nullOptional, defaults: defaults)
@@ -963,7 +1004,7 @@ final class BridgeTests: XCTestCase {
         XCTAssertTrue(persisted.jog.vinylEnabledAtStartup)
         XCTAssertEqual(persisted.jog.platterTargetRpm, 33)
         XCTAssertEqual(persisted.jog.platterMaxForce, 20000)
-        XCTAssertEqual(persisted.jog.platterBaseForce, 1650)
+        XCTAssertEqual(persisted.jog.platterBaseForce, 7000)
         XCTAssertEqual(persisted.jog.platterForcePerRpm, 110)
         XCTAssertEqual(persisted.jog.platterKp, 4000)
         XCTAssertEqual(persisted.jog.platterKi, 3000)
@@ -1024,7 +1065,7 @@ final class BridgeTests: XCTestCase {
     func testTensionPreferencesDefaultsPartialOverridesAndRoundTrip() throws {
         let defaults = try tensionDefaultsData()
         let base = try TensionPreferences.decode(defaults, defaults: defaults)
-        XCTAssertEqual(base.tension, 0)
+        XCTAssertEqual(base.tension, -77)
         XCTAssertEqual(TensionPreferences(), base)
         XCTAssertEqual(try TensionPreferences.decode(Data("{}".utf8), defaults: defaults), base)
         for tension in [-100, -37, 0, 42, 100] {
@@ -1060,7 +1101,7 @@ final class BridgeTests: XCTestCase {
         let support = fixture.appendingPathComponent("support")
         let model = try testController(resourceURL: fixture, supportURL: support)
         XCTAssertFalse(model.requiresReset)
-        XCTAssertEqual(model.tension.tension, 0)
+        XCTAssertEqual(model.tension.tension, -77)
         XCTAssertFalse(FileManager.default.fileExists(atPath: model.tensionURL.path))
         model.leds.loopColor = "blue"
         model.jog.scratchSpeed = 3.5
@@ -1107,12 +1148,12 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: broken.tensionURL), invalid)
         broken.resetPreferences()
         XCTAssertFalse(broken.requiresReset)
-        XCTAssertEqual(broken.tension.tension, 0)
+        XCTAssertEqual(broken.tension.tension, -77)
         XCTAssertEqual(try Data(contentsOf: broken.tensionURL), invalid)
         try broken.save()
         let reloaded = try testController(resourceURL: fixture, supportURL: support)
         XCTAssertFalse(reloaded.requiresReset)
-        XCTAssertEqual(reloaded.tension.tension, 0)
+        XCTAssertEqual(reloaded.tension.tension, -77)
     }
 
     @MainActor

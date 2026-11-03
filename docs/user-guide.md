@@ -3,24 +3,12 @@
 Use this guide to DJ with the S4 MK3, understand the custom mappings, and
 recognize what its lights and screens are telling you.
 
-**Build coverage:** this guide follows the full-controller 0.2.1-beta.1 build.
-Version 0.1.1-beta.3 and older downloads lack its screens and updated control workflows.
-Use the app and mapping supplied together; check the [download notes](../README.md#download-and-install)
-for what the published package includes.
-Backspin continuation, optional motor assistance, the lamp/FX-warning corrections
-and Shift + effect-knob browsing are new since 0.2.0-beta.1. Install the
-0.2.1-beta.1 mapping under a new name,
-preserving custom maps, for Shift + effect-knob browsing.
-
-EXT switching below is a **current-source, full-profile addition**, not a new
-published release. It requires a newly generated matching mapping, installed
-under a new name. EXT lamp locations are confirmed; integrated control
-acceptance is tracked in the [validation record](ext-input-validation.md).
-
-Current source also keeps TT red and supports multiple armed decks for mixer
-Instant FX. These changes are not in the published download. They use the
-existing Instant FX mapping; a mapping reinstall is not needed for these two
-changes alone.
+**Availability:** this guide covers the full-controller app, including
+development-build features. EXT switching, motorized TT playback and its
+tuning controls, red TT indicators, and multi-deck Instant FX are not in the
+published download. Check the [download notes](../README.md#download-and-install)
+for your package's features. Always use the app and its matching mapping
+together, importing updates under a new name to preserve custom mappings.
 
 The DJ laptop needs the standalone app, not Rust, Cargo or this repository.
 
@@ -36,6 +24,8 @@ The DJ laptop needs the standalone app, not Rust, Cargo or this repository.
 - [Mixer Instant FX](#mixer-instant-fx)
 - [Pads and sample banks](#pads-and-sample-banks)
 - [Jog wheels and feel](#jog-wheels-and-feel)
+  - [Testing motorized playback](#testing-motorized-playback)
+  - [Record a motor diagnostic capture](#record-a-motor-diagnostic-capture)
 - [Screens and feedback](#screens-and-feedback)
 - [Settings: what needs saving or a new mapping?](#settings-what-needs-saving-or-a-new-mapping)
 - [Troubleshooting](#troubleshooting)
@@ -55,8 +45,9 @@ The menu-bar app is currently macOS-only.
    NI-driver prompt described below.
 4. Choose **Install Djay mapping...**, save under a new filename, and accept
    Djay's import. Keep your custom mappings under their existing names.
-5. In Djay's MIDI configuration, enable **S4 MK3 MIDI Full** and select the
-   configuration just imported. Its name may have a number appended.
+5. In Djay, open **MIDI > Configure S4 MK3 MIDI Full**, enable the device,
+   and select the imported **S4 MK3 Bridge** configuration. Its name may have
+   a number appended.
 6. Set Djay's audio device to the S4's native audio interface. Route **Main**
    to its speaker outputs and **Pre-cue** to its headphones. Audio does not
    pass through the bridge.
@@ -74,9 +65,11 @@ that driver. Optional automatic stopping and restoration are in the Screens
 tab. Close Traktor, Maschine and Komplete Kontrol before handing over their
 shared service; the bridge will not close those applications for you.
 
-Continue without screens still runs MIDI, LEDs and saved tension. A red status
-icon can mean requested screens are blocked, not that all controls stopped.
-Use the app's recovery controls, not a separate driver-killing command.
+Continue without screens still runs controls, LEDs and saved tension. To enable
+screens later, choose **Enable screens - stop NI driver** in the menu or
+Screens tab. A red status icon can mean screens are blocked while controls
+continue working. Use these recovery controls rather than stopping the driver
+manually.
 See the [screen-driver guide](screen-driver-handover.md).
 
 ## Start and finish a set
@@ -96,20 +89,24 @@ See the [screen-driver guide](screen-driver-handover.md).
 6. Cue a track through headphones, confirm the selected deck, then bring its
    channel volume into the mix.
 
-Later mouse edits are not repeatedly overwritten by unchanged hardware
-snapshots. Shared FX knobs use pickup instead of being pushed on startup.
+Later mouse edits stay in place until you move the corresponding control.
+Shared FX knobs use pickup instead of jumping to their physical positions.
 See [startup and pickup details](controls-state-sync.md).
 
 ### When finished
 
-Pause playback or lower your outputs in the normal way, then use **Stop bridge**
-or **Quit S4 MK3 Bridge**. Stop is not Djay's transport Pause button.
+**Turn TT off or Stop bridge before quitting Djay.** The bridge can retain
+Djay's last reported playing state after Djay closes.
+
+Pause playback or lower your outputs, then use **Stop bridge** or
+**Quit S4 MK3 Bridge**. Stopping the bridge does not pause Djay.
 Closing the settings window alone leaves the bridge running in the menu bar.
 
-To return to Traktor, stop the bridge and use **Restart Native Instruments
-screen driver** if needed. With automatic restoration enabled, the app restores
-a driver it stopped after releasing the controller. Turning only the screens
-off does not hand the driver back during an ongoing bridge session.
+To return to Traktor, use **Restart Native Instruments screen driver** if needed
+and accept **Stop bridge & restore NI driver** if prompted. Open Traktor after
+restoration; restart it if it was already open. With automatic restoration
+enabled, stopping the bridge restores a driver the app stopped. Turning only
+the screens off doesn't return the driver during a running bridge session.
 
 ## Deck focus and transport
 
@@ -141,11 +138,9 @@ not Traktor's per-deck tempo-fader lock.
 QUANT toggles each deck; it does not force already-mixed quantize states into
 one uniform state.
 
-FLX and REV have dim red backlights when Djay reports them off and bright
-red indicators when Slip or reverse is active. They stay dark until their
-software state is known. Their idle intensity follows the same palette
-backlight setting as JOG, rather than the separate fixed-lamp inactive
-brightness. Shift has a dim white backlight and brightens while held.
+FLX and REV are dim red when off and bright red when active. They stay dark
+until Djay reports their state. Their backlights use the palette brightness
+setting, like JOG. Shift is dim white and brightens while held.
 
 ## Browse, preview and load
 
@@ -171,9 +166,8 @@ Switch Library Table changes which library table you work in; changing source
 is the separate Shift+BROWSER gesture. If Preview and Shift are both held,
 **Preview wins** and BROWSER still scrubs.
 
-Preview is implemented with toggle actions at the edges of the hold, not a
-latched mode. If it was already playing or changed externally and becomes out
-of sync, stop it with Djay's mouse control before trying another hold.
+If Preview was already playing or becomes out of sync after a mouse edit,
+stop it in Djay before trying another hold.
 
 ## Loops and beat jumps
 
@@ -197,12 +191,12 @@ Djay's selector while choosing that.
 1. Press **MOVE** to enter jump-size selection for this deck.
 2. Turn MOVE to choose the jump length. The value changes immediately in Djay.
    The deck selector pulses; the screen shows **SELECT**.
-3. Press MOVE again to leave selection. This exits the mode, not a deferred save.
+3. Press MOVE again to leave selection.
 4. Turn MOVE to jump by that length. With an active loop, beat jump moves the
    loop region by the jump length.
 
-Selection has no timeout. It survives a deck switch and clears when the bridge
-restarts; it does not mean the native jump length itself resets.
+Selection stays active across deck switches until you exit it or restart the
+bridge. Restarting clears selection mode, not Djay's jump length.
 
 For example, choose an 8-beat jump, then turn MOVE normally for 8-beat moves.
 Hold Shift while turning MOVE for 1-beat adjustments, including while SELECT
@@ -233,7 +227,7 @@ assignment changed**; choose **Keep** to retain the physical assignments.
 This does not change the armed Instant FX decks. Outside this selection workflow,
 channel ON independently arms/disarms that deck for Instant FX; it is not a
 channel mute button.
-Filter no longer resets the software filter.
+Filter doesn't reset the software filter.
 
 ON is white for normal EQ and cyan for Neural Mix EQ, brighter on each armed
 Instant FX deck. An active Instant FX temporarily takes over its color.
@@ -241,9 +235,7 @@ Dark/unknown feedback is not proof the deck is muted.
 
 ### External audio through a deck
 
-Djay can mix an S4 audio input through a deck in **DVS THRU** mode. The
-channel 4 route has been confirmed with the bridge running, including its
-channel fader, FX and mix/cue.
+Djay can mix an S4 audio input through a deck in **DVS THRU** mode.
 
 #### Required Djay DVS setup
 
@@ -266,9 +258,6 @@ For all four channels, configure:
 
 ![Djay DVS settings with Enable Digital Vinyl Control checked and S4 inputs 1-2, 3-4, 5-6 and 7-8 assigned to Decks 1-4](images/djay-dvs-settings.png)
 
-_Djay Settings > DVS configured for all four S4 inputs. Apply is disabled
-once the assignments have already been applied._
-
 These are audio input channels, not MIDI channels. Selecting another source
 type on the same S4 input does not give it a separate USB pair.
 
@@ -279,9 +268,8 @@ For input D, including the front MIC D socket:
    while selecting or connecting a source.
 2. Start the full-controller bridge with its matching mapping selected in
    Djay, after completing the DVS setup above.
-3. With the current-source full profile and matching mapping, press **EXT 4**
-   without Shift to switch Deck 4 from Internal to **Thru** once its mode
-   feedback is available. You can also select Thru in Deck 4's **DVS control-mode
+3. Press **EXT 4** without Shift to switch Deck 4 from Internal to **Thru**.
+   You can also select Thru in Deck 4's **DVS control-mode
    menu beside Play**. This is different from the crossfader's THRU assignment.
 4. Set channel level and cue/mix normally. If the same input is also selected
    as Djay's global Microphone, leave that microphone route off to avoid
@@ -289,31 +277,19 @@ For input D, including the front MIC D socket:
 5. Once Djay reports THRU, press **EXT 4** again to choose **Internal / INT**
    and return to normal track playback, or choose Internal in the same menu.
 
-**Leave Enable Digital Vinyl Control checked** when using external inputs.
-You can leave it on while playing normal tracks in Internal mode. A MIDI
-THRU command does not enable this setting for you, and the available deck-mode
-feedback cannot reliably tell the bridge whether it is off. If an external
-input will not activate, first check this checkbox and the deck's input
-assignment in **Settings > DVS**.
-
 **EXT 1-4 always address decks 1-4**, regardless of A/C, B/D or FX selection.
-Each new unshifted press uses the latest actual THRU feedback: THRU selects
-Internal, and not-THRU selects Thru. Missing feedback means no switch and a
-dark lamp; the bridge doesn't guess or queue a toggle. Release EXT before
-trying again. Holding it cannot repeat a command, even if feedback arrives
-or Shift is released during the hold.
+Each press switches between Thru and Internal using Djay's reported mode.
+If that mode is unknown, the button does nothing. Check the matching mapping,
+then release EXT before trying again.
 
-Holding **either Shift** suppresses software EXT commands, leaving
-**Shift+EXT** for hardware input-type selection. The EXT lamp lights only
-when Djay reports THRU for that deck. Not-THRU and unknown state stay dark,
-even with dim idle lamps enabled. A lit lamp doesn't confirm global DVS is
-enabled or that audio is arriving.
+Holding **either Shift** leaves EXT for hardware input-type selection.
+The EXT lamp lights only when Djay reports THRU; it doesn't confirm that DVS
+is enabled or audio is arriving. If you hear nothing, check **Enable Digital
+Vinyl Control** and the deck's input assignment in **Settings > DVS**.
 
-The input-pair map and physical EXT lamp locations are confirmed. Integrated
-switching/indicator acceptance is tracked in the
-[validation record](ext-input-validation.md). Complete mixer-control behavior
-on the other channels, phono-stage behavior and four simultaneous external
-sources still need separate validation.
+Check levels, cueing and FX before using an external source live. Full mixer
+behavior across all inputs, phono behavior and four simultaneous external
+sources haven't all been verified.
 
 ## Manual FX strips
 
@@ -331,9 +307,8 @@ They are **control targets**, not Traktor-style shared FX audio buses.
    through the software parameter's pickup position before it responds.
 5. Use the shared dry/wet knob for their wet/dry amounts.
 
-Each browsing step uses about 1/32 of the knob's travel. Small movements
-accumulate; a larger turn can scroll several effects. These knobs have end
-stops: release Shift, reposition, then hold Shift again to continue browsing.
+Larger turns browse several effects. These knobs have end stops: release
+Shift, reposition, then hold Shift again to continue browsing.
 Repositioning does not select effects, but crossing the software parameter
 value picks it up and resumes parameter adjustment. Dry/wet remains a wet/dry
 control even with Shift held.
@@ -359,8 +334,8 @@ After pickup, ordinary knob movement does not flash a new warning while
 Djay returns the updated values. A mouse edit in Djay or a different FX
 target can require pickup again.
 
-The strip's main **ON is not a reliable whole-bank bypass**: the current
-binding duplicates slot 1. Use the individual effect buttons or Djay's UI
+The strip's main **ON is not a reliable whole-bank bypass**: it duplicates
+slot 1. Use the individual effect buttons or Djay's UI
 when you need to turn the other slots off.
 
 ## Mixer Instant FX
@@ -402,382 +377,209 @@ STEMS, not a held modifier and not a button that mutes the entire deck.
 Neural Mix availability depends on the track and Djay support. The screen
 reports actual mute/solo state; ON in a MUTE tile means that mute is active.
 
-**REC is not the set recorder.** It is assigned to Djay's Record Sample
-action, which currently has a bug confirmed by Algoriddim. A fix and retest
-are pending. Use Djay's onscreen recording controls to record a mix.
+**REC is not the set recorder.** It uses Djay's Record Sample action, which
+has a known bug. Use Djay's onscreen recording controls to record a mix.
 
 ## Jog wheels and feel
 
-**In the current-source testing build, JOG and TT are independent toggles.**
-JOG toggles Vinyl: red enables top-touch scratching; blue disables top-touch
-scratch and retains bend/nudge behavior. Normal mode starts with Vinyl on;
-TT mode starts with Vinyl off. Jog settings have separate startup preferences
-for the two modes. Switching modes restores that mode's last Vinyl choice
-for the current bridge session.
-TT enables motorized playback on that physical side and starts off each time
-the bridge starts. Its lamp is always red: bright when enabled, dim when
-disabled unless inactive lamps are set dark. It does not inherit the deck color.
-Rotation follows actual playback feedback for the selected
-deck, not a press of Play. Install/select the newly generated mapping under
-a new filename: it adds explicit Internal-mode feedback required by this experiment.
-The selected deck must be loaded, playing and confirmed Internal, not THRU
-or DVS. Shift+jog seeks.
-In TT mode, hold Shift first, then touch and turn the top of the platter to seek.
-Holding Shift alone does not seek from the platter's powered or coasting rotation.
-Release the top to stop seeking, even if the platter is still turning.
-A gesture already held before Shift keeps its original function until release.
-On first loading an Internal track, touch and turn the platter top to Scratch
-even if Djay has not yet reported whether playback is running or paused.
-You do not need to press Play and Pause first. Diagnostics shows **Manual scratch**
-when this touch-only route is ready, and **Scratch** while touched.
-The motor stays neutral until actual playing feedback authorizes it; an unknown
-playback state is not treated as a confirmed pause.
-With TT selected and the loaded Internal deck confirmed paused, turning the
-platter moves the track in Scratch mode even with Vinyl off, without needing
-top-touch. The motor stays neutral while paused. Playback resumption restores
-the normal TT bend/speed-handoff behavior; your saved Vinyl choice is unchanged.
-If TT is bright red but the platter stays still, open Diagnostics at **Info**
-log detail. `MOTOR_TT_SELECTION` confirms the press; `MOTOR_PLAYBACK_GATE`
-lists the selected deck and blocking conditions. `internal_mode_unknown`
-means Internal-mode feedback has not arrived: install and select this app's
-newly generated mapping, then stop and start the bridge. Preserve your existing
-mapping under its old name. A selected TT light is not proof of motor output.
-GRID+jog edits the beat grid rather than performing an ordinary nudge.
-A detected backspin can keep scratching after you lift your hand, following
-the wheel's actual movement rather than switching immediately to nudge.
+**JOG** toggles Vinyl: red enables top-touch scratching; blue keeps bend/nudge
+behavior. Normal mode starts with Vinyl on, TT mode with Vinyl off. Each mode
+remembers its last Vinyl choice during the session; separate startup options
+are in Jog settings.
+
+**TT** toggles motorized playback on each physical side. It starts off whenever
+the bridge starts. Its lamp is red, bright when enabled and dim when disabled
+(or dark if inactive lamps are set dark). See [motorized playback](#testing-motorized-playback).
+
+Hold **Shift** and turn the jog to seek. In TT mode, hold Shift first, then
+touch and turn the platter top; lifting your hand ends seeking even while the
+wheel coasts. If you started a gesture before pressing Shift, release it first.
+**GRID+jog** edits the beat grid instead of nudging.
 
 ### Change physical resistance
 
-In **Jog > Hardware > Jog Wheel Tension**:
+In **Jog > Jog wheel feel > Wheel tension**:
 
 | Setting | Effect |
 | --- | --- |
-| Assist, -100 to -1 | Helps a wheel's own movement while its metal top is touched |
-| Neutral, 0 | No added tension; first-install default |
+| Assist, -100 to -1 | Helps a wheel's movement while its metal top is touched |
+| Neutral, 0 | No added tension |
 | Brake, 1 to 100 | Resists movement, including after release |
 
-Both wheels share the setting but respond independently. It is not assigned
-to a mixer fader or saved separately per logical deck.
+Both wheels share the setting but respond independently. It isn't assigned to
+a mixer fader or saved per deck. The app defaults to **-77**, toward Assist.
+Use **Save preferences** for the next Start,
+or **Save and restart** while running. No mapping export is needed.
 
 ### Change Djay's scratch/bend response
 
-The other Jog sections control **Speed** and **Reaction** in the exported
-Djay mapping. Defaults are scratch **2.7% / 150%** and pitch bend **2.7% / 17%**.
-These change software response, not motor force.
+The Jog **Scratch and pitch bend mapping** section sets Djay's **Speed** and
+**Reaction**. Defaults are **2.7% / 150%** for Scratch and **2.7% / 17%** for
+pitch bend. **Touch-scratch direction** offers Normal or Reversed.
 
-Tension, motor-force and Vinyl-startup values are runtime preferences and need
-saving/restarting. Scratch and pitch-bend mappings, touch-scratch direction and
-absolute platter sensitivity need a newly exported mapping selected in Djay.
-Haptic cue points remain unavailable.
+These change software response, not motor force. Save, use **Install Djay
+mapping...**, then import and select the new mapping in Djay. Restarting alone
+doesn't apply mapping changes. Haptic cue points aren't available.
 
 ### Backspin detection
 
 In **Jog > Backspin**:
 
-- **Detection** recognizes sharp backward acceleration during Scratch in Normal
-  Vinyl mode and in TT mode. TT also supports detection with Vinyl off, after
-  the speed-floor handoff has entered Scratch. Slow scratches do not get the
-  backspin speed increase. Bend/nudge, Shift-seek and GRID do not start events.
-- **Acceleration threshold** controls how hard a backward flick must be.
-  Higher values need a sharper flick; lower values detect more easily.
-  The starting value is **150000 counts/s^2**, using filtered wheel movement.
-- **Scratch speed increase** adds to the normal Scratch speed only during a
-  detected event. It defaults to **5.6%**; **0.0%** preserves normal travel.
-  For example, a **1.0%**
-  increase over **2.7%** gives an effective **3.7%** during the backspin.
-  Keep the app's normal Scratch speed matched to the mapping selected in Djay.
-- **Motor assistance** is a separate, experimental option, **on by default
-  at 100% strength**, for Normal mode only. TT keeps its existing playback motor
-  behavior; detecting a TT backspin does not add this separate assist pulse.
-  **Motor assist strength** selects **0-100%** of the existing maximum, only
-  for the wheel in a detected backspin. **100%** is the original maximum;
-  **0%** bypasses the override, just like switching motor assistance off.
-  After you lift your hand, assistance fades to zero over one second. Continued
-  spinning cannot extend that deadline or start another pulse without a new
-  touch gesture. Your saved Jog Wheel Tension setting is not changed.
+- **Detection** lets a sharp backward flick continue scratching after you lift
+  your hand, following the wheel's real movement. It works during Scratch in
+  Normal Vinyl mode and TT mode, including TT's low-speed Scratch with Vinyl off.
+  Ordinary nudging, seeking and GRID don't trigger it.
+- **Detection threshold** sets how sharp the flick must be. Raise it if
+  ordinary scratches trigger backspins; lower it for easier detection. The
+  default is **150000 counts/s^2**.
+- **Extra scratch speed** adds speed during a detected backspin. The default
+  is **5.2%**; **0%** keeps normal scratch travel. Keep normal Scratch speed
+  matched to the mapping selected in Djay.
+- **Motor assistance** helps the wheel during detected backspins in Normal
+  mode only. It defaults on at **100% strength**. Lower the strength for less
+  help, or use 0% or turn it off for none. TT uses its own playback assistance.
 
-These defaults apply to fresh preferences and missing fields in older files.
-Explicit saved settings, including zero speed increase or motor assistance off,
-are preserved when upgrading.
+The screen shows **BACKSPIN** and the affected deck. After release, motor
+assistance fades out within one second, but scratching can continue while the
+wheel coasts. Retouching, stopping or reversing the wheel ends the backspin.
+A top-touch backspin stays with its original deck if you change focus. A TT
+Vinyl-off backspin cancels on a deck switch; otherwise Scratch can continue
+until the wheel regains forward speed.
 
-The wheel's screen shows **BACKSPIN** and its owning deck while detection is
-active, including before release. Use that indicator to spot unwanted
-detections before changing the threshold or adding speed.
-
-For a top-touch-owned backspin, released movement stays on its original deck,
-even if you select another deck. It ends when the wheel settles, reverses
-direction, or you touch it again.
-With TT Vinyl off, the speed-floor Scratch route keeps following real backward
-movement after release. Catching or stopping the wheel clears **BACKSPIN** and
-the extra speed, but Scratch can remain active under the usual TT speed-floor
-rules. Switching decks cancels that speed-owned gesture rather than applying
-it to the new deck. Normal forward-speed recovery returns to bend.
-**Stop in the bridge app** releases all scratch holds and clears motor force.
-MIDI movement is not invented after the platter stops.
-
-With motor assistance enabled, retouching, stopping/reversing the wheel or
-cancelling its mode ends the assist pulse early. The existing input-freshness
-cutoff also clears it. Your normal tension behavior resumes after the override.
-The **BACKSPIN** indicator can remain visible after the one-second motor fade:
-scratch continues to follow the remaining real coast, without extending motor
-assistance. Disabling detection disables the assist controls without forgetting
-their saved checkbox or strength values.
-
-These options apply after **Save preferences** and the next Start, or **Save
-and restart**. They do not need a mapping export. Compare with motor assistance
-off first; software speed increase and motor assistance change different parts
-of the feel. This is gesture-driven assistance, not playback-driven platter rotation.
-
-You can make your own repeated comparisons in the app: choose assist off or a
-strength, use **Save and restart**, wait for **Running**, then repeat the same
-flick and release. The slider does not change a running motor until you apply
-it. Keep normal Jog Wheel Tension and Scratch speed increase fixed while
-comparing motor levels; neither is changed by the strength control. No mapping
-reinstall is needed.
+Apply changes with **Save and restart**, or save while stopped for the next
+Start. No mapping export is needed. To compare motor strength, repeat the
+same flick and release while keeping tension and Scratch speed increase fixed.
+The controls don't change the running bridge until applied.
 
 ### Testing motorized playback
 
-The **Testing: Motorized playback** section in Jog settings retains the
-experimental tuning controls for comparison during actual DJ use. These are
-not settled release options. The starting values are 33 RPM, maximum force
-20000, base force 1650, force per RPM 110, Kp 4000, Ki 3000, force rise
-200000/second, startup 200 ms, immediate startup force step and overspeed
-abort disabled. Save and restart to apply changes; controls are not live.
+Motorized playback is experimental. Its feel differs from Traktor, and it
+isn't fully verified for live use.
 
-Unlike the diagnostic's MOVE-armed pulse, TT playback has no 15-second
-duration limit. Switch TT off or pause the selected deck to remove drive.
-The current-source response retains forward assistance for braking,
-holding and reversing, but tapers it linearly over the last 2 RPM below target.
-With the starting settings, full assistance is 5280 force units, capped by
-maximum force. It reaches zero at or above measured target speed, including
-the fallback after top-touch release. Light contact must not accelerate the
-wheel above target. These are requested force units, not measured torque.
-While assistance owns the motor, the speed regulator does not accumulate error
-against your hand. Normal tension and backspin motor assistance do not add to it.
-Sensor loss clears force and
-requires a new baseline and fresh 20 ms sensor window before recovery.
-Automatic rim-braking assistance now requires underspeed confirmation from both
-the 20 ms motor estimate and a separate 100 ms encoder window. Brief speed
-ripple alone should not restart the regulator. Top touch and reverse movement
-retain the short-window response; assistance already active still releases
-using that short window. A brief, light rim brake can therefore feel more
-resistance while the longer window confirms it. Motor tuning and the MIDI
-quiet band are unchanged; physical stability and braking feel need comparison.
-See the [admission correction and verification limits](tt-assistance-admission-validation.md).
-In the current relative-pitchbend test build, when TT is authorized and the
-wheel is not touch-owned, only deviation from the configured target RPM produces
-signed relative Pitch Bend CC 4 steps for the selected deck's `pitchBendMove`
-mapping. Speed uses a rolling 100 ms measurement, but corrections follow fresh
-input reports rather than arriving in 100 ms bursts. Startup and recovery first
-require measured rotation within the 2.25 RPM quiet band around the target.
-A settled 32 RPM wheel at a 33 RPM target can therefore qualify without first
-crossing target speed. Bend output is zero within 2.25 RPM of target on both
-entry and return, with no active-gesture hysteresis or leftover fractional
-correction. Outside that band, output rises smoothly over the next 1 RPM,
-reaching the selected curve's full onset weight at 3.25 RPM deviation.
-Slower rotation sends negative corrections; faster rotation sends positive
-corrections. The nominal rotation itself is subtracted.
-Imported preferences retain the earlier stronger-braking response. The current
-source adds independent braking and nudge controls, described below. These tune
-MIDI commands, not a guaranteed percentage of audible slowdown. Manual TT-off
-jog and top-touch Scratch keep their existing response.
-With TT selected and Vinyl off, slowing to the **TT pitch-bend floor**
-switches from CC 4 to held Scratch mode and raw relative CC 5 movement.
-The initial diagnostic floor is **50% of target RPM** (16.5 RPM at 33 RPM);
-it is adjustable from 1 to 95% in Testing. This is provisional: the supplied
-tone recording reached half speed, but the CC 4 mapping's actual floor has
-not been established. Once Scratch has engaged, keeping your hand on the top
-holds Scratch through fast forward and reverse strokes, even above the exit
-speed. Lift your hand to allow the usual speed-based return to pitch bend.
-If the wheel is still below the exit speed when released, Scratch remains until
-rotation recovers. At the default settings the exit is 18.5 RPM.
-An abrupt stop from normal speed has a faster path: at least 4 ms of fresh
-zero-motion sensor time engages Scratch without waiting for the 100 ms RPM
-average. A duplicate or lone 2 ms zero-count report cannot trigger it.
-Gradual slowing still uses the saved floor; startup and stale-input recovery
-still need normal-speed qualification. This is bridge detection timing, not a
-guarantee of audio latency in Djay.
-Switching deck or losing playback authorization releases
-the original speed-Scratch owner and neutralizes drive.
-The floor controls only the lower-speed Scratch entry. A forward nudge stays
-on pitch bend; there is no automatic upper-speed Scratch handoff. Explicit
-Vinyl-on top touch still selects Scratch. The default floor remains 50%, and
-installing this build preserves your saved floor and gain rather than resetting
-them. Keep your current floor and response for the first comparison.
-See the [diagnostic calibration and attended checks](tt-speed-scratch-diagnostic.md).
-The [touch-hold and abrupt-stop validation record](tt-touch-stop-validation.md)
-separates software regression evidence from the pending physical trial.
-There is no absolute CC 8 position stream in this test path. Ordinary top-touch
-Scratch remains on relative CC 5.
-**Absolute platter sensitivity** in Testing starts at **14.0%** based on the
-first timed trial and can be adjusted from **0.1 to 100%** independently of
-manual Scratch speed. It controls the generated CC 8 mapping and does not tune
-this relative CC 4 experiment. Tune the Djay Pitch Bend mapping's sensitivity
-for this test.
+1. Install and select this app's matching mapping under a new filename. TT
+   needs its Internal-mode feedback; keep your custom mappings intact.
+2. Load a track and select **Internal / INT** in Djay, not THRU or DVS control.
+3. Press **TT** on the desired side. Rotation follows playback on that side's
+   selected deck. The default target is **33 RPM**.
+4. Pause the deck or switch TT off to stop powered rotation. There is no
+   automatic time limit.
+
+**Turn TT off or Stop bridge before quitting Djay.** Closing Djay alone may
+leave the last reported playing state active. Stop releases scratch holds
+and clears motor force.
+
+With Vinyl off, slowing the wheel bends the track down and speeding it up
+nudges it forward. Small deviations within **2.25 RPM** of target produce no
+pitch bend. The wheel must first settle near target speed before bending works.
+
+The **Switch to scratching below** setting sets when slow rotation changes from
+pitch bend to Scratch. Its default is **1% of target speed**, or **0.33 RPM** at
+33 RPM.
+This is an adjustable handoff point, not a verified minimum playback speed in
+Djay. An abrupt stop can enter Scratch sooner. Once Scratch starts, keeping
+your hand on the top retains it through forward and reverse strokes. After
+release, it returns to pitch bend as the wheel recovers forward speed, at
+2.33 RPM with the default settings. A fast forward nudge doesn't automatically
+switch to Scratch; enabling Vinyl lets top touch select Scratch directly.
+
+On a paused, loaded Internal deck, turning the platter moves the track in
+Scratch even with Vinyl off and without top touch. The motor stays neutral.
+You can also touch and turn a newly loaded Internal track before pressing Play.
+
+The motor continues helping forward movement while you brake, hold or reverse
+the wheel, easing off near target speed. Tension and backspin assistance don't
+add extra force in TT mode.
+
+In **Jog > Motorized platters**, start with **Base force** to adjust the
+baseline motor drive. The default is **7,000 force units**. Move toward Weak
+for a gentler push or Strong for a stronger push; speed-based drive and
+corrections are added on top, up to the maximum force.
+
+**Pitch bend response** has separate Braking and Nudge controls:
+
+- **Strength** changes how strongly the track slows down or speeds up for the
+  same platter movement. Defaults are **10x braking** and **3x nudge**.
+- **Shape** changes the response to small movements. Lower values emphasize
+  them; higher values make them gentler. Defaults are **1 for braking** and
+  **1.6 for nudge**.
+
+Tick **Advanced settings** for startup Vinyl choices, target speed, the
+scratch handoff, maximum force and detailed motor tuning. Untick it to hide
+those controls without changing their values. **Restore defaults** resets
+the motorized platter controls, including response and advanced settings,
+in the editor. It leaves wheel tension, backspin and mapping settings alone.
+
+Save while stopped for the next Start, or use **Save and restart** while
+running. These controls aren't live and don't need a new mapping.
+Detailed motor tuning and limits are in the
+[bridge function reference](bridge-function-reference.md#current-source-motorized-playback-testing).
 
 #### See what braking is doing
 
-Open **Diagnostics > Live platter diagnostics** in the current-source app.
-The Full profile supplies both wheels' values at every log-detail setting;
-Debug is needed only for the separate motor diagnostic capture.
+Open **Diagnostics > Live platter diagnostics** with the full-controller
+profile. The readings work at any log-detail setting.
 
-- **Measured speed** is physical RPM from the encoder, including while paused
-  or scratching. Reverse movement has a negative sign.
-- **Bend output** is the recent signed MIDI bend output in counts per second.
-  A negative value confirms the bridge sent a slowing command; zero means no
-  net bend output in that update. This is not a measured percentage change in
-  Djay's audible playback speed.
-- **Mode** distinguishes Bend, Scratch, Paused scratch, Waiting, Blocked,
-  Seek, Grid and TT Off. Waiting can mean the wheel has not yet qualified near
-  target speed. Scratch uses a separate movement route, so zero bend output
-  during Scratch is expected.
-- Stale or stopped indicators do not retain old numbers as current readings.
-  A sensor gap clears current RPM; missing telemetry also expires the display.
+- **Measured speed** is physical RPM, including while paused or scratching.
+  Negative values mean reverse rotation.
+- **Bend output** is the pitch bend rate sent to Djay. Negative means slowing;
+  zero means no net pitch bend. It isn't a measurement of audible playback speed.
+- **Mode** shows Bend, Scratch, Paused scratch, Seek, Grid, TT Off, or a waiting
+  or blocked state. Waiting can mean the wheel hasn't settled near target yet.
+  Manual scratch means a newly loaded track is ready for top-touch movement.
+  Zero bend output during Scratch is normal.
+
+Stale or stopped readings aren't current measurements. If TT is lit but the
+wheel won't turn, check the track is loaded, playing and Internal, then confirm
+the matching mapping and restart the bridge.
 
 #### Adjust braking and nudge separately
 
-Current-source builds show **Braking (slow down)** and **Nudge (speed up)** in
-**Jog > Testing: Motorized playback**. Each has **Strength**, **Shape**, and a
-graph that updates as you edit:
+**Jog > Testing: Motorized playback** has separate **Braking (slow down)** and
+**Nudge (speed up)** controls:
 
-- **Strength** changes the amount of MIDI bend: 0.1-20x for braking, 0.1-10x
-  for nudging. Lower nudge strength without changing braking.
-- **Shape 1** keeps the existing response. Values above 1 make small movements
-  gentler relative to deep movements; values below 1 make them stronger.
-  The range is 0.25-4.
-- The horizontal axis is physical speed deviation from the target. The vertical
-  extent is the displayed MIDI count rate, not an audio-speed percentage.
-  Each graph scales independently, so compare the count labels as well as shape.
-  The shaded area is the fixed 2.25 RPM quiet band.
+| Setting | What it changes |
+| --- | --- |
+| Strength | Amount of pitch bend: 0.1-20x for braking, 0.1-10x for nudging |
+| Shape | Response near target speed: above 1 is gentler, below 1 is stronger; range 0.25-4 |
 
-The preview is the bend law before whole-count quantization and Scratch routing.
-Below the saved floor with Vinyl off, Scratch takes over instead of sending the
-braking preview's CC4 commands.
+Defaults are **2x braking / 1x nudge**, both Shape 1. The graphs show
+physical speed deviation against pitch bend rate, not an audio-speed
+percentage. Each graph scales independently; compare its number labels as
+well as its shape. The shaded area is the 2.25 RPM quiet band. Below the saved
+floor with Vinyl off, Scratch takes over from pitch bend.
 
-Existing settings load with the same response. The old shared gain included an
-extra 2x braking weight, now included in the displayed braking strength. For
-example, a saved **5x** loads as **10x braking / 5x nudge**, both Shape 1.
-This display change does not double the old braking response again.
-New installations start at **2x braking / 1x nudge**, both Shape 1.
+To soften nudging, leave braking unchanged, lower only nudge Strength and use
+**Save and restart**. Let the wheel settle into **Bend**, then repeat the same
+gentle nudge. Change Shape separately to adjust the feel near target speed.
+These controls don't change Scratch, motor force, the floor or normal jog
+response, and don't need a new mapping.
 
-To soften nudging, leave braking unchanged, reduce only nudge Strength, then use
-**Save and restart**. Let the wheel settle and repeat the same gentle nudge.
-Change Shape separately if you want a gentler onset relative to larger nudges.
-Saving while stopped applies on the next Start; the controls do not change a
-running bridge until applied. No mapping export is needed.
-After saving these curve settings, keep using a curve-capable build; older
-diagnostic apps can reject the added preference fields.
+Keep **Jog > Pitch bend > Speed / Reaction** fixed while comparing Strength
+and Shape. Those separate settings change Djay's response and require a new
+mapping. Judge the result by listening, not just by the diagnostic numbers.
 
-These settings change TT bend only, not normal jog, Scratch, motor force,
-measured RPM, the quiet band or the lower-speed Scratch handoff floor. The graph
-updates immediately; the actual feel still needs a controller comparison.
+#### Record a motor diagnostic capture
 
-For tuning, let the wheel settle, confirm **Bend**, then brake gently and watch
-RPM and Bend output together. The filter stays quiet within 2.25 RPM even
-after a bend has started. To probe Djay's minimum playback-speed
-response, keep target RPM, floor and the selected mapping fixed, then compare
-braking Strength **2x, 4x and 8x**, with Shape 1, at the same measured RPM.
-These correspond to the earlier shared gains 1x, 2x and 4x. Higher strength should
-increase negative MIDI output; whether audible speed continues to decrease
-must be measured separately. A larger diagnostic number alone does not
-establish Djay's response limit.
+1. Select **Full controller + LED feedback** and set **Diagnostics > Log detail**
+   to **Debug** before starting or restarting the bridge.
+2. Wait for **Running**, then click **Start motor diagnostic capture** before
+   performing the actions you want to record.
+3. Repeat the problem or comparison, noting which deck and controls you used.
+4. Click **Stop motor diagnostic capture**, then **Show file** to reveal the
+   saved log in Finder.
+5. Turn TT off or Stop bridge before closing Djay.
 
-**Jog > Pitch Bend > Speed / Reaction** separately controls Djay's interpretation
-of that MIDI. Changing those values still requires exporting and selecting the
-updated mapping, not merely Save and restart. Keep them fixed during a gain
-comparison. **Absolute platter sensitivity** does not affect this bend route.
+Captures are saved under
+`~/Library/Application Support/S4 MK3 Bridge/diagnostics/`. They include
+motor settings and timestamped platter activity, and continue if Settings is
+closed. **Copy log** copies only the latest 60,000 characters of the displayed
+log; the separate capture file isn't subject to that limit. Use **Normal** log
+detail for everyday use and **Debug** for a requested capture.
 
-The retired [absolute-position Scratch experiment](absolute-position-scratch-experiment.md)
-is documented separately for future software compatibility work.
-The touch-scratch direction picker offers **Normal** and **Reversed** for the
-manual CC 5 route only.
-Nominal TT rotation does not hold Djay's `scratchingMode` state. The new
-speed-floor handoff can hold it with Vinyl off; Vinyl on retains conventional
-top-touch Scratch ownership while continuing bounded TT assistance.
-Physical coverage and remaining limits are recorded in the
-[integration validation record](motorized-playback-integration-validation.md).
-For diagnostics, set log detail to **Debug** and look for
-`MOTOR_JOG_BEND` to confirm relative CC 4 movement, and `MOTOR_JOG_POSITION`
-to observe the encoder-derived angle. These confirm bridge output, not that
-Djay produced the intended audible speed.
-For a longer trace, select the **Full** profile and **Debug** before starting
-the bridge, then choose **Start motor diagnostic capture** before the test and
-stop the capture afterward. The app writes timestamped
-`MOTOR_JOG_BEND`, `MOTOR_JOG_POSITION`, `MOTOR_SCRATCH_HANDOFF`,
-`MOTOR_TT_SELECTION`, `MOTOR_PLAYBACK_GATE`, bounded `MOTOR_TT_STATE` reports
-and `S4_PLATTER_STATUS` lines to a separate file under
-`~/Library/Application Support/S4 MK3 Bridge/diagnostics/`; **Show file**
-reveals it in Finder. Unlike the Diagnostics display, this filtered file is
-not limited to 60,000 characters.
-The response-stability capture includes an `S4_MOTOR_CONFIG` receipt for the
-actual configuration loaded by each bridge launch, not unsaved editor values.
-`MOTOR_TT_STATE` records touch, playback authorization, ownership and requested
-force; it does not measure applied torque. There is no runtime
-`MOTOR_SCRATCH_MODE` emitter.
-At **Normal** log detail, TT-state records appear at startup and when touch,
-authorization or ownership flags change, rather than repeating unchanged idle
-state. **Debug** retains periodic TT-state samples for motor captures.
-Routine slider values, encoder steps and successful screen-frame writes also
-require **Debug**. **Normal** keeps button/mode changes and errors without those
-continuous event streams. This changes logging, not MIDI or screen updates.
-Live platter readings and log output update only their Diagnostics views;
-they do not refresh the preference editors. Diagnostics rendering is suspended
-while another Settings tab is selected. Settings content is also suspended
-when its window is closed, minimized, hidden, or fully covered by other windows.
-The bridge, log collection, and any motor diagnostic capture keep running.
-Reopening Settings preserves the selected tab and preference edits, and shows
-the latest retained readings and log. Readings become stale after half a second
-without telemetry; the display uses a single freshness deadline rather than a
-continuously running UI timer.
-While Diagnostics is visible, routine platter readouts refresh at most four
-times per second, and identical displayed values do not trigger another refresh.
-Opening Diagnostics, stopping the bridge, and stale-data transitions update
-immediately. This display limit does not discard incoming telemetry or records
-in a motor diagnostic capture.
-The visible log updates incrementally rather than laying out its whole retained
-history for each new batch. **Copy log** still copies the most recent 60,000
-characters; full motor diagnostic captures retain their separate file.
-
-The RPM-investigation build also captures `MOTOR_REGULATOR`: sampled encoder
-counts, sensor timing, motor-speed measurements, regulation/assistance mode and
-requested-force components. Its timestamps can be aligned with the live platter
-snapshots. `assistance_rpm` shows the longer admission estimate, or no value until
-a complete window is available. Diagnostics do not establish physical stability.
-For a clean untouched baseline, follow the
-[hands-free RPM procedure](tt-rpm-baseline.md); keep all tuning settings fixed.
-
-**For this testing build, turn TT off or Stop bridge before quitting Djay.**
-Playback authorization is cached from real feedback; silence from Djay does
-not itself clear a previously reported playing state.
-Integrated physical feel and playing acceptance are tracked separately in
-the [integration validation record](motorized-playback-integration-validation.md).
-This is current-source testing behavior, not a published release.
-The response-stability changes still need physical and Djay audio checks;
-source tests and offline replay cannot establish either. See the
-[ordered morning test and evidence limits](tt-response-stability-validation.md).
-These response changes use the existing mapping; no export is needed.
-The Testing settings remain available during beta testing. Before release,
-the settings exposed to ordinary users will be reviewed; no options are removed
-by this documentation update.
-
-The separate [attended platter diagnostic](platter-diagnostic.md)
-measures motor response and physical ring following without controlling Djay.
-Current source also provides a short target-speed probe, armed with MOVE,
-with a two-second powered window by default and an optional window up to
-15 seconds for repeated rim-feel checks. Its 33 RPM/8,000-unit defaults use
-sensor-timed feed-forward and PI feedback. The standalone command lets you
-adjust the force ceiling, feed-forward curve, PI gains and startup behavior
-for each attended run; the log records the selected values. Change the command
-between runs; values are not adjusted live or saved to the bridge app. For a
-trial, you can also override the overspeed cutoff or set it to zero to disable
-that cutoff; the direction and sensor-freshness guards remain. Clear both
-platters and wait for the terminal to show
-`PLATTER_STATE gate=Ready` before arming MOVE. Top-plate touch cancels drive,
-and lifting does not restart it; this does not enable scratching. Separate
-rim-brake and forward-nudge checks compare recovery. The current feel remains
-different from Traktor; see the diagnostic guide for the adjustable values
-and run procedure.
-Run it separately from the bridge, only during an attended test.
+For an ordered, hands-free speed comparison, follow the
+[RPM baseline procedure](tt-rpm-baseline.md). The separate
+[attended platter diagnostic](platter-diagnostic.md) is a developer tool, run
+without the bridge; it doesn't control Djay.
 
 ## Screens and feedback
 
@@ -795,20 +597,14 @@ There is no title, artwork, BPM, time or waveform display.
 | BACKSPIN A/B/C/D | That wheel is in a detected backspin owned by the named deck |
 | Red running status icon | Requested screens are blocked/failed; check the Screens tab |
 
-The musical-key load-order bug is fixed in the current build: replacement
-preserves the newly reported key, and eject uses Djay's explicit no-key value.
-It does not guess a key or retain an old track's key as a fallback.
+Normal-mode rings advance during playback, follow scratching and freeze when
+paused and untouched. Playback animation resumes from the same position after
+a scratch. Set its speed with **LEDs > Jog rings > Chase revolution**; it
+doesn't show the track's actual position. TT rings follow physical wheel
+rotation. Whole-ring loop flashing takes priority until the loop ends.
 
-Most playback, pad and meter indications follow Djay feedback; selection and
-physical-hold indicators also represent local bridge state. Normal-mode rings
-advance while the deck plays, follow Scratch movement and freeze in place when
-paused and untouched. Releasing Scratch resumes playback animation from that
-same position, without a jump. Each logical deck keeps its phase and original
-Scratch ownership. The normal animation period uses `chase_period_ms`; it is
-not an absolute track playhead. TT rings remain tied to physical wheel rotation.
-Whole-ring loop flashing takes precedence and restores the current mode's phase
-when the loop exits.
-See the [screen reference](screens.md) and [LED reference](led-feedback.md).
+See the [screen reference](screens.md) and [LED reference](led-feedback.md)
+for more detail.
 
 ## Settings: what needs saving or a new mapping?
 
@@ -816,15 +612,14 @@ See the [screen reference](screens.md) and [LED reference](led-feedback.md).
 | --- | --- |
 | LED colors, brightness, meter appearance | Save preferences while stopped, or Save and restart while running; no mapping export |
 | Hardware jog tension | Same save/restart actions; no mapping export |
-| Jog scratch/bend Speed or Reaction | Save, export with Install Djay mapping..., import and select that new mapping in Djay |
-| Backspin detection, threshold or speed increase | Save preferences and restart the bridge; no mapping export |
+| Jog scratch/bend Speed, Reaction or touch-scratch direction | Save, export with Install Djay mapping..., import and select that new mapping in Djay |
+| Backspin detection, threshold, speed increase or motor assistance | Save preferences while stopped, or Save and restart while running; no mapping export |
+| TT startup Vinyl, braking/nudge response, floor or motor tuning | Same save/restart actions; no mapping export |
 | Screens on/off and NI handover options | Screen controls save immediately; use their live actions |
 | A build with changed MIDI bindings/feedback | Install/select its matching mapping under a new filename, then restart the bridge |
 
 Mapping export uses the current Jog editor values. Saving or restarting alone
 does not change Djay's selected mapping. Preserve custom maps when importing.
-A runtime-only key fix does not require a new mapping if the current numeric
-feedback is already present.
 
 LED and Palette preferences can be imported/exported. These LED exports are
 not a backup of every app preference or your custom Djay mapping.
@@ -842,14 +637,12 @@ editing them.
 | FX knob seems ignored or blinks | Check its target deck, then cross the software pickup value; missing feedback needs the matching mapping |
 | Jumps are one beat after Shift+MOVE | Confirm JUMP feedback and the matching mapping before relying on size restoration |
 | Preview stays playing | Stop Preview with the mouse to resynchronize the held workflow |
-| Screens show logos, stay dark, or status is red | Use Settings > Screens and the app's NI handover/recovery controls; do not start a second screen prototype |
+| Screens show logos, stay dark, or status is red | Use Settings > Screens and the app's NI handover/recovery controls; run only one bridge app |
 | Return to Traktor after a crash | Use Restart Native Instruments screen driver; accept Stop bridge & restore NI driver if prompted |
 | USB was disconnected | Reconnect and explicitly start the bridge again |
 
-Brief input gaps suspend tension and allow it to recover after fresh readings
-and newly qualified movement. That is different from a bridge exit. If the
-bridge actually stops with an error, keep the Diagnostics log and report the
-exact message rather than assuming the timeout-recovery path ran.
+Brief input gaps suspend tension until fresh movement arrives. If the bridge
+stops with an error, keep the Diagnostics log and report the exact message.
 
 If Djay shows a key but the latest S4 build shows `?`, retain the track and
 record the deck, title and Djay key before restarting. For a report, also
@@ -865,20 +658,12 @@ Copy relevant Diagnostics output and check it for private information.
 - Filter then ON chooses an EQ-mode change; ordinary ON targets Instant FX.
 - MUTE selects the STEMS layer rather than acting as a held modifier.
 - The main FX ON and REC have the limitations described above.
-- Current-source full-profile EXT switches fixed decks between THRU and Internal
-  using actual feedback and a new matching mapping. DVS enable and input
-  assignments remain manual. Switching and lamps are confirmed on all four
-  channels; broader audio checks remain separate. Don't assume factory
-  Traktor behavior.
-- Djay can coalesce very rapid separate jump commands. This is distinct from
-  the confirmed-size restoration fix.
+- EXT switches fixed decks between THRU and Internal. DVS enable and input
+  assignments remain manual; this isn't Traktor's factory input workflow.
+- Djay may combine very rapid separate jump commands.
 
 For every binding and lower-level detail, use the
 [bridge function reference](bridge-function-reference.md). The
 [Traktor comparison](traktor-djay-comparison.md) explains the factory
-differences; its historical rows are superseded by its current overlays.
+differences.
 The [issue checklist](issues.md) tracks remaining work.
-
-This guide is the maintained explanation of current workflows. Control,
-mapping, setup and feedback changes should update the relevant section here
-alongside their technical reference.

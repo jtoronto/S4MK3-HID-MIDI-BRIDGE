@@ -302,11 +302,12 @@ and clears on catch or stop. The separate backspin motor-assist pulse remains
 Normal-only; TT playback motor behavior is unchanged.
 Holding or braking retains assistance, tapered linearly over the final 2 RPM
 below target to zero at/above measured target, including touch-release fallback.
-The default floor remains 50%; existing saved values persist. Current source
-provides separate braking and nudge Strength/Shape controls with live MIDI-rate
-graphs. Defaults are 2x braking / 1x nudge, both Shape 1. A legacy shared gain
-keeps its response: saved 5x appears as 10x braking / 5x nudge because braking
-already included an extra 2x weight. No additional multiplier is applied.
+Current source puts **Base force** first in **Jog > Motorized platters**,
+with separate braking and nudge **Strength/Shape** controls always visible.
+Defaults are 7,000 force units, 10x braking / Shape 1, 3x nudge / Shape 1.6,
+and a 1% lower scratch handoff. Tick **Advanced settings** for the remaining
+motor controls. **Restore defaults** resets only the motorized platter
+settings in the editor, leaving wheel tension, backspin and mapping choices.
 Save and restart applies changes; no mapping export is needed.
 Physical feel and Djay's audio floor remain unverified.
 

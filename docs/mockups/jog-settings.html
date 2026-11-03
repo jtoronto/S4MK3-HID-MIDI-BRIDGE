@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jog settings proposal</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --page: var(--background, light-dark(#f2f2f4, #222225));
+        --ink: var(--foreground, light-dark(#222226, #f3f3f5));
+        --secondary: var(--muted-foreground, light-dark(#56565e, #bcbcc4));
+        --panel: var(--card, light-dark(#ffffff, #303034));
+        --line: var(--border, light-dark(#dddde2, #505057));
+        --control: var(--muted, light-dark(#f6f6f8, #3b3b41));
+        --blue: var(--primary, light-dark(#1764c0, #8cbdff));
+        --radius-small: 6px;
+        --radius-group: 10px;
+        font-family: var(
+          --font-sans,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif
+        );
+        font-size: 14px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--page);
+      }
+      ::selection {
+        background: color-mix(in srgb, var(--blue) 25%, transparent);
+        color: var(--ink);
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+        color: inherit;
+        caret-color: var(--blue);
+      }
+      button,
+      input,
+      select {
+        accent-color: var(--blue);
+      }
+      button {
+        min-height: 32px;
+        padding: 5px 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-small);
+        background: var(--panel);
+        cursor: pointer;
+        font-weight: 500;
+      }
+      button:hover {
+        background: var(--control);
+      }
+      button:active {
+        filter: brightness(0.93);
+      }
+      :focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 3px;
+      }
+      .window {
+        height: min(940px, 100dvh);
+        min-height: 540px;
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+        max-width: 1000px;
+        margin-inline: auto;
+      }
+      .titlebar {
+        min-height: 44px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 72px;
+        color: var(--secondary);
+        font-size: 13px;
+      }
+      .lights {
+        position: absolute;
+        inset-inline-start: 16px;
+        display: flex;
+        gap: 8px;
+      }
+      .lights i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--border, light-dark(#d0d0d5, #6b6b72));
+      }
+      .tabs {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 0 16px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .tab {
+        padding: 7px 15px;
+        color: var(--secondary);
+        border-radius: var(--radius-small);
+        font-size: 14px;
+      }
+      .tab[aria-current] {
+        color: var(--ink);
+        background: var(--panel);
+        font-weight: 600;
+      }
+      .settings-scroll {
+        overflow: auto;
+        min-height: 0;
+        padding: 20px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--line) transparent;
+      }
+      .page-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      h1 {
+        font-size: 23px;
+        line-height: 1.25;
+        margin: 0;
+        font-weight: 650;
+        letter-spacing: -0.015em;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--secondary);
+        font-size: 14px;
+      }
+      .status::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--success, light-dark(#268344, #72ca8b));
+      }
+      .group {
+        background: var(--panel);
+        border-radius: var(--radius-group);
+        padding: 18px;
+        margin-bottom: 20px;
+      }
+      .group-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      h2 {
+        font-size: 18px;
+        line-height: 1.3;
+        margin: 0;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .force-heading,
+      .setting-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+      label {
+        font-weight: 500;
+      }
+      output,
+      .measurement,
+      input[type="number"] {
+        font-variant-numeric: tabular-nums;
+      }
+      .measurement {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .units {
+        color: var(--secondary);
+        font-size: 14px;
+        font-weight: 400;
+      }
+      input[type="range"] {
+        width: 100%;
+        min-width: 0;
+        height: 32px;
+        margin: 6px 0 0;
+        cursor: pointer;
+      }
+      .range-ends {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--secondary);
+        font-size: 14px;
+      }
+      .hint {
+        display: block;
+        margin: 6px 0 0;
+        max-width: 70ch;
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1.5;
+        font-weight: 400;
+      }
+      .advanced-toggle {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-top: 16px;
+        cursor: pointer;
+      }
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin: 0;
+      }
+      .advanced-controls {
+        display: none;
+        border-top: 1px solid var(--line);
+        margin-top: 12px;
+        padding-top: 4px;
+      }
+      .motor-settings:has(#advanced:checked) .advanced-controls {
+        display: block;
+      }
+      fieldset {
+        min-width: 0;
+        margin: 24px 0 0;
+        padding: 0;
+        border: 0;
+      }
+      legend {
+        padding: 0;
+        margin-bottom: 4px;
+        font-size: 15px;
+        font-weight: 650;
+      }
+      .setting-row {
+        padding: 14px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .setting-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+      }
+      .value-control {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 7px;
+        flex: none;
+      }
+      input[type="number"],
+      select {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-small);
+        background: var(--control);
+        padding: 5px 7px;
+        min-height: 32px;
+      }
+      input[type="number"] {
+        width: 100px;
+        text-align: right;
+      }
+      .value-control .units {
+        max-width: 95px;
+        line-height: 1.25;
+      }
+      .check-line {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 28px;
+        cursor: pointer;
+      }
+      .curve-pair {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 24px;
+      }
+      .curve-title {
+        display: block;
+        margin: 16px 0 4px;
+        font-weight: 600;
+      }
+      .curve-row {
+        display: grid;
+        grid-template-columns: 1fr 80px;
+        column-gap: 12px;
+        align-items: center;
+      }
+      .curve-row label {
+        grid-column: 1/-1;
+        margin-top: 12px;
+      }
+      .curve-row input[type="number"] {
+        width: 80px;
+      }
+      .curve-row .hint {
+        grid-column: 1/-1;
+      }
+      .plot-title {
+        margin: 16px 0 4px;
+        color: var(--secondary);
+        font-size: 14px;
+      }
+      .plot {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 280 / 110;
+        display: block;
+        overflow: visible;
+      }
+      .plot-grid {
+        fill: none;
+        stroke: var(--ink);
+        opacity: 0.12;
+        stroke-width: 1;
+      }
+      .plot-curve {
+        fill: none;
+        stroke: var(--blue);
+        stroke-width: 2;
+      }
+      .plot-fill {
+        fill: var(--blue);
+        opacity: 0.09;
+      }
+      .plot-labels {
+        display: flex;
+        justify-content: space-between;
+        color: var(--secondary);
+        font-size: 14px;
+        margin-top: 4px;
+      }
+      .footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        border-top: 1px solid var(--line);
+        padding: 14px 20px;
+        background: var(--page);
+      }
+      .titlebar,
+      .tabs,
+      .footer {
+        position: relative;
+        z-index: 1;
+        background: var(--page);
+      }
+      .primary {
+        background: var(--blue);
+        color: var(--background, light-dark(#ffffff, #202024));
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .primary:hover {
+        background: var(--blue);
+        filter: brightness(0.95);
+      }
+      .mapping-action {
+        margin-top: 16px;
+      }
+      @media (max-width: 560px) {
+        .settings-scroll {
+          padding: 16px;
+        }
+        .group {
+          padding: 16px;
+        }
+        .tab {
+          padding: 7px 10px;
+        }
+        .curve-pair {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+        .setting-line {
+          align-items: flex-start;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .value-control {
+          margin-inline-start: auto;
+        }
+        .force-heading {
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .page-heading {
+          gap: 8px;
+        }
+        .footer {
+          padding: 12px 16px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="window">
+      <div class="titlebar">
+        <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>S4
+        MK3 Bridge
+      </div>
+      <nav class="tabs" aria-label="Settings sections">
+        <span class="tab">Bridge</span><span class="tab">Screens</span
+        ><span class="tab" aria-current="page">Jog</span
+        ><span class="tab">LEDs</span><span class="tab">Palette</span
+        ><span class="tab">Diagnostics</span>
+      </nav>
+      <main class="settings-scroll">
+        <div class="page-heading">
+          <h1>Jog</h1>
+          <span class="status">Bridge running</span>
+        </div>
+        <section class="group motor-settings" aria-labelledby="motor-heading">
+          <div class="group-heading">
+            <h2 id="motor-heading">Motorized platters</h2>
+            <button id="restore-motor" type="button">Restore defaults</button>
+          </div>
+          <div class="force-heading">
+            <label for="base-force">Base force</label
+            ><span class="measurement"
+              ><output id="force-value" for="base-force">7,000</output>
+              <span class="units">force units</span></span
+            >
+          </div>
+          <input
+            id="base-force"
+            data-motor
+            type="range"
+            min="0"
+            max="25000"
+            step="50"
+            value="7000"
+            aria-describedby="force-hint"
+          />
+          <div class="range-ends"><span>Weak</span><span>Strong</span></div>
+          <p class="hint" id="force-hint">
+            Sets the baseline motor drive, with speed-based drive and
+            corrections added on top. Lower values give a gentler push; higher
+            values give a stronger push.
+          </p>
+          <fieldset>
+            <legend>Pitch bend response</legend>
+            <div class="curve-pair">
+              <div>
+                <span class="curve-title">Braking</span>
+                <div class="curve-row">
+                  <label for="brake-strength">Strength</label
+                  ><input
+                    data-motor
+                    data-curve="brake-strength"
+                    id="brake-strength"
+                    type="range"
+                    min="0.1"
+                    max="20"
+                    step="0.1"
+                    value="10"
+                    aria-label="Braking strength"
+                  /><input
+                    data-motor
+                    data-curve="brake-strength"
+                    type="number"
+                    min="0.1"
+                    max="20"
+                    step="0.1"
+                    value="10"
+                    aria-label="Braking strength multiplier"
+                  />
+                  <p class="hint">
+                    Higher values produce a stronger slowdown for the same
+                    platter movement.
+                  </p>
+                </div>
+                <div class="curve-row">
+                  <label for="brake-shape">Shape</label
+                  ><input
+                    data-motor
+                    data-curve="brake-shape"
+                    id="brake-shape"
+                    type="range"
+                    min="0.25"
+                    max="4"
+                    step="0.05"
+                    value="1"
+                    aria-label="Braking shape"
+                  /><input
+                    data-motor
+                    data-curve="brake-shape"
+                    type="number"
+                    min="0.25"
+                    max="4"
+                    step="0.05"
+                    value="1"
+                    aria-label="Braking shape value"
+                  />
+                  <p class="hint">
+                    Lower values emphasize small movements. Higher values make
+                    small movements gentler.
+                  </p>
+                </div>
+                <p class="plot-title">Pitch bend rate</p>
+                <svg
+                  class="plot"
+                  viewBox="0 0 280 110"
+                  role="img"
+                  aria-label="Braking pitch bend rate"
+                >
+                  <path
+                    class="plot-grid"
+                    d="M0 0H280M0 55H280M0 109H280M70 0V110M140 0V110M210 0V110"
+                  />
+                  <path
+                    class="plot-fill"
+                    id="brake-fill"
+                    d="M0,110L0,108L17.5,108L26.25,99.1L35,95.25L70,82.5L105,69.75L140,57L175,44.25L210,31.5L245,18.75L280,6L280,110Z"
+                  />
+                  <path
+                    class="plot-curve"
+                    id="brake-path"
+                    d="M0,108L17.5,108L26.25,99.1L35,95.25L70,82.5L105,69.75L140,57L175,44.25L210,31.5L245,18.75L280,6"
+                  />
+                </svg>
+                <div class="plot-labels">
+                  <span>Small slowdown</span><span>Large slowdown</span>
+                </div>
+              </div>
+              <div>
+                <span class="curve-title">Nudge</span>
+                <div class="curve-row">
+                  <label for="nudge-strength">Strength</label
+                  ><input
+                    data-motor
+                    data-curve="nudge-strength"
+                    id="nudge-strength"
+                    type="range"
+                    min="0.1"
+                    max="10"
+                    step="0.1"
+                    value="3"
+                    aria-label="Nudge strength"
+                  /><input
+                    data-motor
+                    data-curve="nudge-strength"
+                    type="number"
+                    min="0.1"
+                    max="10"
+                    step="0.1"
+                    value="3"
+                    aria-label="Nudge strength multiplier"
+                  />
+                  <p class="hint">
+                    Higher values produce a stronger speed-up for the same
+                    platter movement.
+                  </p>
+                </div>
+                <div class="curve-row">
+                  <label for="nudge-shape">Shape</label
+                  ><input
+                    data-motor
+                    data-curve="nudge-shape"
+                    id="nudge-shape"
+                    type="range"
+                    min="0.25"
+                    max="4"
+                    step="0.05"
+                    value="1.6"
+                    aria-label="Nudge shape"
+                  /><input
+                    data-motor
+                    data-curve="nudge-shape"
+                    type="number"
+                    min="0.25"
+                    max="4"
+                    step="0.05"
+                    value="1.6"
+                    aria-label="Nudge shape value"
+                  />
+                  <p class="hint">
+                    Lower values emphasize small movements. Higher values make
+                    small movements gentler.
+                  </p>
+                </div>
+                <p class="plot-title">Pitch bend rate</p>
+                <svg
+                  class="plot"
+                  viewBox="0 0 280 110"
+                  role="img"
+                  aria-label="Nudge pitch bend rate"
+                >
+                  <path
+                    class="plot-grid"
+                    d="M0 0H280M0 55H280M0 109H280M70 0V110M140 0V110M210 0V110"
+                  />
+                  <path
+                    class="plot-fill"
+                    id="nudge-fill"
+                    d="M0,110L0.00,108.00L4.38,108.00L8.75,108.00L13.13,108.00L17.50,108.00L21.88,107.56L26.25,105.84L30.63,105.04L35.00,104.34L39.38,103.58L43.75,102.77L48.13,101.91L52.50,101.00L56.88,100.04L61.25,99.04L65.63,97.99L70.00,96.90L74.38,95.77L78.75,94.60L83.13,93.39L87.50,92.14L91.88,90.85L96.25,89.52L100.63,88.16L105.00,86.77L109.38,85.33L113.75,83.86L118.13,82.36L122.50,80.83L126.88,79.26L131.25,77.65L135.63,76.02L140.00,74.35L144.38,72.65L148.75,70.93L153.13,69.17L157.50,67.37L161.88,65.55L166.25,63.70L170.63,61.82L175.00,59.92L179.38,57.98L183.75,56.01L188.13,54.02L192.50,51.99L196.88,49.94L201.25,47.87L205.63,45.76L210.00,43.63L214.38,41.47L218.75,39.28L223.13,37.07L227.50,34.83L231.88,32.57L236.25,30.28L240.63,27.96L245.00,25.62L249.38,23.26L253.75,20.86L258.13,18.45L262.50,16.01L266.88,13.54L271.25,11.05L275.63,8.54L280.00,6.00L280,110Z"
+                  />
+                  <path
+                    class="plot-curve"
+                    id="nudge-path"
+                    d="M0.00,108.00L4.38,108.00L8.75,108.00L13.13,108.00L17.50,108.00L21.88,107.56L26.25,105.84L30.63,105.04L35.00,104.34L39.38,103.58L43.75,102.77L48.13,101.91L52.50,101.00L56.88,100.04L61.25,99.04L65.63,97.99L70.00,96.90L74.38,95.77L78.75,94.60L83.13,93.39L87.50,92.14L91.88,90.85L96.25,89.52L100.63,88.16L105.00,86.77L109.38,85.33L113.75,83.86L118.13,82.36L122.50,80.83L126.88,79.26L131.25,77.65L135.63,76.02L140.00,74.35L144.38,72.65L148.75,70.93L153.13,69.17L157.50,67.37L161.88,65.55L166.25,63.70L170.63,61.82L175.00,59.92L179.38,57.98L183.75,56.01L188.13,54.02L192.50,51.99L196.88,49.94L201.25,47.87L205.63,45.76L210.00,43.63L214.38,41.47L218.75,39.28L223.13,37.07L227.50,34.83L231.88,32.57L236.25,30.28L240.63,27.96L245.00,25.62L249.38,23.26L253.75,20.86L258.13,18.45L262.50,16.01L266.88,13.54L271.25,11.05L275.63,8.54L280.00,6.00"
+                  />
+                </svg>
+                <div class="plot-labels">
+                  <span>Small nudge</span><span>Large nudge</span>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+          <label class="advanced-toggle"
+            ><input
+              type="checkbox"
+              id="advanced"
+              aria-controls="advanced-controls"
+            />Advanced settings</label
+          >
+          <div class="advanced-controls" id="advanced-controls">
+            <fieldset>
+              <legend>Playback and touch</legend>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="target-speed">Target speed</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      data-curve="target"
+                      id="target-speed"
+                      type="number"
+                      min="1"
+                      max="45"
+                      value="33"
+                    /><span class="units">RPM</span>
+                  </div>
+                </div>
+                <p class="hint">
+                  The speed the motor aims to maintain during playback.
+                </p>
+              </div>
+              <div class="setting-row">
+                <label class="check-line"
+                  ><input
+                    data-motor
+                    id="vinyl-normal"
+                    type="checkbox"
+                    checked
+                  />Start normal mode with Vinyl enabled</label
+                >
+                <p class="hint">
+                  Starts normal mode with touch scratching enabled.
+                </p>
+              </div>
+              <div class="setting-row">
+                <label class="check-line"
+                  ><input data-motor id="vinyl-tt" type="checkbox" />Start
+                  motorized mode with Vinyl enabled</label
+                >
+                <p class="hint">
+                  Starts TT mode with touch scratching enabled.
+                </p>
+              </div>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="scratch-floor">Switch to scratching below</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="scratch-floor"
+                      type="number"
+                      min="1"
+                      max="95"
+                      value="1"
+                    /><span class="units">% of target speed</span>
+                  </div>
+                </div>
+                <p class="hint">
+                  Changes from pitch bending to scratching when the platter
+                  slows below this share of its target speed.
+                </p>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Motor response</legend>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="maximum-force">Maximum force</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="maximum-force"
+                      type="number"
+                      min="1"
+                      max="25000"
+                      step="1"
+                      value="20000"
+                    /><span class="units">force units</span>
+                  </div>
+                </div>
+                <p class="hint">
+                  Limits the total motor drive, including base force and speed
+                  corrections.
+                </p>
+              </div>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="speed-force">Speed-based force</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="speed-force"
+                      type="number"
+                      min="0"
+                      max="25000"
+                      step="10"
+                      value="110"
+                    /><span class="units">force units/RPM</span>
+                  </div>
+                </div>
+                <p class="hint">Adds motor drive as the target speed rises.</p>
+              </div>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="speed-correction">Speed correction</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="speed-correction"
+                      type="number"
+                      min="0"
+                      max="25000"
+                      step="100"
+                      value="4000"
+                    />
+                  </div>
+                </div>
+                <p class="hint">
+                  How strongly the motor reacts when the platter is above or
+                  below its target speed.
+                </p>
+              </div>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="sustained-correction"
+                    >Sustained speed correction</label
+                  >
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="sustained-correction"
+                      type="number"
+                      min="0"
+                      max="25000"
+                      step="100"
+                      value="3000"
+                    />
+                  </div>
+                </div>
+                <p class="hint">
+                  Adds correction when a speed difference persists, helping the
+                  platter settle at its target speed.
+                </p>
+              </div>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="running-rise">Running force rise</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="running-rise"
+                      type="number"
+                      min="0"
+                      max="1000000"
+                      step="10000"
+                      value="200000"
+                    /><span class="units">force units/s</span>
+                  </div>
+                </div>
+                <p class="hint">
+                  How quickly motor strength can build after startup. A value of
+                  0 prevents further increases.
+                </p>
+              </div>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="startup-duration">Startup duration</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="startup-duration"
+                      type="number"
+                      min="0"
+                      max="2000"
+                      step="50"
+                      value="200"
+                    /><span class="units">ms</span>
+                  </div>
+                </div>
+                <p class="hint">
+                  How long the starting response is used before switching to the
+                  running response. A value of 0 skips it.
+                </p>
+              </div>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="startup-rise">Startup force rise</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="startup-rise"
+                      type="number"
+                      min="0"
+                      max="1000000"
+                      step="10000"
+                      value="0"
+                    /><span class="units">force units/s</span>
+                  </div>
+                </div>
+                <p class="hint">
+                  How quickly starting strength builds. A value of 0 applies the
+                  starting force immediately.
+                </p>
+              </div>
+              <div class="setting-row">
+                <div class="setting-line">
+                  <label for="overspeed">Overspeed limit</label>
+                  <div class="value-control">
+                    <input
+                      data-motor
+                      id="overspeed"
+                      type="number"
+                      min="0"
+                      max="250"
+                      value="0"
+                    /><span class="units">RPM</span>
+                  </div>
+                </div>
+                <p class="hint">
+                  Stops motor drive if the platter exceeds this speed. A value
+                  of 0 turns this limit off.
+                </p>
+              </div>
+            </fieldset>
+          </div>
+        </section>
+        <section class="group" aria-labelledby="feel-heading">
+          <div class="group-heading">
+            <h2 id="feel-heading">Jog wheel feel</h2>
+          </div>
+          <div class="force-heading">
+            <label for="tension">Wheel tension</label
+            ><span class="measurement"
+              ><output id="tension-value" for="tension">-77</output></span
+            >
+          </div>
+          <input
+            id="tension"
+            type="range"
+            min="-100"
+            max="100"
+            value="-77"
+            aria-describedby="tension-hint"
+          />
+          <div class="range-ends">
+            <span>Assist</span><span>Neutral</span><span>Brake</span>
+          </div>
+          <p class="hint" id="tension-hint">
+            Adjusts the feel of both wheels. Assist helps them spin; Brake adds
+            resistance.
+          </p>
+        </section>
+        <section class="group" aria-labelledby="backspin-heading">
+          <div class="group-heading">
+            <h2 id="backspin-heading">Backspin</h2>
+          </div>
+          <div class="setting-row">
+            <label class="check-line"
+              ><input type="checkbox" checked />Continue a detected backspin
+              after release</label
+            >
+            <p class="hint">
+              Lets a quick reverse spin continue briefly after you let go.
+            </p>
+          </div>
+          <div class="setting-row">
+            <div class="setting-line">
+              <label for="backspin-threshold">Detection threshold</label>
+              <div class="value-control">
+                <input
+                  id="backspin-threshold"
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  value="150000"
+                /><span class="units">counts/s&sup2;</span>
+              </div>
+            </div>
+            <p class="hint">
+              Higher values require a sharper backward flick to trigger a
+              backspin.
+            </p>
+          </div>
+          <div class="setting-row">
+            <div class="setting-line">
+              <label for="backspin-speed">Extra scratch speed</label>
+              <div class="value-control">
+                <input
+                  id="backspin-speed"
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  value="5.2"
+                /><span class="units">%</span>
+              </div>
+            </div>
+            <p class="hint">Adds scratch speed during a detected backspin.</p>
+          </div>
+          <div class="setting-row">
+            <label class="check-line"
+              ><input type="checkbox" checked />Use motor assistance for
+              backspins</label
+            >
+            <p class="hint">
+              Helps backspins keep moving in normal mode. TT uses its own
+              playback assistance.
+            </p>
+          </div>
+          <div class="setting-row">
+            <div class="setting-line">
+              <label for="backspin-assist">Motor assist strength</label>
+              <div class="value-control">
+                <input
+                  id="backspin-assist"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value="100"
+                /><span class="units">%</span>
+              </div>
+            </div>
+            <p class="hint">
+              Lower it for gentler follow-through; raise it for a stronger push.
+            </p>
+          </div>
+        </section>
+        <section class="group" aria-labelledby="scratch-heading">
+          <div class="group-heading">
+            <h2 id="scratch-heading">Scratch and pitch bend mapping</h2>
+          </div>
+          <div class="setting-row">
+            <div class="setting-line">
+              <label for="scratch-speed">Scratch speed</label>
+              <div class="value-control">
+                <input
+                  id="scratch-speed"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value="2.7"
+                /><span class="units">%</span>
+              </div>
+            </div>
+            <p class="hint">
+              How far the track moves when you turn a platter while touching its
+              top.
+            </p>
+          </div>
+          <div class="setting-row">
+            <div class="setting-line">
+              <label for="scratch-reaction">Scratch reaction</label>
+              <div class="value-control">
+                <input
+                  id="scratch-reaction"
+                  type="number"
+                  min="0"
+                  max="150"
+                  value="150"
+                /><span class="units">%</span>
+              </div>
+            </div>
+            <p class="hint">
+              How immediately Djay follows your scratching movement.
+            </p>
+          </div>
+          <div class="setting-row">
+            <div class="setting-line">
+              <label for="scratch-direction">Touch-scratch direction</label
+              ><select id="scratch-direction">
+                <option>Normal</option>
+                <option>Reversed</option>
+              </select>
+            </div>
+            <p class="hint">
+              Choose the track direction when you turn a touched platter
+              forward.
+            </p>
+          </div>
+          <div class="setting-row">
+            <div class="setting-line">
+              <label for="bend-speed">Pitch bend speed</label>
+              <div class="value-control">
+                <input
+                  id="bend-speed"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value="2.7"
+                /><span class="units">%</span>
+              </div>
+            </div>
+            <p class="hint">
+              How much an untouched platter movement speeds up or slows down the
+              track.
+            </p>
+          </div>
+          <div class="setting-row">
+            <div class="setting-line">
+              <label for="bend-reaction">Pitch bend reaction</label>
+              <div class="value-control">
+                <input
+                  id="bend-reaction"
+                  type="number"
+                  min="0"
+                  max="150"
+                  value="17"
+                /><span class="units">%</span>
+              </div>
+            </div>
+            <p class="hint">
+              How quickly temporary speed changes respond to your hand.
+            </p>
+          </div>
+          <div class="mapping-action">
+            <button type="button">Install Djay mapping&hellip;</button>
+            <p class="hint">
+              Install a new mapping in Djay after changing these controls.
+            </p>
+          </div>
+        </section>
+      </main>
+      <footer class="footer">
+        <button class="primary" type="button">Save and restart</button>
+      </footer>
+    </div>
+    <script>
+      const force = document.getElementById("base-force");
+      const forceValue = document.getElementById("force-value");
+      const tension = document.getElementById("tension");
+      const tensionValue = document.getElementById("tension-value");
+      const numberFormat = new Intl.NumberFormat("en-US");
+      function updateReadouts() {
+        if (force instanceof HTMLInputElement && forceValue) {
+          forceValue.textContent = numberFormat.format(force.valueAsNumber);
+          force.setAttribute(
+            "aria-valuetext",
+            `${numberFormat.format(force.valueAsNumber)} force units`,
+          );
+        }
+        if (tension instanceof HTMLInputElement && tensionValue)
+          tensionValue.textContent = tension.value;
+      }
+      function curveValue(key) {
+        const input = document.querySelector(`[data-curve="${key}"]`);
+        return input instanceof HTMLInputElement ? input.valueAsNumber : NaN;
+      }
+      function drawCurve(direction) {
+        const target = curveValue("target");
+        const gain = curveValue(`${direction}-strength`);
+        const exponent = curveValue(`${direction}-shape`);
+        if (
+          ![target, gain, exponent].every(Number.isFinite) ||
+          target <= 0 ||
+          gain <= 0
+        )
+          return;
+        const rates = [];
+        for (let index = 0; index <= 64; index++) {
+          const difference = (target * index) / 64;
+          const a = Math.min(Math.max(difference - 2.25, 0), 1);
+          const onset = a * a * (3 - 2 * a);
+          rates.push(
+            difference <= 2.25
+              ? 0
+              : difference *
+                  onset *
+                  gain *
+                  Math.pow(difference / target, exponent - 1) *
+                  48,
+          );
+        }
+        const peak = Math.max(...rates, 1);
+        const points = rates.map(
+          (rate, index) => `${(index * 280) / 64},${108 - (rate / peak) * 102}`,
+        );
+        document
+          .getElementById(`${direction}-path`)
+          ?.setAttribute("d", `M${points.join("L")}`);
+        document
+          .getElementById(`${direction}-fill`)
+          ?.setAttribute("d", `M0,110L${points.join("L")}L280,110Z`);
+      }
+      function refresh() {
+        updateReadouts();
+        drawCurve("brake");
+        drawCurve("nudge");
+      }
+      document.addEventListener("input", (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (input.dataset.curve && input.checkValidity()) {
+          for (const paired of document.querySelectorAll(
+            `[data-curve="${input.dataset.curve}"]`,
+          )) {
+            if (paired instanceof HTMLInputElement && paired !== input)
+              paired.value = input.value;
+          }
+        }
+        refresh();
+      });
+      document
+        .getElementById("restore-motor")
+        ?.addEventListener("click", () => {
+          for (const input of document.querySelectorAll("[data-motor]")) {
+            if (!(input instanceof HTMLInputElement)) continue;
+            if (input.type === "checkbox") input.checked = input.defaultChecked;
+            else input.value = input.defaultValue;
+          }
+          refresh();
+        });
+      refresh();
+    </script>
+  </body>
+</html>

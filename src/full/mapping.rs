@@ -10,8 +10,8 @@ use plist::{Dictionary, Value};
 
 use super::catalog::{
     Binding, DECK_BINDINGS, EQ_MODE_NOTE, EXT_BINDINGS, EXT_THRU_CC, FX_LEFT_BINDINGS,
-    FX_RIGHT_BINDINGS, INTERNAL_MODE_CC, Kind, MIXER_BINDINGS, PLATTER_POSITION_BINDING, PadMode,
-    QUICK_BINDINGS, pad_binding,
+    FX_RIGHT_BINDINGS, INTERNAL_MODE_CC, Kind, MIXER_BINDINGS, PadMode, QUICK_BINDINGS,
+    pad_binding,
 };
 use super::feedback::{PAD_COLOR_TOKENS, PAD_WHITE_TOKEN};
 use super::jog;
@@ -166,14 +166,6 @@ fn push_jog_controls(
         for deck in 1_u8..=4 {
             push_deck(controls, addresses, binding, deck)?;
         }
-    }
-    let platter_position = Binding {
-        sensitivity: Some(jog.platter_position_sensitivity),
-        acceleration: Some(jog.scratch_reaction),
-        ..PLATTER_POSITION_BINDING
-    };
-    for deck in 1_u8..=4 {
-        push_deck(controls, addresses, platter_position, deck)?;
     }
     Ok(())
 }
@@ -415,7 +407,7 @@ fn push_control(
 ) -> Result<()> {
     let message_type = match binding.kind {
         Kind::Note => 1,
-        Kind::Absolute | Kind::Relative | Kind::RotaryAbsolute => 3,
+        Kind::Absolute | Kind::Relative => 3,
     };
     ensure!(
         channel <= 15 && binding.number <= 127 && !key_path.contains('{'),
@@ -443,7 +435,6 @@ fn push_control(
     );
     let rotary_type = match binding.kind {
         Kind::Relative => Some("rotary-64"),
-        Kind::RotaryAbsolute => Some("rotary-absolute"),
         Kind::Note | Kind::Absolute => None,
     };
     if let Some(rotary_type) = rotary_type {
@@ -697,30 +688,33 @@ mod tests {
     }
 
     #[test]
-    fn platter_position_maps_absolute_rotary_to_scratch_on_every_deck() -> anyhow::Result<()> {
-        // Given the generated mapping with physical jog and platter-position inputs.
+    fn generated_mapping_omits_retired_cc8_and_keeps_manual_scratch_cc5() -> anyhow::Result<()> {
+        // Given the generated mapping for each logical deck.
         let controls = generated_controls()?;
         for deck in 1_u8..=4 {
             let key = format!("turntable{deck}.scratchingMove");
-            let control = controls
-                .iter()
-                .find(|control| {
-                    field(control, "keyPath").and_then(Value::as_string) == Some(key.as_str())
-                        && field(control, "midiChannel").and_then(Value::as_unsigned_integer)
-                            == Some(u64::from(deck - 1))
-                        && field(control, "midiData").and_then(Value::as_unsigned_integer)
-                            == Some(u64::from(PLATTER_POSITION_BINDING.number))
-                })
-                .context("absolute platter-position control missing")?;
-            // When absolute angle values arrive, Djay receives them as Scratch CC.
+            // Then no absolute CC8 Scratch route remains.
             assert_eq!(
-                field(control, "controlType").and_then(Value::as_string),
-                Some("rotary-absolute")
+                controls
+                    .iter()
+                    .filter(|control| {
+                        field(control, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                            && field(control, "midiChannel").and_then(Value::as_unsigned_integer)
+                                == Some(u64::from(deck - 1))
+                            && field(control, "midiData").and_then(Value::as_unsigned_integer)
+                                == Some(8)
+                    })
+                    .count(),
+                0
             );
-            assert_eq!(
-                field(control, "rotarySensitivity").and_then(Value::as_real),
-                Some(jog::DEFAULT.platter_position_sensitivity)
-            );
+            // Manual top-touch Scratch remains on relative CC5.
+            assert!(controls.iter().any(|control| {
+                field(control, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                    && field(control, "midiChannel").and_then(Value::as_unsigned_integer)
+                        == Some(u64::from(deck - 1))
+                    && field(control, "midiData").and_then(Value::as_unsigned_integer) == Some(5)
+                    && field(control, "controlType").and_then(Value::as_string) == Some("rotary-64")
+            }));
             let scratching_mode = format!("turntable{deck}.scratchingMode");
             assert!(controls.iter().any(|control| {
                 field(control, "keyPath").and_then(Value::as_string)
@@ -811,7 +805,6 @@ mod tests {
         let config = jog::Config {
             scratch_speed: 4.5,
             scratch_reaction: 60,
-            platter_position_sensitivity: 23.4,
             pitch_bend_speed: 1.6,
             pitch_bend_reaction: 25,
             tt_pitch_bend_gain: 4.0,
@@ -836,7 +829,7 @@ mod tests {
             .context("generated controls missing")?;
         assert_eq!(controls.len(), defaults.len());
         let mut changed = 0;
-        // Then manual CC 5 scratch and absolute CC 8 platter sensitivity stay independent.
+        // Then configured mapping parameters only modify CC 5 Scratch and bend controls.
         for (control, baseline) in controls.iter().zip(&defaults) {
             let key = field(control, "keyPath")
                 .and_then(Value::as_string)
@@ -846,8 +839,6 @@ mod tests {
                 .context("control data missing")?;
             let settings = if key.ends_with(".scratchingMove") && data == 5 {
                 Some((config.scratch_speed, config.scratch_reaction))
-            } else if key.ends_with(".scratchingMove") && data == 8 {
-                Some((config.platter_position_sensitivity, config.scratch_reaction))
             } else if key.ends_with(".pitchBendMove") {
                 Some((config.pitch_bend_speed, config.pitch_bend_reaction))
             } else {
@@ -878,7 +869,7 @@ mod tests {
                 assert_eq!(control, baseline);
             }
         }
-        assert_eq!(changed, 12);
+        assert_eq!(changed, 8);
         let base = generate()?;
         assert_eq!(field(&parsed, "outputs"), field(&base, "outputs"));
         assert_eq!(field(&parsed, "userInfo"), field(&base, "userInfo"));
@@ -886,8 +877,7 @@ mod tests {
     }
 
     #[test]
-    fn scratch_direction_flip_affects_touch_scratch_but_not_platter_position() -> anyhow::Result<()>
-    {
+    fn scratch_direction_flip_affects_manual_touch_scratch() -> anyhow::Result<()> {
         // Given a configuration that reverses only manual top-touch scratch.
         let config = jog::Config {
             scratch_direction: jog::ScratchDirection::Reversed,
@@ -903,24 +893,21 @@ mod tests {
                 .context("generated controls missing")?
                 .clone()
         };
-        // When CC 5 and CC 8 target the same Scratch action.
-        for (data, flipped) in [(5_u64, Some(true)), (8, None)] {
-            let control = controls
-                .iter()
-                .find(|control| {
-                    field(control, "keyPath")
-                        .and_then(Value::as_string)
-                        .is_some_and(|key| key.ends_with(".scratchingMove"))
-                        && field(control, "midiData").and_then(Value::as_unsigned_integer)
-                            == Some(data)
-                })
-                .context("Scratch input missing")?;
-            // Then polarity is configurable for touch only, not platter angle.
-            assert_eq!(
-                field(control, "flipped").and_then(Value::as_boolean),
-                flipped
-            );
-        }
+        // When the generated manual CC 5 Scratch route is inspected.
+        let control = controls
+            .iter()
+            .find(|control| {
+                field(control, "keyPath")
+                    .and_then(Value::as_string)
+                    .is_some_and(|key| key.ends_with(".scratchingMove"))
+                    && field(control, "midiData").and_then(Value::as_unsigned_integer) == Some(5)
+            })
+            .context("manual Scratch input missing")?;
+        // Then its configured polarity is reflected in the mapping.
+        assert_eq!(
+            field(control, "flipped").and_then(Value::as_boolean),
+            Some(true)
+        );
         Ok(())
     }
 

@@ -45,21 +45,25 @@ apply. No React, browser runtime, or downloaded assets are needed.
   requirement. Wait for screen-release acknowledgement or whole-child exit
   before restoring. Keep NI stopped across Save and restart. Persist recovery
   responsibility across a crash so the user can restore manually next launch.
-- Jog's Hardware group exposes the saved Jog Wheel Tension control for both
+- Jog's Jog wheel feel group exposes the saved Wheel tension control for both
   physical wheels. Put its title and value above the label-hidden slider; the
   Assist, Neutral (0), and Brake legends share the slider's width. Neutral is
   the physical midpoint of the track, not the midpoint of a labeled control.
-- Jog exposes mapping-time manual scratch and pitch-bend speed/reaction,
-  touch-scratch direction, and separate absolute platter sensitivity. Those
+- Jog begins with Motorized platters: Base force is a Weak–Strong slider
+  with a force-unit readout, and Pitch bend response remains visible.
+  An unchecked Advanced settings checkbox reveals playback/touch and motor
+  tuning without changing their saved values. Restore defaults resets only
+  the motorized group in the editor; the common Save action applies it.
+- Jog exposes mapping-time manual scratch and pitch-bend speed/reaction and
+  touch-scratch direction. Those
   values affect the exported Djay mapping only: install the generated file
   under a new name and select it in Djay. Bridge restart is not required and
   does not apply mapping changes; seek behavior is unchanged. Hardware tension
   and platter force settings apply through Save and restart, independently of
-  the mapping. Absolute sensitivity belongs to the retained CC8 experiment;
-  current motorized playback sends filtered relative CC4 with a diagnostic
-  lower/upper-speed CC5 Scratch handoff instead. Normal and TT modes have separate
-  Vinyl startup preferences; each remembers its own session choice. The control
-  remains in Testing and does not adjust the current motorized response.
+  the mapping. The abandoned absolute-position experiment is removed.
+  Current motorized playback sends filtered relative CC4 with a lower-speed
+  CC5 Scratch handoff. Normal and TT modes have separate Vinyl startup
+  preferences; each remembers its own session choice.
 - LEDs and Palette expose all current JSON preferences. Invalid values must
   produce a visible error, not silently reset user configuration.
 - Diagnostics contains the bundled release version and build number, a bounded
@@ -95,13 +99,12 @@ apply. No React, browser runtime, or downloaded assets are needed.
 ## Jog preferences and mapping export
 
 - `JogPreferences` mirrors `examples/jog-config.json`: mapping scratch/pitch-bend
-  speeds and reactions, `scratch_direction`, `platter_position_sensitivity`,
-  runtime backspin options, and `Testing: Motorized playback` parameters
+  speeds and reactions, `scratch_direction`, runtime backspin options, and motorized platter parameters
   (`vinyl_enabled_at_startup`, `platter_target_rpm`, `platter_max_force`,
   `platter_base_force`, `platter_force_per_rpm`, `platter_kp`, `platter_ki`,
   `platter_force_rise_per_second`, `platter_startup_force_rise_per_second`,
   `platter_startup_ms`, `platter_overspeed_limit_rpm`). Manual speeds are
-  finite and positive; absolute platter sensitivity is 0.1-100%; touch direction
+  finite and positive; touch direction
   uses the `normal`/`reversed` enum; reactions are integers 0-150; motor-force values use their
   documented ranges. Unknown keys are rejected; saved files merge over bundled
   defaults like LED preferences.

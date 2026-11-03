@@ -2,15 +2,15 @@
 
 This document preserves the abandoned Djay absolute Scratch CC 8 experiment
 and describes the source inspected on October 30, 2026. It is a reconstruction,
-not a setup guide for an active feature. The current runtime computes angle
-telemetry but doesn't emit this absolute-position CC 8 stream. Generated
-mapping entries, configuration, converter code and tests remain.
+not a setup guide for an active feature. The abandoned mapping, configuration
+setting and conversion stream have since been removed. Physical encoder phase
+tracking remains only for the jog-ring indicator.
 
 ## Counter-to-position algorithm
 
-The current implementation is in
-[`platter_position.rs`](../src/full/platter_position.rs), called by
-`Translator::log_platter_position` in [`mod.rs`](../src/full/mod.rs).
+The historical implementation was in `src/full/platter_position.rs`, called by
+`Translator::log_platter_position`. Current ring-only tracking is in
+[`ring_position.rs`](../src/full/ring_position.rs).
 The scale is defined in [`tension/playback.rs`](../src/tension/playback.rs):
 2,880 encoder counts per physical revolution.
 
@@ -139,12 +139,11 @@ Djay/audio retest established 14.0 as a final setting. The earlier package's
 missing Scratch gate also limits conclusions drawn from early playback
 timings.
 
-[`jog.rs`](../src/full/jog.rs) still defaults
-`platter_position_sensitivity` to 14.0 and validates a finite value in
+The recorded revision defaulted `platter_position_sensitivity` to 14.0 and validated a finite value in
 `0.1..=100.0`. It is independent of manual `scratch_speed`, whose default is
 2.7. These sensitivities are mapping-time settings: changing them doesn't
-rewrite an already installed mapping. The current generated CC 8 mapping
-also uses the configured Scratch reaction, currently defaulting to 150.
+rewrite an already installed mapping. That generated CC 8 mapping also used
+the configured Scratch reaction, defaulting to 150.
 
 Audio-derived frequency or elapsed-track ratios measure the combined host
 response, mapping, gating and physical motion. An average ratio can conceal
@@ -185,22 +184,14 @@ advancement mustn't be attributed to the absolute CC 8 experiment.
 
 ## What remains in source
 
-The converter and four unit tests remain. They cover quantization and
-duplicate suppression, bidirectional revolution wrap, sensor counter
-rollover, and touch rebasing. Generated-mapping tests retain the four
-absolute Scratch entries, Note 7 mapping, independent CC 5/CC 8 sensitivity,
-and manual-only polarity reversal.
-
-`log_platter_position` still computes changed bins and logs
-`MOTOR_JOG_POSITION` with side, deck and position. It has no MIDI output
-argument and doesn't append CC 8 messages. A telemetry record isn't
-evidence that a MIDI message was sent. The fixed `+32` diagnostic offset
-is absent from the current converter.
-
-The same `Position` type is also retained for separate ring-position state;
-removing it as supposedly dead experiment code would require reviewing that
-use. Historical test counts and package replay results describe their
-recorded revisions, not a fresh test run of today's tree.
+Only physical encoder phase tracking for the ring indicator remains in
+`ring_position.rs`. Its counter-rollover regression protects that independent
+use. The absolute converter, generated Scratch CC8 entries, sensitivity
+preference and `MOTOR_JOG_POSITION` stream have been removed. Older saved
+sensitivity keys remain readable but have no effect and are omitted on save.
+Scratch Note 7 and relative CC5 remain part of current manual/TT behavior.
+Historical test counts and package replay results describe their recorded
+revisions, not today's tree.
 
 ## Reusing the idea with another host
 
@@ -225,5 +216,4 @@ release on stop and gate closure, and prevent competing production jog
 routes from driving the same gesture. Merely reconnecting telemetry to CC 8
 wouldn't recreate the corrected historical experiment.
 
-This documentation change doesn't reactivate code, run hardware, or validate
-the UI. Release option pruning is deferred.
+No other-host experiment has been validated by this record.

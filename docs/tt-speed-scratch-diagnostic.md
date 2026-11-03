@@ -19,7 +19,7 @@ historical, including their upper-speed handoff behavior.
   signed. Once entered, top contact holds Scratch through fast strokes across
   the exit threshold. After release, speed recovery allows the usual exit;
   release below the exit threshold keeps Scratch until recovery.
-- The initial floor is 50% of target speed: 16.5 RPM at 33 RPM. Exit is 18.5 RPM
+- The default floor is 1% of target speed: 0.33 RPM at 33 RPM. Exit is 2.33 RPM
   at those settings. Entry uses the existing 100 ms speed window after normal
   speed qualification; top touch alone with Vinyl off does not enter Scratch.
   An abrupt stop from normal speed has a separate 4 ms fresh zero-count
@@ -34,14 +34,15 @@ historical, including their upper-speed handoff behavior.
   clears fractional residual. Across the next 1 RPM, smoothstep
   `x*x*(3 - 2*x)`, where `x = clamp((abs(error) - 2.25) / 1, 0, 1)`,
   multiplies the existing full-error law. The full response is restored at
-  3.25 RPM deviation. Braking remains 2x and forward nudge 1x, multiplied by
-  saved gain, range 0.1-10 and default 1.
+  3.25 RPM deviation. Independent braking and nudge Strength/Shape controls
+  default to 10x / Shape 1 and 3x / Shape 1.6. The legacy shared gain remains
+  readable for saved configurations; see the [response law](bridge-function-reference.md#current-source-motorized-playback-testing).
 - Normal rings advance with playback, follow Scratch movement and freeze where
   paused. Scratch release resumes from that position. TT rings stay physical.
   Firmware loop flashing is retained and restores the mode's phase on exit.
 - TT retains forward assistance during top touch, braking, holding and reverse
   movement. Full assistance `F0 = min(max_force, base_force + force_per_rpm *
-  target_rpm)` is 5280 force units with the supplied settings. Multiply it by
+  target_rpm)` is 10630 force units with the supplied settings. Multiply it by
   `clamp((target_rpm - measured_rpm) / min(2, target_rpm), 0, 1)`: full stopped/reverse
   assistance, a linear taper over the last 2 RPM below target, and zero at or
   above measured target, including the touch-release fallback. This is a
@@ -68,10 +69,10 @@ show an observed 0.5 frequency ratio. The knob recording reaches approximately
 1500 Hz, an upward ratio of 1.5, not a downward floor.
 
 Neither recording establishes saturation of the selected relative CC4 mapping,
-nor a wheel RPM that guarantees a smooth Scratch handoff. The default 50% is
-therefore an adjustable diagnostic starting point, not a confirmed Djay limit.
+nor a wheel RPM that guarantees a smooth Scratch handoff. The earlier 50%
+diagnostic starting point was not a confirmed Djay limit.
 The integer preference `tt_pitch_bend_floor_percent` accepts 1 through 95.
-Its default remains 50%; existing saved floor and gain values are preserved.
+Its current default is 1%; existing saved floor and gain values are preserved.
 Changing either requires Save and restart, not a new mapping. Don't reset
 preferences for this test: start at gain 1x with the current floor, then compare
 floor settings separately.

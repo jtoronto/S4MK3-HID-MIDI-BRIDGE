@@ -57,10 +57,6 @@ struct TTResponseCurve {
         }
     }
 
-    static func shapeDescription(for exponent: Double) -> String {
-        if exponent == 1.0 { return "1.00 (existing soft-knee)" }
-        return String(format: exponent > 1.0 ? "%.2f (softer near center)" : "%.2f (stronger near center)", exponent)
-    }
 }
 
 struct TTResponseCurvesSectionView: View {
@@ -82,10 +78,6 @@ struct TTResponseCurvesSectionView: View {
                     exponent: $jog.ttNudgeCurveExponent
                 )
             }
-            Text("Existing preferences keep their response. The earlier shared gain already included a 2x braking boost: 5x therefore appears as 10x braking and 5x nudge here.")
-                .font(.caption).foregroundColor(.secondary)
-            Text("Shape 1 keeps the current response. Higher values soften movement near target speed; lower values strengthen it. The quiet band and smooth onset stay fixed. These graphs show MIDI commands, not measured audio tempo. Save and restart to apply; no mapping export is needed.")
-                .font(.caption).foregroundColor(.secondary)
         }
     }
 }
@@ -124,8 +116,8 @@ struct TTSingleCurveEditorView: View {
     var body: some View {
         GroupBox(direction.title) {
             VStack(alignment: .leading, spacing: 8) {
+                Text("Strength")
                 HStack(spacing: 8) {
-                    Text("Strength")
                     Slider(value: $gain, in: direction.gainRange, step: 0.1)
                         .accessibilityLabel("\(direction.title) strength")
                     TextField("\(direction.title) strength", value: $gain, format: numberFormat(for: gain))
@@ -134,8 +126,13 @@ struct TTSingleCurveEditorView: View {
                     Stepper("\(direction.title) strength", value: $gain, in: direction.gainRange, step: 0.1)
                         .labelsHidden().fixedSize()
                 }
+                Text(direction == .braking
+                     ? "Higher values produce a stronger slowdown for the same platter movement."
+                     : "Higher values produce a stronger speed-up for the same platter movement.")
+                    .font(.caption).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Shape")
                 HStack(spacing: 8) {
-                    Text("Shape")
                     Slider(value: $exponent, in: TTResponseCurve.exponentRange, step: 0.05)
                         .accessibilityLabel("\(direction.title) curve shape")
                     TextField("\(direction.title) curve shape", value: $exponent, format: numberFormat(for: exponent))
@@ -143,9 +140,10 @@ struct TTSingleCurveEditorView: View {
                     Stepper("\(direction.title) curve shape", value: $exponent, in: TTResponseCurve.exponentRange, step: 0.05)
                         .labelsHidden().fixedSize()
                 }
+                Text("Lower values emphasize small movements. Higher values make small movements gentler.")
+                    .font(.caption).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if canPreview {
-                    Text(TTResponseCurve.shapeDescription(for: exponent))
-                        .font(.caption).foregroundColor(.secondary)
                     TTResponsePlotView(direction: direction, targetRpm: targetRpm, samples: samples)
                 } else {
                     Text("Enter a valid strength and shape, with a target speed from 1 to 45 RPM, to preview the curve.")
@@ -169,7 +167,7 @@ struct TTResponsePlotView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("MIDI CC 4 bend rate (counts/s)")
+                Text("Pitch bend rate (counts/s)")
                 Text(String(format: "At %d RPM deviation: %+.0f counts/s", targetRpm, peakSignedRate))
             }.font(.caption).fixedSize(horizontal: false, vertical: true)
             GeometryReader { geometry in

@@ -49,12 +49,13 @@ do not receive this additional permission.
 Current-source Jog settings provide independent braking and nudge curves for
 the playback-driven TT CC4 route. Optional `tt_brake_gain` accepts 0.1-20 and
 `tt_nudge_gain` accepts 0.1-10. Missing or null gains inherit the existing
-`tt_pitch_bend_gain` (default 1, range 0.1-10), multiplied by 2 for braking
+`tt_pitch_bend_gain` (default 5, range 0.1-10), multiplied by 2 for braking
 and unchanged for nudging. Explicit gains replace that combined strength;
 there is no additional braking multiplier. Thus legacy shared gain 5 retains
 effective strengths 10 for braking and 5 for nudging.
+Current defaults leave braking inherited at 10 and set explicit nudge gain 3.
 `tt_brake_curve_exponent` and `tt_nudge_curve_exponent` each accept 0.25-4,
-defaulting to 1. All non-null values must be finite numbers.
+defaulting to 1 and 1.6 respectively. All non-null values must be finite numbers.
 Save/restart applies these runtime preferences without regenerating a mapping.
 They do not change ordinary jog, Scratch, handoff thresholds or motor control.
 
@@ -116,16 +117,18 @@ feedback plus explicit Internal true and THRU false authorize rotation;
 false THRU alone is insufficient because it may mean DVS. Install/select a
 matching mapping only if the current one lacks that feedback, preserving custom
 mappings. The response-stability update does not change the mapping.
-Active wheel output uses the existing CC4/CC5/Note7 routes. The retained CC8
-absolute-position mapping is experimental and receives no runtime stream;
-see the [archived method](absolute-position-scratch-experiment.md).
+Active wheel output uses the existing CC4/CC5/Note7 routes. The abandoned CC8
+absolute-position mapping and its preference are removed. Existing saved
+`platter_position_sensitivity` keys are ignored on load and omitted on save;
+other unknown keys are still rejected. See the
+[archived method](absolute-position-scratch-experiment.md).
 
 The production motor owner arbitrates rotation, tension and owned gestures;
 nominal powered motion is removed before jog MIDI translation. The TT diagnostic
 retains bounded forward assistance through touch, braking and Scratch rather
 than summing tension/backspin force. Freshness, playback and deck-owner gates
 still neutralize drive. With TT Vinyl off, the provisional configurable
-`tt_pitch_bend_floor_percent` (default 50, range 1-95) selects only the lower
+`tt_pitch_bend_floor_percent` (default 1, range 1-95) selects only the lower
 speed-driven CC4-to-CC5 Scratch handoff in `src/full/platter_gesture.rs`.
 Entry is at or below `floor = target * percent / 100`. A qualified abrupt stop
 from the normal-speed quiet band can also enter after 4 ms of fresh zero-count
@@ -142,7 +145,7 @@ Forward nudges do not trigger automatic upper Scratch. Explicit Vinyl-on touch
 still owns Scratch.
 See [touch retention and abrupt-stop verification](tt-touch-stop-validation.md).
 In `src/tension/playback.rs`, hold assistance uses
-`F0 = min(max_force, base_force + force_per_rpm * target_rpm)`, default 5280,
+`F0 = min(max_force, base_force + force_per_rpm * target_rpm)`, default 10630,
 scaled by `clamp((target_rpm - measured_rpm) / min(2, target_rpm), 0, 1)`.
 This preserves full stopped/reverse assistance, tapers the final 2 RPM below
 target, and gives zero assistance at/above measured target, including the
@@ -181,7 +184,7 @@ Current-source backspin detection uses two 24 ms movement windows to recognize
 backward acceleration while a Scratch gesture owns the wheel. This includes
 TT physical touch owners and the TT Vinyl-off speed-floor Scratch owner. The
 runtime options share `jog-config.json`: enabled, acceleration threshold
-150000 counts/s^2, and additive speed increase 5.6%. A detected event retains
+150000 counts/s^2, and additive speed increase 5.2%. A detected event retains
 its deck/scratch ownership after release until measured near-rest, reversal,
 retouch, mode cancellation or Stop. Input freshness loss also releases the
 synthetic hold. Zero increase preserves measured counts; event gain is

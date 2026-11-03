@@ -113,7 +113,7 @@ fn production_replay_gates_motor_force_and_preserves_original_scratch_owner() ->
         writes
             .iter()
             .filter(|(at, _)| (200_001..220_001).contains(at))
-            .all(|(_, report)| force(report, 0) == 5280)
+            .all(|(_, report)| force(report, 0) == 10630)
     );
     let scratch_index = touch
         .iter()
@@ -257,7 +257,12 @@ fn powered_speed_error_emits_only_the_corresponding_relative_bend() -> anyhow::R
         // When the complete production replay processes that speed.
         let bends = RefCell::new(Vec::new());
         let reported = RefCell::new(Vec::new());
-        replay::execute(full::jog::DEFAULT, fixture, |record| {
+        // A fixed shared gain isolates one-count quantization from user tuning.
+        let mut config = full::jog::DEFAULT;
+        config.tt_pitch_bend_gain = 1.0;
+        config.tt_nudge_gain = None;
+        config.tt_nudge_curve_exponent = 1.0;
+        replay::execute(config, fixture, |record| {
             if record["event"] == "midi"
                 && record["now_us"].as_u64().is_some_and(|at| at > 3_000_000)
                 && record["message"][0]
@@ -285,10 +290,8 @@ fn powered_speed_error_emits_only_the_corresponding_relative_bend() -> anyhow::R
             .into_inner()
             .into_iter()
             .map(|(at, value)| {
-                Ok((
-                    at.context("bend timestamp")?,
-                    value.context("bend value")? - 64,
-                ))
+                let (at, value) = at.zip(value).context("bend event")?;
+                Ok((at, value - 64))
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
         let readings = reported.into_inner();

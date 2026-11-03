@@ -58,7 +58,6 @@ pub enum Kind {
     Note,
     Absolute,
     Relative,
-    RotaryAbsolute,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -112,10 +111,6 @@ const fn relative(
     binding(input, number, Kind::Relative, target, shifted)
 }
 
-const fn rotary_absolute(input: &'static str, number: u8, target: &'static str) -> Binding {
-    binding(input, number, Kind::RotaryAbsolute, target, None)
-}
-
 const fn note(
     input: &'static str,
     number: u8,
@@ -124,9 +119,6 @@ const fn note(
 ) -> Binding {
     binding(input, number, Kind::Note, target, shifted)
 }
-
-pub const PLATTER_POSITION_BINDING: Binding =
-    rotary_absolute("jog_platter_position", 8, "turntable{deck}.scratchingMove");
 
 /// Deck suffixes are prefixed with `left_` / `right_` by the HID bridge.
 pub const DECK_BINDINGS: &[Binding] = &[

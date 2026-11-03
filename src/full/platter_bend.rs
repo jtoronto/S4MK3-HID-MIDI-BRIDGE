@@ -262,6 +262,9 @@ mod tests {
                     Duration::from_micros(u64::from(index) * 2000),
                     &jog::Config {
                         platter_target_rpm: 25,
+                        tt_pitch_bend_gain: 1.0,
+                        tt_nudge_gain: None,
+                        tt_nudge_curve_exponent: 1.0,
                         ..jog::DEFAULT
                     },
                 )?;
@@ -331,7 +334,12 @@ mod tests {
                     counter,
                     index * 200_000,
                     Duration::from_micros(u64::from(index) * 2000),
-                    &jog::DEFAULT,
+                    &jog::Config {
+                        tt_pitch_bend_gain: 1.0,
+                        tt_nudge_gain: None,
+                        tt_nudge_curve_exponent: 1.0,
+                        ..jog::DEFAULT
+                    },
                 )?;
                 if !(250..950).contains(&index) {
                     assert!(movement.is_none());

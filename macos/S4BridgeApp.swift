@@ -159,21 +159,20 @@ struct JogPreferences: Codable, Equatable {
     var pitchBendReaction = 17
     var backspinEnabled = true
     var backspinAcceleration = 150000.0
-    var backspinSpeedIncrease = 5.6
+    var backspinSpeedIncrease = 5.2
     var backspinAssistEnabled = true
     var backspinAssistStrength = 100
     var vinylEnabledAtStartup = true
     var ttVinylEnabledAtStartup = false
-    var ttPitchBendFloorPercent = 50
-    var ttPitchBendGain = 1.0
+    var ttPitchBendFloorPercent = 1
+    var ttPitchBendGain = 5.0
     var ttBrakeGain: Double?
-    var ttNudgeGain: Double?
+    var ttNudgeGain: Double? = 3.0
     var ttBrakeCurveExponent = 1.0
-    var ttNudgeCurveExponent = 1.0
+    var ttNudgeCurveExponent = 1.6
     var platterTargetRpm = 33
-    var platterPositionSensitivity = 14.0
     var platterMaxForce = 20000
-    var platterBaseForce = 1650
+    var platterBaseForce = 7000
     var platterForcePerRpm = 110
     var platterKp = 4000
     var platterKi = 3000
@@ -215,7 +214,7 @@ struct JogPreferences: Codable, Equatable {
               let overrides = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AppError.invalid("Jog preferences must be a JSON object.")
         }
-        let allowed = Set(base.keys).union(defaultValues.keys).union(optionalGainKeys)
+        let allowed = Set(defaultValues.keys).union(optionalGainKeys).union(["platter_position_sensitivity"])
         for object in [base, overrides] {
             let unknown = Set(object.keys).subtracting(allowed)
             guard unknown.isEmpty else {
@@ -232,7 +231,13 @@ struct JogPreferences: Codable, Equatable {
             }
         }
         var merged = defaultValues.merging(base) { _, baseValue in baseValue }
+        if overrides["tt_pitch_bend_gain"] != nil {
+            for key in Self.optionalGainKeys where overrides[key] == nil {
+                merged.removeValue(forKey: key)
+            }
+        }
         merged.merge(overrides) { _, override in override }
+        merged.removeValue(forKey: "platter_position_sensitivity")
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let value = try decoder.decode(JogPreferences.self, from: JSONSerialization.data(withJSONObject: merged))
@@ -253,9 +258,6 @@ struct JogPreferences: Codable, Equatable {
             guard speed.isFinite, speed > 0 else {
                 throw AppError.invalid("Jog speeds must be finite and greater than 0.")
             }
-        }
-        guard platterPositionSensitivity.isFinite, (0.1...100).contains(platterPositionSensitivity) else {
-            throw AppError.invalid("Motorized platter sensitivity must be between 0.1 and 100.")
         }
         guard (0...150).contains(scratchReaction), (0...150).contains(pitchBendReaction) else {
             throw AppError.invalid("Jog reactions must be integers from 0 to 150.")
@@ -325,10 +327,31 @@ struct JogPreferences: Codable, Equatable {
             throw AppError.invalid("Platter overspeed limit must be an integer from 0 to 250.")
         }
     }
+
+    mutating func restoreMotorized(from defaults: JogPreferences) {
+        vinylEnabledAtStartup = defaults.vinylEnabledAtStartup
+        ttVinylEnabledAtStartup = defaults.ttVinylEnabledAtStartup
+        ttPitchBendFloorPercent = defaults.ttPitchBendFloorPercent
+        ttPitchBendGain = defaults.ttPitchBendGain
+        ttBrakeGain = defaults.ttBrakeGain
+        ttNudgeGain = defaults.ttNudgeGain
+        ttBrakeCurveExponent = defaults.ttBrakeCurveExponent
+        ttNudgeCurveExponent = defaults.ttNudgeCurveExponent
+        platterTargetRpm = defaults.platterTargetRpm
+        platterMaxForce = defaults.platterMaxForce
+        platterBaseForce = defaults.platterBaseForce
+        platterForcePerRpm = defaults.platterForcePerRpm
+        platterKp = defaults.platterKp
+        platterKi = defaults.platterKi
+        platterForceRisePerSecond = defaults.platterForceRisePerSecond
+        platterStartupForceRisePerSecond = defaults.platterStartupForceRisePerSecond
+        platterStartupMs = defaults.platterStartupMs
+        platterOverspeedLimitRpm = defaults.platterOverspeedLimitRpm
+    }
 }
 
 struct TensionPreferences: Codable, Equatable {
-    var tension = 0
+    var tension = -77
 
     static func decode(_ data: Data, defaults: Data) throws -> TensionPreferences {
         guard let base = try JSONSerialization.jsonObject(with: defaults) as? [String: Any],
@@ -977,6 +1000,14 @@ final class BridgeController: ObservableObject {
         }
     }
 
+    func restoreMotorizedDefaults() {
+        do {
+            let defaults = try JogPreferences.decode(jogDefaults, defaults: jogDefaults)
+            jog.restoreMotorized(from: defaults)
+            message = "Motorized platter defaults restored. Save to apply."
+        } catch { report(error) }
+    }
+
     func resetPreferences() {
         do {
             leds = try LedPreferences.decode(defaults, defaults: defaults)
@@ -1318,123 +1349,7 @@ struct BridgeSettingsView: View {
     }
 
     private var jogTab: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                section("Hardware") {
-                    HStack {
-                        Text("Jog Wheel Tension")
-                        Spacer()
-                        Text(controller.tension.tension, format: .number.grouping(.never))
-                    }
-                    Slider(value: Binding(
-                        get: { Double(controller.tension.tension) },
-                        set: { controller.tension.tension = Int($0) }
-                    ), in: -100...100, step: 1) {
-                        Text("Jog Wheel Tension")
-                    }
-                    .labelsHidden()
-                    HStack {
-                        Text("Assist").frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Neutral (0)").frame(maxWidth: .infinity)
-                        Text("Brake").frame(maxWidth: .infinity, alignment: .trailing)
-                    }.font(.caption).foregroundColor(.secondary)
-                    Text("One setting for both wheels; each responds to its own movement and touch. Channel 1's fader remains a normal mixer control.")
-                        .font(.caption).foregroundColor(.secondary)
-                    Text("Full-controller profile only. Save preferences to apply on the next start, or Save and restart while running. No new Djay mapping is needed.")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                section("Backspin") {
-                    Toggle("Detect backspins and continue scratch after release", isOn: $controller.jog.backspinEnabled)
-                    HStack {
-                        Text("Acceleration threshold")
-                        Spacer()
-                        TextField("Acceleration threshold", value: $controller.jog.backspinAcceleration, format: .number.grouping(.never))
-                            .frame(width: 90).multilineTextAlignment(.trailing)
-                        Text("counts/s^2").foregroundColor(.secondary)
-                        Stepper("Acceleration threshold", value: $controller.jog.backspinAcceleration, in: 1000...Double.greatestFiniteMagnitude, step: 10000)
-                            .labelsHidden().fixedSize()
-                    }
-                    .disabled(!controller.jog.backspinEnabled)
-                    HStack {
-                        Text("Scratch speed increase")
-                        Slider(value: $controller.jog.backspinSpeedIncrease, in: 0...10, step: 0.1)
-                        Text(controller.jog.backspinSpeedIncrease, format: .number.precision(.fractionLength(1)).grouping(.never))
-                            .frame(width: 35, alignment: .trailing)
-                        Text("%").foregroundColor(.secondary)
-                    }
-                    .disabled(!controller.jog.backspinEnabled)
-                    Toggle("Apply motor assistance during detected backspins", isOn: $controller.jog.backspinAssistEnabled)
-                        .disabled(!controller.jog.backspinEnabled)
-                    HStack {
-                        Text("Motor assist strength")
-                        Slider(value: Binding(
-                            get: { Double(controller.jog.backspinAssistStrength) },
-                            set: { controller.jog.backspinAssistStrength = Int($0) }
-                        ), in: 0...100, step: 1)
-                        .accessibilityLabel("Motor assist strength")
-                        Text("\(controller.jog.backspinAssistStrength)%")
-                            .frame(width: 42, alignment: .trailing)
-                    }
-                    .disabled(!controller.jog.backspinEnabled || !controller.jog.backspinAssistEnabled)
-                    Text("Adjusts motor assistance during detected backspins. Assistance continues after release and fades out within one second. Normal Jog Wheel Tension and scratch speed increase are independent settings.")
-                        .font(.caption).foregroundColor(.secondary)
-                    Text("Backspin options apply on the next start after saving, or through Save and restart while running; no new Djay mapping export is needed.")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                section("Testing: Motorized playback") {
-                    Toggle("Enable Vinyl at normal-mode startup", isOn: $controller.jog.vinylEnabledAtStartup)
-                    Toggle("Enable Vinyl mode at TT startup", isOn: $controller.jog.ttVinylEnabledAtStartup)
-                    Text("Normal and TT modes have separate Vinyl defaults. Each mode remembers its last choice during the session. TT motors always start off and must be engaged on the controller.")
-                        .font(.caption).foregroundColor(.secondary)
-                    NumberRow(title: "TT pitch-bend floor", value: $controller.jog.ttPitchBendFloorPercent, range: 1...95, unit: "%")
-                    Text("Testing: falling below this floor hands off to Scratch. This provisional diagnostic bound is not a verified CC 4 limit.")
-                        .font(.caption).foregroundColor(.secondary)
-                    TTResponseCurvesSectionView(jog: $controller.jog)
-                    NumberRow(title: "Target speed", value: $controller.jog.platterTargetRpm, range: 1...45, unit: "RPM")
-                    DecimalRow(title: "Absolute platter sensitivity", value: $controller.jog.platterPositionSensitivity, range: 0.1...100, unit: "%")
-                    NumberRow(title: "Maximum force", value: $controller.jog.platterMaxForce, range: 1...25000, step: 500, unit: "force units")
-                    NumberRow(title: "Base force (0 RPM)", value: $controller.jog.platterBaseForce, range: 0...25000, step: 50, unit: "force units")
-                    NumberRow(title: "Force per RPM", value: $controller.jog.platterForcePerRpm, range: 0...25000, step: 10, unit: "force units/RPM")
-                    NumberRow(title: "Proportional gain (Kp)", value: $controller.jog.platterKp, range: 0...25000, step: 100, unit: "force units/RPM")
-                    NumberRow(title: "Integral gain (Ki)", value: $controller.jog.platterKi, range: 0...25000, step: 100, unit: "force units/(RPM*s)")
-                    NumberRow(title: "Force rise rate", value: $controller.jog.platterForceRisePerSecond, range: 0...1000000, step: 10000, unit: "force units/s")
-                    NumberRow(title: "Startup duration", value: $controller.jog.platterStartupMs, range: 0...2000, step: 50, unit: "ms")
-                    NumberRow(title: "Startup force rise rate", value: $controller.jog.platterStartupForceRisePerSecond, range: 0...1000000, step: 10000, unit: "force units/s")
-                    NumberRow(title: "Overspeed limit", value: $controller.jog.platterOverspeedLimitRpm, range: 0...250, unit: "RPM")
-                    Text("Zero semantics: 0 ms startup duration skips the startup window; 0 force units/s startup force rise rate applies an immediate step; 0 force units/s force rise rate holds post-startup force from increasing; 0 RPM overspeed limit disables the overspeed guard.")
-                        .font(.caption).foregroundColor(.secondary)
-                    Text("Motor force and Vinyl startup are runtime preferences; save and restart to apply. Absolute platter sensitivity controls the generated CC 8 mapping: save, install a new Djay mapping, and select it to apply. The starting sensitivity was estimated from a timed 145 BPM test.")
-                        .font(.caption).foregroundColor(.secondary)
-                    Text("Testing: Turn TT mode off or stop the bridge before quitting Djay. Motorized playback uses the last reported playback state; silence from Djay does not stop it.")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                section("Scratch (platter touch)") {
-                    DecimalRow(title: "Scratch speed", value: $controller.jog.scratchSpeed, range: 0.1...Double.greatestFiniteMagnitude, unit: "%")
-                    NumberRow(title: "Scratch reaction", value: $controller.jog.scratchReaction, range: 0...150, unit: "%")
-                    Picker("Touch-scratch direction", selection: $controller.jog.scratchDirection) {
-                        Text("Normal").tag(ScratchDirection.normal)
-                        Text("Reversed").tag(ScratchDirection.reversed)
-                    }
-                    Text("Applies to manual top-touch Scratch CC only; motorized absolute platter position keeps its own direction.")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                section("Pitch bend (no touch)") {
-                    DecimalRow(title: "Pitch bend speed", value: $controller.jog.pitchBendSpeed, range: 0.1...Double.greatestFiniteMagnitude, unit: "%")
-                    NumberRow(title: "Pitch bend reaction", value: $controller.jog.pitchBendReaction, range: 0...150, unit: "%")
-                }
-                section("Applying jog mapping changes") {
-                    Text("Scratch speed, touch direction, absolute platter sensitivity and pitch bend affect the exported mapping only. Save preferences, then install a new mapping and select it in Djay; restarting the bridge is not required. Seek behavior is unchanged.")
-                        .font(.caption).foregroundColor(.secondary)
-                    HStack {
-                        Button("Install Djay mapping…") { controller.installMapping() }.disabled(controller.isExporting)
-                        if controller.isExporting {
-                            Text("Generating mapping…").font(.caption).foregroundColor(.secondary)
-                        }
-                        Spacer()
-                    }
-                }
-            }.padding(20).frame(maxWidth: .infinity)
-        }
+        JogSettingsView(controller: controller)
     }
 
     private var ledTab: some View {

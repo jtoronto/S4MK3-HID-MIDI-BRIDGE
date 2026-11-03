@@ -9,10 +9,10 @@ pub mod mapping;
 pub mod output;
 mod platter_bend;
 mod platter_gesture;
-mod platter_position;
 mod platter_telemetry;
 mod raw;
 pub mod replay;
+mod ring_position;
 pub mod screens;
 
 use std::collections::HashMap;
@@ -162,8 +162,7 @@ struct Translator {
     playback_paused: [bool; 4],
     playback_touch_scratch: [bool; 4],
     last_motor_gate: [Option<MotorGateState>; 2],
-    platter_position: [platter_position::Position; 2],
-    ring_position: [platter_position::Position; 2],
+    ring_position: [ring_position::RingPosition; 2],
     platter_bend: [platter_bend::Bend; 2],
     platter_scratch: [Option<Deck>; 2],
     platter_paused: [bool; 2],
@@ -209,8 +208,7 @@ impl Default for Translator {
             playback_paused: [false; 4],
             playback_touch_scratch: [false; 4],
             last_motor_gate: [None; 2],
-            platter_position: std::array::from_fn(|_| platter_position::Position::default()),
-            ring_position: std::array::from_fn(|_| platter_position::Position::default()),
+            ring_position: std::array::from_fn(|_| ring_position::RingPosition::default()),
             platter_bend: std::array::from_fn(|_| platter_bend::Bend::default()),
             platter_scratch: [None; 2],
             platter_paused: [false; 2],
@@ -415,7 +413,6 @@ impl Translator {
         self.translate(controls, buttons, output)?;
         let playback = self.playback_state();
         self.motorized_bend(Some(report), playback, output)?;
-        self.log_platter_position(report, playback)?;
         self.log_motor_gate_changes(feedback);
         Ok(())
     }
@@ -476,43 +473,6 @@ impl Translator {
                     deck = active.map(|deck| deck + 1),
                     active = active.is_some(),
                     "BACKSPIN_STATE"
-                );
-            }
-        }
-        Ok(())
-    }
-
-    fn log_platter_position(
-        &mut self,
-        report: &[u8],
-        state: s4mk3_hid_midi_bridge::tension::PlaybackState,
-    ) -> anyhow::Result<()> {
-        if report.first() != Some(&3) {
-            return Ok(());
-        }
-        ensure!(report.len() == 60, "full jog report must have 60 bytes");
-        for (side, offset) in [(0, 8), (1, 36)] {
-            let counter = u32::from_le_bytes(report[offset + 4..offset + 8].try_into()?);
-            let deck = self.decks[side].channel() + 1;
-            let position = if !state.enabled[side] {
-                self.platter_position[side].suspend(counter);
-                None
-            } else if state.owned[side] {
-                if self.platter_position[side].is_active_for(deck) {
-                    self.platter_position[side].rebase(counter);
-                } else {
-                    self.platter_position[side].suspend(counter);
-                }
-                None
-            } else if self.platter_position[side].is_active_for(deck) {
-                self.platter_position[side].observe(counter)?
-            } else {
-                self.platter_position[side].activate(counter, deck)?
-            };
-            if let Some(position) = position {
-                debug!(
-                    side = if side == 0 { "left" } else { "right" },
-                    deck, position, "MOTOR_JOG_POSITION"
                 );
             }
         }
@@ -625,11 +585,11 @@ impl Translator {
             ring_positions: self
                 .ring_position
                 .each_ref()
-                .map(platter_position::Position::ring_position),
+                .map(ring_position::RingPosition::ring_position),
             ring_counters: self
                 .ring_position
                 .each_ref()
-                .map(platter_position::Position::counter),
+                .map(ring_position::RingPosition::counter),
             scratch_decks: std::array::from_fn(|side| {
                 self.wheels[side]
                     .filter(|owner| owner.action == "jog_scratch")
@@ -2425,6 +2385,7 @@ mod tests {
             for (tt, vinyl) in [(false, true), (true, true), (true, false)] {
                 // Given a touched platter with sustained backward movement.
                 let mut state = Translator::default();
+                state.jog_config.backspin_speed_increase = 5.6;
                 state.motor_enabled[side] = tt;
                 state.vinyl[side] = vinyl;
                 let mut feedback = feedback::FeedbackState::default();
@@ -2538,6 +2499,7 @@ mod tests {
     fn coasting_backspin_retains_ownership_across_deck_and_shift_changes() -> anyhow::Result<()> {
         // Given a released backspin owned by A.
         let mut state = Translator::default();
+        state.jog_config.backspin_speed_increase = 5.6;
         prime_backspin(&mut state, 0)?;
         run(&mut state, &[Control::Button("left_wheel_touch", false)])?;
         run(

@@ -9,7 +9,7 @@ backspin controls affect runtime detection and event-only scratch routing/gain.
 
 - The TT speed-Scratch diagnostic adds separate TT Vinyl startup (off by
   default; normal Vinyl stays on) and an integer TT pitch-bend floor from
-  1 to 95% of target RPM, initially 50%. These are save/restart runtime
+  1 to 95% of target RPM, default 1%. These are save/restart runtime
   preferences, not mapping changes or a measured CC4 limit. See the
   [calibration workflow](tt-speed-scratch-diagnostic.md).
 
@@ -22,15 +22,12 @@ backspin controls affect runtime detection and event-only scratch routing/gain.
   input addresses and verified feedback outputs as the CLI generator.
 - Jog-tab manual Scratch and Pitch Bend Speed/Reaction settings. Defaults are
   manual scratch 2.7% / 150% and pitch bend 2.7% / 17%, applied to decks A-D.
-  Manual touch Scratch direction is independently reversible. The retained
-  experimental absolute Scratch CC8 mapping has a separate sensitivity setting,
-  default 14.0% and bounded to 0.1-100%; current motorized playback emits relative
-  CC4 and speed-owned CC5 instead, so the absolute sensitivity does not tune that path. These values
+  Manual touch Scratch direction is independently reversible. These values
   are encoded as `rotarySensitivity`, `rotaryAcceleration` and `flipped` in the
   generated mapping.
 - Current-source Jog > Backspin controls: detection enabled by default,
   filtered backward-acceleration threshold **150000 counts/s^2**, and additive
-  scratch-speed increase **5.6%**. Save/restart applies these without exporting
+  scratch-speed increase **5.2%**. Save/restart applies these without exporting
   a mapping. Zero increase preserves ordinary count gain; nonzero increase uses
   `(scratch_speed + backspin_speed_increase) / scratch_speed` only during a
   detected event. The normal Scratch speed must match the selected Djay mapping.
@@ -42,9 +39,10 @@ backspin controls affect runtime detection and event-only scratch routing/gain.
   release its one-second fade cannot be extended by
   movement. Retouch, stop/reversal, mode cancellation, freshness loss or Stop
   clears the override; normal tension and software scratch speed remain separate.
-- Jog > Hardware > Jog Wheel Tension: a saved integer from -100 to 100,
+- Jog > Jog wheel feel > Wheel tension: a saved integer from -100 to 100,
   shared by both wheels with independent motion/touch response. Negative is
-  assistance, zero neutral, positive braking. Full profile only; save before
+  assistance, zero neutral, positive braking. The app defaults to -77.
+  Full profile only; save before
   starting or Save and restart while running. No mapping export is needed.
   See [hardware integration](jog-tension-integration.md).
 - Every setting in `examples/led-config.json`: deck/stem/hotcue palettes,
@@ -98,9 +96,8 @@ The Jog preferences now include `vinyl_enabled_at_startup` (default true)
 and testing-only `platter_*` runtime values for target RPM, maximum force,
 feed-forward base/slope, Kp/Ki, startup duration and rise rates, and overspeed
 cutoff. They use the saved jog configuration and apply on the next bridge
-start. `platter_position_sensitivity` is a separate mapping-time percentage for
-the retained CC8 experiment, not the current CC4 motorized path; save, export and
-select a new Djay mapping to apply it. TT independently
+start. The abandoned absolute-position mapping and its preference are removed.
+TT independently
 toggles motorized playback and starts off, while JOG toggles Vinyl red/on and
 blue/off. These testing controls are not a commitment to expose every
 parameter in a release. See the

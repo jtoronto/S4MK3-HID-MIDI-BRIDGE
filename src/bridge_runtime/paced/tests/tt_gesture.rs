@@ -40,7 +40,7 @@ fn production_tt_handoff_keeps_assistance_through_stop_reverse_and_recovery() ->
         }
         if record["event"] == "motor" && (3_300_000..4_400_000).contains(&at) {
             let report: [u8; 11] = serde_json::from_value(record["report"].clone())?;
-            assert_eq!(u16::from_le_bytes([report[4], report[5]]), 5280);
+            assert_eq!(u16::from_le_bytes([report[4], report[5]]), 10630);
             held_reports += 1;
         }
         if record["event"] == "motor" && (6_100_000..6_500_000).contains(&at) {
@@ -201,9 +201,9 @@ fn production_tt_tail_rejects_noise_and_bounds_touched_motor_force() -> anyhow::
         assert!(frames > 0);
     }
     for (start, end, expected) in [
-        (21_100_000, 21_500_000, 5280),
+        (21_100_000, 21_500_000, 10630),
         (22_100_000, 23_000_000, 0),
-        (23_600_000, 24_500_000, 5280),
+        (23_600_000, 24_500_000, 10630),
     ] {
         let mut writes = 0;
         for record in &records {

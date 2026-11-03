@@ -121,8 +121,9 @@ Current source also allows stopped TT platter movement to scratch without
 enabling Vinyl. The app's Diagnostics tab shows live physical RPM, signed MIDI
 bend output and routing mode for tuning. These indicators are bridge-output
 diagnostics, not measured audible playback speed.
-The separate TT pitch-bend gain adjusts bend output strength without moving the
-lower Scratch handoff threshold; its default remains 1x and saved values persist.
+Separate TT braking and nudge Strength/Shape controls adjust pitch bend response
+without moving the lower Scratch handoff threshold. Current defaults are
+10x / Shape 1 for braking and 3x / Shape 1.6 for nudging.
 The response update needs no mapping export. Physical response and Djay's
 audible slowdown limit remain unverified.
 
@@ -208,14 +209,15 @@ its separate fallback hasn't been verified.
 
 ### Jog wheels
 
-The **Jog > Hardware** section has a shared **Jog Wheel Tension** slider:
+The **Jog > Jog wheel feel** section has a shared **Wheel tension** slider:
 
 - **Assist (-100 to -1):** assists each wheel's own movement while its metal
   top is touched.
-- **Neutral (0):** the first-install default.
+- **Neutral (0):** no added tension.
 - **Brake (1 to 100):** resists each wheel's movement, including after release.
 
-Both wheels share the saved setting but respond independently. Channel 1's
+The current-source app defaults to **-77**, toward Assist. Both wheels share
+the saved setting but respond independently. Channel 1's
 fader remains a normal mixer control. This setting applies only to the
 full-controller profile: use **Save preferences** before starting, or
 **Save and restart** while running. It does **not** require a new Djay mapping.
@@ -230,7 +232,7 @@ remain in place. Physical timeout-recovery testing is still pending; see
 
 #### Djay scratch and pitch-bend response
 
-The separate scratch and pitch-bend sections set Speed and Reaction for all
+The scratch and pitch-bend mapping controls set Speed and Reaction for all
 four decks. The calibrated defaults are:
 
 | Action                   | Speed | Reaction |
@@ -251,8 +253,8 @@ A sharp backward flick in Turntable mode can continue scratching after you
 release the platter, following its remaining real movement. Catching or stopping
 the wheel ends the backspin.
 
-In **Jog > Backspin**, adjust the detection threshold, **Scratch speed increase**
-and **Motor assist strength**. The defaults are **5.6%** extra scratch speed and
+In **Jog > Backspin**, adjust the detection threshold, extra scratch speed
+and **Motor assist strength**. Current source defaults are **5.2%** extra scratch speed and
 motor assistance **on at 100%**. Software speed and motor help are independent
 of your normal scratch response and Jog Wheel Tension. Motor help fades out
 within one second after release; this is not playback-driven platter rotation.
@@ -263,8 +265,8 @@ backspin options, and upgrading preserves explicit saved choices. See the
 
 ![Jog settings showing Hardware tension, Backspin detection, scratch speed increase and motor assist controls, plus scratch and pitch-bend mapping settings](docs/images/jog-settings.png)
 
-_Jog settings with the Backspin controls, 5.6% speed increase and motor assistance
-enabled at 100%, alongside neutral tension and calibrated scratch/pitch-bend defaults._
+_Jog settings in the published app. Current source adds the Motorized platters
+layout described in the [user guide](docs/user-guide.md#testing-motorized-playback)._
 
 The menu-bar icon turns green while the bridge is running. In source builds,
 it turns red if requested screens are blocked or fail while the bridge keeps

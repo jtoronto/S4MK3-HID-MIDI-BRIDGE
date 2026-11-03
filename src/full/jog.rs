@@ -60,7 +60,8 @@ pub struct Config {
     pub tt_brake_curve_exponent: f64,
     pub tt_nudge_curve_exponent: f64,
     pub platter_target_rpm: u16,
-    pub platter_position_sensitivity: f64,
+    #[serde(rename = "platter_position_sensitivity", default, skip_serializing)]
+    pub retired_platter_position_sensitivity: Option<f64>,
     pub platter_max_force: u16,
     pub platter_base_force: u16,
     pub platter_force_per_rpm: u16,
@@ -82,19 +83,19 @@ pub const DEFAULT: Config = Config {
     backspin_assist_enabled: true,
     backspin_assist_strength: 100,
     backspin_acceleration: 150_000.0,
-    backspin_speed_increase: 5.6,
+    backspin_speed_increase: 5.2,
     vinyl_enabled_at_startup: true,
     tt_startup_mode: VinylMode::Bend,
-    tt_pitch_bend_floor_percent: 50,
-    tt_pitch_bend_gain: 1.0,
+    tt_pitch_bend_floor_percent: 1,
+    tt_pitch_bend_gain: 5.0,
     tt_brake_gain: None,
-    tt_nudge_gain: None,
+    tt_nudge_gain: Some(3.0),
     tt_brake_curve_exponent: 1.0,
-    tt_nudge_curve_exponent: 1.0,
+    tt_nudge_curve_exponent: 1.6,
     platter_target_rpm: 33,
-    platter_position_sensitivity: 14.0,
+    retired_platter_position_sensitivity: None,
     platter_max_force: 20_000,
-    platter_base_force: 1_650,
+    platter_base_force: 7_000,
     platter_force_per_rpm: 110,
     platter_kp: 4_000,
     platter_ki: 3_000,
@@ -137,10 +138,26 @@ impl Config {
             Some(path) => {
                 let bytes = std::fs::read(path)
                     .with_context(|| format!("read jog mapping preferences {}", path.display()))?;
-                serde_json::from_slice(&bytes)
+                let value: serde_json::Value = serde_json::from_slice(&bytes)
+                    .with_context(|| format!("parse jog mapping preferences {}", path.display()))?;
+                Self::from_value(value)
                     .with_context(|| format!("parse jog mapping preferences {}", path.display()))
             }
         }
+    }
+
+    fn from_value(value: serde_json::Value) -> Result<Self> {
+        let has_shared_gain = value
+            .as_object()
+            .is_some_and(|object| object.contains_key("tt_pitch_bend_gain"));
+        let has_nudge_override = value
+            .as_object()
+            .is_some_and(|object| object.contains_key("tt_nudge_gain"));
+        let mut config: Self = serde_json::from_value(value)?;
+        if has_shared_gain && !has_nudge_override {
+            config.tt_nudge_gain = None;
+        }
+        Ok(config)
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -153,11 +170,6 @@ impl Config {
                 "{name} must be finite and positive"
             );
         }
-        ensure!(
-            self.platter_position_sensitivity.is_finite()
-                && (0.1..=100.0).contains(&self.platter_position_sensitivity),
-            "platter_position_sensitivity must be finite and between 0.1 and 100"
-        );
         for (name, reaction) in [
             ("scratch_reaction", self.scratch_reaction),
             ("pitch_bend_reaction", self.pitch_bend_reaction),
@@ -254,14 +266,18 @@ mod tests {
         shipped.validate()?;
         let partial: Config = serde_json::from_str(r#"{"scratch_speed":4.5}"#)?;
         // Then shipped defaults agree and omitted user fields retain those defaults.
-        assert!((shipped.backspin_speed_increase - 5.6).abs() < f64::EPSILON);
-        assert!((shipped.platter_position_sensitivity - 14.0).abs() < f64::EPSILON);
+        assert!((shipped.backspin_speed_increase - 5.2).abs() < f64::EPSILON);
         assert_eq!(shipped.scratch_direction, ScratchDirection::Normal);
         assert!(shipped.backspin_assist_enabled);
         assert_eq!(shipped.backspin_assist_strength, 100);
         assert!(shipped.vinyl_enabled_at_startup);
         assert_eq!(shipped.tt_startup_mode, VinylMode::Bend);
-        assert_eq!(shipped.tt_pitch_bend_floor_percent, 50);
+        assert_eq!(shipped.tt_pitch_bend_floor_percent, 1);
+        assert!((shipped.tt_pitch_bend_gain - 5.0).abs() < f64::EPSILON);
+        assert_eq!(shipped.tt_brake_gain, None);
+        assert_eq!(shipped.tt_nudge_gain, Some(3.0));
+        assert!((shipped.tt_nudge_curve_exponent - 1.6).abs() < f64::EPSILON);
+        assert_eq!(shipped.platter_base_force, 7_000);
         assert_eq!(
             serde_json::to_value(shipped)?,
             serde_json::to_value(DEFAULT)?
@@ -272,7 +288,20 @@ mod tests {
             serde_json::to_value(partial)?,
             serde_json::to_value(expected)?
         );
+        Ok(())
+    }
+
+    #[test]
+    fn saved_preferences_accept_retired_field_and_reject_invalid_values() -> Result<()> {
         assert!(serde_json::from_str::<Config>(r#"{"unknown":true}"#).is_err());
+        let retired: Config =
+            serde_json::from_str(r#"{"platter_position_sensitivity":14.0,"scratch_speed":3.1}"#)?;
+        assert!((retired.scratch_speed - 3.1).abs() < f64::EPSILON);
+        assert!(
+            !serde_json::to_value(retired)?
+                .as_object()
+                .is_some_and(|object| object.contains_key("platter_position_sensitivity"))
+        );
         assert!(serde_json::from_str::<Config>(r#"{"scratch_reaction":-1}"#).is_err());
         assert!(serde_json::from_str::<Config>(r#"{"scratch_reaction":17.5}"#).is_err());
         for input in [
@@ -303,8 +332,6 @@ mod tests {
             r#"{"platter_target_rpm":0}"#,
             r#"{"tt_pitch_bend_floor_percent":0}"#,
             r#"{"tt_pitch_bend_floor_percent":96}"#,
-            r#"{"platter_position_sensitivity":0.0}"#,
-            r#"{"platter_position_sensitivity":100.1}"#,
             r#"{"platter_max_force":0}"#,
             r#"{"platter_max_force":25001}"#,
             r#"{"platter_base_force":25001}"#,
@@ -378,7 +405,7 @@ mod tests {
         let legacy: Config = serde_json::from_str(r#"{"vinyl_enabled_at_startup":false}"#)?;
         assert!(!legacy.vinyl_enabled_at_startup);
         assert_eq!(legacy.tt_startup_mode, VinylMode::Bend);
-        assert_eq!(legacy.tt_pitch_bend_floor_percent, 50);
+        assert_eq!(legacy.tt_pitch_bend_floor_percent, 1);
 
         // When TT preferences are saved and reloaded.
         let config = Config {
@@ -416,7 +443,7 @@ mod tests {
     #[test]
     fn tt_gain_defaults_and_round_trips_without_changing_floor() -> Result<()> {
         let legacy: Config = serde_json::from_str(r#"{"tt_pitch_bend_floor_percent":1}"#)?;
-        assert!((legacy.tt_pitch_bend_gain - 1.0).abs() < f64::EPSILON);
+        assert!((legacy.tt_pitch_bend_gain - 5.0).abs() < f64::EPSILON);
         for gain in [0.1, 1.0, 4.0, 10.0] {
             let config = Config {
                 tt_pitch_bend_gain: gain,
@@ -448,7 +475,7 @@ mod tests {
 
     #[test]
     fn tt_response_overrides_round_trip_and_validate_independently() -> Result<()> {
-        let legacy: Config = serde_json::from_str(r#"{"tt_pitch_bend_gain":5}"#)?;
+        let legacy = Config::from_value(serde_json::json!({"tt_pitch_bend_gain":5}))?;
         assert_eq!(legacy.tt_brake_gain, None);
         assert_eq!(legacy.tt_nudge_gain, None);
         let configured = Config {
@@ -464,7 +491,14 @@ mod tests {
         let inherited: Config = serde_json::from_str(
             r#"{"tt_pitch_bend_gain":5,"tt_brake_gain":null,"tt_nudge_gain":null}"#,
         )?;
-        assert_eq!(inherited, legacy);
+        assert_eq!(inherited.tt_nudge_gain, None);
+        let current_saved = Config::from_value(serde_json::json!({
+            "tt_pitch_bend_gain":5,
+            "tt_brake_gain":null,
+            "tt_nudge_gain":3
+        }))?;
+        assert_eq!(current_saved.tt_brake_gain, None);
+        assert_eq!(current_saved.tt_nudge_gain, Some(3.0));
         for (brake, nudge, shape) in [(0.1, 0.1, 0.25), (20.0, 10.0, 4.0)] {
             Config {
                 tt_brake_gain: Some(brake),

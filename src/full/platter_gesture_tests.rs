@@ -266,6 +266,8 @@ fn tt_gain_scales_only_bend_without_changing_measured_rpm() -> anyhow::Result<()
         for gain in [0.5, 1.0, 2.0, 10.0] {
             let mut fixture = Fixture::new();
             fixture.translator.jog_config.tt_pitch_bend_gain = gain;
+            fixture.translator.jog_config.tt_brake_gain = None;
+            fixture.translator.jog_config.tt_nudge_gain = None;
             fixture.drive(330, 150)?;
             let output = fixture.drive(gesture_rpm, 600)?;
             assert!(
@@ -487,6 +489,7 @@ fn paused_scratch_drops_implausible_counter_jumps() -> anyhow::Result<()> {
 fn speed_handoff_stops_bend_and_routes_raw_scratch_without_touch() -> anyhow::Result<()> {
     // Given authorized, qualified TT playback with Vinyl off.
     let mut fixture = Fixture::new();
+    fixture.translator.jog_config.tt_pitch_bend_floor_percent = 50;
     assert!(fixture.drive(330, 150)?.is_empty());
     // When the wheel crosses the diagnostic half-speed floor.
     let output = fixture.drive(120, 150)?;
@@ -713,6 +716,7 @@ fn floor_scratch_touch_release_below_exit_waits_for_speed_recovery() -> anyhow::
 fn held_stop_and_reverse_stay_in_scratch_until_speed_recovers() -> anyhow::Result<()> {
     // Given speed-owned Scratch without capacitive touch.
     let mut fixture = Fixture::new();
+    fixture.translator.jog_config.tt_pitch_bend_floor_percent = 50;
     fixture.drive(330, 150)?;
     fixture.drive(120, 150)?;
     // When motion stops, reverses, then resumes below and above the exit threshold.
@@ -805,6 +809,7 @@ fn deck_switch_and_stale_input_release_the_original_speed_owner() -> anyhow::Res
     ] {
         // Given deck A speed-owned Scratch with C also authorized.
         let mut fixture = Fixture::new();
+        fixture.translator.jog_config.tt_pitch_bend_floor_percent = 50;
         fixture.drive(330, 150)?;
         fixture.drive(120, 150)?;
         let mut output = Vec::new();
