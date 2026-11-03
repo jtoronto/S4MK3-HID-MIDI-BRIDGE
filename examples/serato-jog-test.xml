@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Experimental legacy jog mapping, not a verified Serato 5 preset.
+     Movement uses legacy deck_id=1; touch/play use modern deck_id=0.
+     Based on Teo Tormo's April 11, 2018 DJ TechTools experiment.
+     One virtual controller, MIDI channel 1. No S4 hardware involved. -->
+<midi>
+  <control channel="1" event_type="Note On" control="0">
+    <userio event="click">
+      <play deck_set="Default" deck_id="0" slot_id="0">
+        <translation action_on="press" behaviour="toggle"/>
+      </play>
+    </userio>
+    <userio event="output">
+      <play deck_set="Default" deck_id="0" slot_id="0">
+        <translation action_on="any">
+          <alias name="on" value="127"/>
+          <alias name="off" value="0"/>
+        </translation>
+      </play>
+    </userio>
+  </control>
+  <control channel="1" control_type="CC" event_type="Control Change"
+           control="16" data_type="Relative Binary Offset">
+    <userio event="click">
+      <platter_move deck_id="1">
+        <translation>
+          <range in_min="-1546" in_max="1546" out_min="-1" out_max="1"/>
+        </translation>
+      </platter_move>
+    </userio>
+  </control>
+  <control channel="1" event_type="Note On" control="7">
+    <userio event="click">
+      <platter_touch deck_set="Default" deck_id="0" slot_id="0">
+        <translation action_on="any" behaviour="explicit"/>
+      </platter_touch>
+    </userio>
+  </control>
+</midi>
