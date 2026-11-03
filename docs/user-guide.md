@@ -722,7 +722,18 @@ require **Debug**. **Normal** keeps button/mode changes and errors without those
 continuous event streams. This changes logging, not MIDI or screen updates.
 Live platter readings and log output update only their Diagnostics views;
 they do not refresh the preference editors. Diagnostics rendering is suspended
-while another Settings tab is selected.
+while another Settings tab is selected. Settings content is also suspended
+when its window is closed, minimized, hidden, or fully covered by other windows.
+The bridge, log collection, and any motor diagnostic capture keep running.
+Reopening Settings preserves the selected tab and preference edits, and shows
+the latest retained readings and log. Readings become stale after half a second
+without telemetry; the display uses a single freshness deadline rather than a
+continuously running UI timer.
+While Diagnostics is visible, routine platter readouts refresh at most four
+times per second, and identical displayed values do not trigger another refresh.
+Opening Diagnostics, stopping the bridge, and stale-data transitions update
+immediately. This display limit does not discard incoming telemetry or records
+in a motor diagnostic capture.
 The visible log updates incrementally rather than laying out its whole retained
 history for each new batch. **Copy log** still copies the most recent 60,000
 characters; full motor diagnostic captures retain their separate file.

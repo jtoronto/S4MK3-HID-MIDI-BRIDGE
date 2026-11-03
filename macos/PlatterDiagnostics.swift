@@ -1,4 +1,5 @@
 import CoreFoundation
+import Combine
 import Foundation
 import SwiftUI
 
@@ -138,6 +139,13 @@ struct PlatterWheelPresentation: Equatable {
     var bendOutputText: String {
         bendOutput.map { PlatterDiagnosticsState.formatSigned($0, unit: "counts/s") } ?? "—"
     }
+
+    // Equality follows the rendered values, not sub-tenth telemetry differences.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.sideTitle == rhs.sideTitle && lhs.deckText == rhs.deckText
+            && lhs.modeText == rhs.modeText && lhs.isStaleOrStopped == rhs.isStaleOrStopped
+            && lhs.rpmText == rhs.rpmText && lhs.bendOutputText == rhs.bendOutputText
+    }
 }
 
 struct PlatterDiagnosticsPresentation: Equatable {
@@ -251,23 +259,87 @@ struct PlatterDiagnosticsState: Equatable {
     }
 }
 
+@MainActor
+final class PlatterDiagnosticsDisplay: ObservableObject {
+    @Published private(set) var presentation = PlatterDiagnosticsState().presentation(bridgeRunning: false)
+    private var state = PlatterDiagnosticsState()
+    private var presentationActive = false
+    private var bridgeRunning = false
+    private var lastPublication: Date?
+    private var refresh: DispatchWorkItem?
+    private var expiration: DispatchWorkItem?
+
+    func setPresentationActive(_ active: Bool, bridgeRunning: Bool) {
+        guard active != presentationActive || bridgeRunning != self.bridgeRunning else { return }
+        presentationActive = active
+        self.bridgeRunning = bridgeRunning
+        refresh?.cancel()
+        refresh = nil
+        expiration?.cancel()
+        expiration = nil
+        guard active else { return }
+        publish(at: Date())
+        scheduleExpiration()
+    }
+
+    func accept(_ state: PlatterDiagnosticsState) {
+        self.state = state
+        guard presentationActive else { return }
+        scheduleRefresh()
+        scheduleExpiration()
+    }
+
+    private func publish(at now: Date) {
+        let next = state.presentation(bridgeRunning: bridgeRunning, at: now)
+        guard next != presentation else { return }
+        lastPublication = now
+        presentation = next
+    }
+
+    private func scheduleRefresh() {
+        guard refresh == nil else { return }
+        let delay = lastPublication.map { max(0, $0.addingTimeInterval(0.25).timeIntervalSinceNow) } ?? 0
+        guard delay > 0 else {
+            publish(at: Date())
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.refresh = nil
+            self.publish(at: Date())
+        }
+        refresh = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func scheduleExpiration() {
+        expiration?.cancel()
+        expiration = nil
+        guard bridgeRunning, let receivedAt = state.receivedAt,
+              !state.isSilenceStale(at: Date()) else { return }
+        // Preserve the strictly-after boundary used by the raw diagnostics state.
+        let deadline = Date(timeIntervalSinceReferenceDate:
+            (receivedAt.timeIntervalSinceReferenceDate + PlatterStatusSnapshot.staleInterval).nextUp
+        )
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.expiration = nil
+            self.refresh?.cancel()
+            self.refresh = nil
+            self.publish(at: Date())
+        }
+        expiration = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, deadline.timeIntervalSinceNow), execute: work)
+    }
+}
+
 struct PlatterDiagnosticsGroupView: View {
-    let diagnostics: PlatterDiagnosticsState
-    let bridgeRunning: Bool
-    var now: Date?
+    let presentation: PlatterDiagnosticsPresentation
 
     var body: some View {
         GroupBox("Live platter diagnostics") {
             VStack(alignment: .leading, spacing: 8) {
-                if let fixedNow = now {
-                    content(for: diagnostics.presentation(bridgeRunning: bridgeRunning, at: fixedNow))
-                } else if bridgeRunning && diagnostics.latest != nil {
-                    TimelineView(.periodic(from: .now, by: 0.25)) { context in
-                        content(for: diagnostics.presentation(bridgeRunning: bridgeRunning, at: context.date))
-                    }
-                } else {
-                    content(for: diagnostics.presentation(bridgeRunning: bridgeRunning, at: Date()))
-                }
+                content(for: presentation)
                 Text("Bend output shows outgoing MIDI CC 4 rate (counts/s), not measured audible Djay pitch or playback speed.")
                     .font(.caption)
                     .foregroundColor(.secondary)

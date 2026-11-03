@@ -100,6 +100,134 @@ final class PlatterDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testLivePresentationReplacesOldDeadlineAndExpiresOnceAfterSilence() async throws {
+        let model = LivePlatterDiagnostics()
+        let snapshot = try XCTUnwrap(PlatterStatusSnapshot.parseLine(
+            #"S4_PLATTER_STATUS {"wheels":[{"deck":1,"rpm":33.3,"bend_counts_per_second":8.5,"mode":"bend"},{"deck":2,"rpm":0,"bend_counts_per_second":0,"mode":"scratch"}]}"#
+        ))
+        model.state.accept(snapshot)
+        model.display.setPresentationActive(true, bridgeRunning: true)
+        defer { model.display.setPresentationActive(false, bridgeRunning: true) }
+        let expired = expectation(description: "latest snapshot expires after silence")
+        let receivedAt = Date()
+        let observation = model.display.$presentation.dropFirst().prefix(1).sink { presentation in
+            XCTAssertTrue(presentation.isStale)
+            expired.fulfill()
+        }
+
+        // Replace a nearly expired snapshot before its deadline can run.
+        model.state.accept(snapshot, at: receivedAt.addingTimeInterval(-0.4))
+        model.state.accept(snapshot, at: receivedAt)
+        await fulfillment(of: [expired], timeout: 3)
+        XCTAssertTrue(model.display.presentation.isStale)
+
+        let repeated = expectation(description: "no periodic updates after expiration")
+        repeated.isInverted = true
+        let afterExpiration = model.display.$presentation.dropFirst().sink { _ in repeated.fulfill() }
+        await fulfillment(of: [repeated], timeout: 0.7)
+        withExtendedLifetime((observation, afterExpiration)) {}
+    }
+
+    @MainActor
+    func testHiddenPresentationCancelsDeadlineButKeepsLatestTelemetry() async throws {
+        let model = LivePlatterDiagnostics()
+        let snapshot = try XCTUnwrap(PlatterStatusSnapshot.parseLine(
+            #"S4_PLATTER_STATUS {"wheels":[{"deck":3,"rpm":34,"bend_counts_per_second":9,"mode":"bend"},{"deck":4,"rpm":0,"bend_counts_per_second":0,"mode":"off"}]}"#
+        ))
+        model.display.setPresentationActive(true, bridgeRunning: true)
+        model.state.accept(snapshot)
+        let hiddenUpdate = expectation(description: "no hidden presentation deadline")
+        hiddenUpdate.isInverted = true
+        let hiddenObservation = model.display.$presentation.dropFirst().sink { _ in hiddenUpdate.fulfill() }
+
+        model.display.setPresentationActive(false, bridgeRunning: true)
+        for _ in 0..<100 { model.state.accept(snapshot) }
+        await fulfillment(of: [hiddenUpdate], timeout: 0.7)
+        hiddenObservation.cancel()
+        XCTAssertEqual(model.state.latest, snapshot)
+
+        // Returning after the freshness interval shows the retained sample as stale.
+        model.display.setPresentationActive(true, bridgeRunning: true)
+        XCTAssertTrue(model.display.presentation.isStale)
+        let fresh = expectation(description: "fresh data replaces stale presentation")
+        let freshObservation = model.display.$presentation.dropFirst().prefix(1).sink { presentation in
+            XCTAssertFalse(presentation.isStale)
+            fresh.fulfill()
+        }
+        model.state.accept(snapshot)
+        await fulfillment(of: [fresh], timeout: 3)
+        model.display.setPresentationActive(false, bridgeRunning: true)
+        withExtendedLifetime(freshObservation) {}
+    }
+
+    @MainActor
+    func testVisiblePresentationCoalescesBurstToNewestSampleWithoutThrottlingRawTelemetry() async {
+        let model = LivePlatterDiagnostics()
+        let initial = PlatterStatusSnapshot(
+            left: PlatterWheelStatus(deck: 1, rpm: 33, bendCountsPerSecond: 0, mode: .bend),
+            right: PlatterWheelStatus(deck: 2, rpm: 0, bendCountsPerSecond: 0, mode: .off)
+        )
+        model.state.accept(initial)
+        model.display.setPresentationActive(true, bridgeRunning: true)
+        defer { model.display.setPresentationActive(false, bridgeRunning: true) }
+        let refreshed = expectation(description: "coalesced visible update")
+        var publications: [PlatterDiagnosticsPresentation] = []
+        var rawUpdates = 0
+        let raw = model.$state.dropFirst().sink { _ in rawUpdates += 1 }
+        let display = model.display.$presentation.dropFirst().sink { presentation in
+            publications.append(presentation)
+            if publications.count == 1 { refreshed.fulfill() }
+        }
+
+        for index in 1...100 {
+            model.state.accept(PlatterStatusSnapshot(
+                left: PlatterWheelStatus(deck: 3, rpm: Double(index), bendCountsPerSecond: -Double(index), mode: .scratch),
+                right: initial.right
+            ))
+        }
+        XCTAssertTrue(publications.isEmpty)
+        XCTAssertEqual(rawUpdates, 100)
+        await fulfillment(of: [refreshed], timeout: 3)
+        XCTAssertEqual(publications.count, 1)
+        XCTAssertEqual(publications.first?.left.rpmText, "+100.0 RPM")
+        XCTAssertEqual(publications.first?.left.bendOutputText, "-100.0 counts/s")
+        XCTAssertEqual(publications.first?.left.deckText, "Deck C (3)")
+        XCTAssertEqual(publications.first?.left.modeText, "Scratch")
+        XCTAssertEqual(model.state.latest?.left.rpm, 100)
+        withExtendedLifetime((raw, display)) {}
+    }
+
+    @MainActor
+    func testUnchangedFormattedValuesDoNotPublishButFreshnessStillExpires() async {
+        let model = LivePlatterDiagnostics()
+        let right = PlatterWheelStatus(deck: 2, rpm: 0, bendCountsPerSecond: 0, mode: .off)
+        model.state.accept(PlatterStatusSnapshot(
+            left: PlatterWheelStatus(deck: 1, rpm: 33.31, bendCountsPerSecond: 8.51, mode: .bend), right: right
+        ))
+        model.display.setPresentationActive(true, bridgeRunning: true)
+        defer { model.display.setPresentationActive(false, bridgeRunning: true) }
+        let expired = expectation(description: "only the stale transition publishes")
+        let display = model.display.$presentation.dropFirst().prefix(1).sink { presentation in
+            XCTAssertTrue(presentation.isStale)
+            expired.fulfill()
+        }
+
+        for index in 0..<100 {
+            model.state.accept(PlatterStatusSnapshot(
+                left: PlatterWheelStatus(deck: 1, rpm: 33.31 + Double(index % 3) * 0.01,
+                                         bendCountsPerSecond: 8.51 + Double(index % 3) * 0.01, mode: .bend),
+                right: right
+            ))
+        }
+        XCTAssertEqual(model.display.presentation.left.rpmText, "+33.3 RPM")
+        XCTAssertEqual(model.display.presentation.left.bendOutputText, "+8.5 counts/s")
+        await fulfillment(of: [expired], timeout: 3)
+        XCTAssertTrue(model.display.presentation.isStale)
+        XCTAssertEqual(model.state.latest?.left.rpm, 33.31)
+        withExtendedLifetime(display) {}
+    }
+
+    @MainActor
     func testLivePlatterPipeUpdatesModelCapturesTelemetryOmitsDisplayLogAndClearsOnStop() async throws {
         let fixture = try makeFixture()
         let fifo = fixture.appendingPathComponent("control.fifo")
@@ -113,7 +241,11 @@ final class PlatterDiagnosticsTests: XCTestCase {
         #!/bin/sh
         trap 'printf "STOPPED_CLEAN\\n"; exit 0' INT
         exec 3< '\(fifo.path)'
-        printf 'S4_PLATTER_STATUS {"wheels":[{"deck":1,"rpm":33.3,"bend_counts_per_second":8.5,"mode":"bend"},{"deck":2,"rpm":0.0,"bend_counts_per_second":0.0,"mode":"scratch"}]}\\n'
+        i=0
+        while [ "$i" -lt 100 ]; do
+            printf 'S4_PLATTER_STATUS {"sequence":%s,"wheels":[{"deck":1,"rpm":33.3,"bend_counts_per_second":8.5,"mode":"bend"},{"deck":2,"rpm":0.0,"bend_counts_per_second":0.0,"mode":"scratch"}]}\\n' "$i"
+            i=$((i + 1))
+        done
         printf 'S4_PLATTER_STATUS {"wheels":[]}\\n'
         printf 'ORDINARY_READY\\n'
         IFS= read -r line <&3
@@ -137,8 +269,10 @@ final class PlatterDiagnosticsTests: XCTestCase {
         var didFulfillPlatter = false
         var didFulfillLog = false
         var sawStopping = false
+        var receivedSnapshots = 0
 
         let platterSub = model.livePlatter.$state.sink { state in
+            if state.latest != nil { receivedSnapshots += 1 }
             if !didFulfillPlatter, state.latest != nil {
                 didFulfillPlatter = true
                 platterReceived.fulfill()
@@ -165,6 +299,7 @@ final class PlatterDiagnosticsTests: XCTestCase {
         XCTAssertEqual(latest.left.mode, .bend)
         XCTAssertEqual(latest.right.deck, 2)
         XCTAssertEqual(latest.right.mode, .scratch)
+        XCTAssertEqual(receivedSnapshots, 100)
         XCTAssertFalse(model.log.contains("S4_PLATTER_STATUS"))
 
         model.stop()
@@ -174,7 +309,8 @@ final class PlatterDiagnosticsTests: XCTestCase {
 
         model.stopMotorDiagnosticCapture()
         let captured = String(decoding: try Data(contentsOf: captureURL), as: UTF8.self)
-        XCTAssertTrue(captured.contains(#"S4_PLATTER_STATUS {"wheels":[{"deck":1"#))
+        XCTAssertEqual(captured.split(whereSeparator: \.isNewline).filter { $0.hasPrefix(PlatterStatusSnapshot.prefix) }.count, 100)
+        XCTAssertTrue(captured.contains(#""sequence":99"#))
         XCTAssertFalse(captured.contains(#"S4_PLATTER_STATUS {"wheels":[]}"#))
         XCTAssertFalse(model.log.contains("S4_PLATTER_STATUS"))
         XCTAssertNil(model.platterDiagnostics.latest)

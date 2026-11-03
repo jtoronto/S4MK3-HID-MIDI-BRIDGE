@@ -432,7 +432,10 @@ final class BridgeLog: ObservableObject {
 
 @MainActor
 final class LivePlatterDiagnostics: ObservableObject {
-    @Published var state = PlatterDiagnosticsState()
+    @Published var state = PlatterDiagnosticsState() {
+        didSet { display.accept(state) }
+    }
+    let display = PlatterDiagnosticsDisplay()
 }
 
 @MainActor
@@ -1203,11 +1206,33 @@ enum SettingsTab: Hashable {
     case bridge, screens, jog, leds, palette, diagnostics
 }
 
+@MainActor
+final class SettingsWindowVisibility: ObservableObject {
+    @Published private(set) var isVisible = false
+
+    func update(for window: NSWindow) {
+        let visible = window.isVisible && !window.isMiniaturized && window.occlusionState.contains(.visible)
+        if isVisible != visible { isVisible = visible }
+    }
+
+    func suspend() {
+        if isVisible { isVisible = false }
+    }
+}
+
 struct BridgeSettingsView: View {
     @ObservedObject var controller: BridgeController
+    @ObservedObject var visibility: SettingsWindowVisibility
     @State var selectedTab: SettingsTab = .bridge
 
     var body: some View {
+        Group {
+            if visibility.isVisible { settingsContent }
+        }
+        .frame(minWidth: 760, minHeight: 540)
+    }
+
+    private var settingsContent: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: "waveform").font(.title2)
@@ -1521,7 +1546,7 @@ struct BridgeSettingsView: View {
                 Toggle("Raw HID reports", isOn: $controller.run.rawReports)
             }
             LivePlatterDiagnosticsView(
-                model: controller.livePlatter,
+                model: controller.livePlatter.display,
                 bridgeRunning: controller.state == .running
             )
             HStack {
@@ -1573,11 +1598,14 @@ struct BridgeSettingsView: View {
 }
 
 struct LivePlatterDiagnosticsView: View {
-    @ObservedObject var model: LivePlatterDiagnostics
+    @ObservedObject var model: PlatterDiagnosticsDisplay
     let bridgeRunning: Bool
 
     var body: some View {
-        PlatterDiagnosticsGroupView(diagnostics: model.state, bridgeRunning: bridgeRunning)
+        PlatterDiagnosticsGroupView(presentation: model.presentation)
+            .onAppear { model.setPresentationActive(true, bridgeRunning: bridgeRunning) }
+            .onChange(of: bridgeRunning) { model.setPresentationActive(true, bridgeRunning: $0) }
+            .onDisappear { model.setPresentationActive(false, bridgeRunning: bridgeRunning) }
     }
 }
 
@@ -1693,10 +1721,11 @@ func bridgeStatusImage(for state: BridgeState, screenAttention: Bool = false) ->
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
     private var controller: BridgeController?
     private var statusItem: NSStatusItem?
     private var settingsWindow: NSWindow?
+    private let settingsVisibility = SettingsWindowVisibility()
     private var observation: AnyCancellable?
     private var screenObservation: AnyCancellable?
 
@@ -1771,13 +1800,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                   backing: .buffered, defer: false)
             window.title = "S4 MK3 Bridge"
             window.contentMinSize = NSSize(width: 760, height: 540)
-            window.contentView = NSHostingView(rootView: BridgeSettingsView(controller: controller))
+            window.contentView = NSHostingView(rootView: BridgeSettingsView(
+                controller: controller, visibility: settingsVisibility
+            ))
             window.isReleasedWhenClosed = false
+            window.delegate = self
             window.center()
             settingsWindow = window
         }
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+        if let settingsWindow { settingsVisibility.update(for: settingsWindow) }
+    }
+
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        if let settingsWindow { settingsVisibility.update(for: settingsWindow) }
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        settingsVisibility.suspend()
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        if let settingsWindow { settingsVisibility.update(for: settingsWindow) }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        settingsVisibility.suspend()
+    }
+
+    func applicationDidHide(_ notification: Notification) {
+        settingsVisibility.suspend()
+    }
+
+    func applicationDidUnhide(_ notification: Notification) {
+        if let settingsWindow { settingsVisibility.update(for: settingsWindow) }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
