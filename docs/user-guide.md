@@ -4,9 +4,12 @@ Use this guide to DJ with the S4 MK3, understand the custom mappings, and
 recognize what its lights and screens are telling you.
 
 **Availability:** this guide covers the full-controller app, including
-development-build features. EXT switching, motorized TT playback and its
+development-build features prepared for the **0.3.0-beta.1 draft**.
+EXT switching, motorized TT playback and its
 tuning controls, red TT indicators, and multi-deck Instant FX are not in the
-published download. Check the [download notes](../README.md#download-and-install)
+published 0.2.1-beta.1 download. See the
+[0.3.0 beta release notes](release-0.3.0-beta.1.md) and
+[download notes](../README.md#download-and-install)
 for your package's features. Always use the app and its matching mapping
 together, importing updates under a new name to preserve custom mappings.
 

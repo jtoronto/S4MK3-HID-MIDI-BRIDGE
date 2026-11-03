@@ -15,15 +15,15 @@ bash macos/build-app.sh
 
 The results are `dist/S4 MK3 Bridge.app`, the transfer archive
 `dist/S4 MK3 Bridge-arm64.zip`, and the versioned release disk image
-`dist/S4 MK3 Bridge-0.2.1-beta.1-arm64.dmg`. The script compiles
+`dist/S4 MK3 Bridge-0.3.0-beta.1-arm64.dmg`. The script compiles
 `macos/S4BridgeApp.swift` against the installed Apple macOS SDK, builds
 `s4mk3-hid-midi-bridge` with `cargo build --locked --release`, copies
 `examples/led-config.json`, `examples/jog-config.json`, and
 `examples/tension-config.json` into the app resources as `default-led-config.json`,
 `default-jog-config.json`, and `default-tension-config.json`, and creates
 `S4 MK3 Bridge.djayMidiMapping` by running that same release bridge with
-`--generate-mapping`. Cargo identifies this release as `0.2.1-beta.1`;
-the bundle uses numeric version `0.2.1`, build `7`, and records the complete
+`--generate-mapping`. Cargo identifies this release as `0.3.0-beta.1`;
+the bundle uses numeric version `0.3.0`, build `8`, and records the complete
 release in `S4BridgeReleaseVersion`. The script checks alignment with Cargo.
 It generates `AppIcon.icns` from `macos/Assets/AppIcon.png` and includes an
 Applications shortcut in the compressed read-only DMG.

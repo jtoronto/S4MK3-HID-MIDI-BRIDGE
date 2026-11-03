@@ -31,6 +31,10 @@ screens without requiring MIDI or development knowledge.
 **0.2.1-beta.1 (build 7)** adds backspin continuation and motor assistance,
 Shift + FX knob effect browsing, and clearer LED/FX feedback. See
 [what changed and how to use it](docs/release-0.2.1-beta.1.md).
+The next beta, **0.3.0-beta.1 (build 8)**, is being prepared as a draft:
+motorized playback, simpler Jog tuning, EXT switching and multi-deck Instant FX.
+See its [illustrated release notes](docs/release-0.3.0-beta.1.md).
+Until it is published, use the latest published release for downloads.
 Version 0.2.0 adds screens, updated Preview/CUE/library controls, startup channel
 synchronization, FX pickup and jump-size restoration. Use the app and mapping
 supplied together; beta.3's older mapping does not provide these additions.
@@ -263,10 +267,10 @@ Use **Save and restart** to apply changes. No mapping export is needed for
 backspin options, and upgrading preserves explicit saved choices. See the
 [Backspin guide](docs/user-guide.md#backspin-detection) for tuning and details.
 
-![Jog settings showing Hardware tension, Backspin detection, scratch speed increase and motor assist controls, plus scratch and pitch-bend mapping settings](docs/images/jog-settings.png)
+![Jog settings showing Base force, separate Braking and Nudge response controls, and Advanced settings](docs/images/jog-settings-0.3.0-beta.1.png)
 
-_Jog settings in the published app. Current source adds the Motorized platters
-layout described in the [user guide](docs/user-guide.md#testing-motorized-playback)._
+_Jog settings in the upcoming 0.3.0 beta, with motor strength and response
+controls visible together. See the [user guide](docs/user-guide.md#testing-motorized-playback)._
 
 The menu-bar icon turns green while the bridge is running. In source builds,
 it turns red if requested screens are blocked or fail while the bridge keeps

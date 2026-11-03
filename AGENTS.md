@@ -92,10 +92,10 @@ Outputs:
 
 - `dist/S4 MK3 Bridge.app`
 - `dist/S4 MK3 Bridge-arm64.zip`
-- `dist/S4 MK3 Bridge-0.2.1-beta.1-arm64.dmg`
+- `dist/S4 MK3 Bridge-0.3.0-beta.1-arm64.dmg`
 
-Cargo package/executable: `s4mk3-hid-midi-bridge`, release `0.2.1-beta.1`.
-The bundle uses numeric version `0.2.1`, build `7`, and custom
+Cargo package/executable: `s4mk3-hid-midi-bridge`, release `0.3.0-beta.1`.
+The bundle uses numeric version `0.3.0`, build `8`, and custom
 `S4BridgeReleaseVersion` for the complete prerelease identifier.
 `macos/Assets/AppIcon.png` generates the bundled `.icns` during packaging.
 
@@ -106,7 +106,7 @@ Verify a rebuilt package:
 
        codesign --verify --deep --strict "dist/S4 MK3 Bridge.app"
        unzip -tq "dist/S4 MK3 Bridge-arm64.zip"
-       hdiutil verify "dist/S4 MK3 Bridge-0.2.1-beta.1-arm64.dmg"
+       hdiutil verify "dist/S4 MK3 Bridge-0.3.0-beta.1-arm64.dmg"
 
 Signing is currently ad-hoc, not Developer ID signing or notarization.
 
