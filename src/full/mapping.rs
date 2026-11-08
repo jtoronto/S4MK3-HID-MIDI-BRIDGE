@@ -15,6 +15,29 @@ use super::catalog::{
 };
 use super::feedback::{PAD_COLOR_TOKENS, PAD_WHITE_TOKEN};
 use super::jog;
+mod windows;
+
+pub use windows::generate as generate_for_backend;
+
+pub fn write_for_backend(
+    path: &Path,
+    config_path: Option<&Path>,
+    backend: crate::midi_transport::Backend,
+) -> Result<()> {
+    if backend == crate::midi_transport::Backend::CoreMidi {
+        return write(path, config_path);
+    }
+    let mapping = generate_for_backend(&jog::Config::load(config_path)?, backend)?;
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .with_context(|| format!("create mapping {}; choose a new file path", path.display()))?;
+    mapping
+        .to_writer_xml(&mut output)
+        .context("serialize Windows mapping")?;
+    output.flush().context("flush Windows mapping")
+}
 
 pub const PORT_NAME: &str = "S4 MK3 MIDI Full";
 const DECK_MARKER: &str = "{deck}";

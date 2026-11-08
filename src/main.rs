@@ -3,9 +3,14 @@
 mod bridge_runtime;
 mod full;
 mod input;
+mod lifecycle;
 mod midi;
+mod midi_capture;
+mod midi_layout;
+mod midi_transport;
 #[path = "jog_diagnostic/ownership.rs"]
 mod ownership;
+mod platform;
 mod screens_control;
 
 use std::num::NonZeroU64;
@@ -21,7 +26,7 @@ use encdr::device::parser::PacketParser;
 use encdr::usb::hotplug;
 use encdr::{DeviceDescriptor, Event, LedValue};
 use hidapi::{HidApi, HidDevice};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 
 const S4_VENDOR_ID: u16 = 0x17cc;
@@ -45,6 +50,16 @@ enum ReplayFixture {
     group(clap::ArgGroup::new("jog_context").args(["generate_mapping", "midi", "replay_motor_fixture"]))
 )]
 struct Args {
+    #[command(flatten)]
+    managed: ManagedArgs,
+    /// MIDI transport and mapping layout; export accepts either backend offline.
+    #[arg(long, value_enum, default_value_t = midi_transport::Backend::default())]
+    midi_backend: midi_transport::Backend,
+    /// Temporary raw MIDI JSONL capture (`LoopBe` only); creates a new absolute path.
+    #[arg(long, value_name = "PATH", requires = "midi")]
+    midi_capture: Option<PathBuf>,
+    #[arg(skip)]
+    capture_handle: midi_capture::Handle,
     /// Replay the built-in motor playback fixture without opening HID or MIDI.
     #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "playback", conflicts_with_all = ["midi", "list", "generate_mapping", "generate_screen_previews", "raw"])]
     replay_motor_fixture: Option<ReplayFixture>,
@@ -94,6 +109,13 @@ struct Args {
 }
 
 #[derive(Debug, clap::Args)]
+struct ManagedArgs {
+    /// Accept managed STOP commands and stop normally when stdin closes.
+    #[arg(long = "managed-stdin", id = "managed_stdin", conflicts_with_all = ["list", "generate_mapping", "generate_screen_previews", "replay_motor_fixture"])]
+    stdin: bool,
+}
+
+#[derive(Debug, clap::Args)]
 struct ScreenArgs {
     /// Experimental Djay feedback and reactive STEMS on both S4 screens (full profile).
     #[arg(long = "screens", requires = "midi", conflicts_with_all = ["list", "generate_mapping"])]
@@ -118,6 +140,10 @@ struct ProbeCounts {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    ensure!(
+        args.midi_capture.is_none() || args.midi_backend == midi_transport::Backend::Loopbe,
+        "--midi-capture requires --midi-backend loopbe"
+    );
     ensure!(
         args.jog_config.is_none()
             || args.replay_motor_fixture.is_some()
@@ -159,7 +185,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     if let Some(path) = &args.generate_mapping {
-        full::mapping::write(path, args.jog_config.as_deref())?;
+        full::mapping::write_for_backend(path, args.jog_config.as_deref(), args.midi_backend)?;
         for control in full::catalog::LOCAL_CONTROLS {
             info!(
                 input = control.name,
@@ -182,6 +208,9 @@ fn main() -> anyhow::Result<()> {
         info!(path = %path.display(), "SCREEN_PREVIEWS_EXPORTED: no USB or MIDI opened");
         return Ok(());
     }
+    if !args.list {
+        args.midi_backend.validate_runtime()?;
+    }
     let jog = matches!(args.midi, Some(MidiProfile::Full))
         .then(|| full::jog::Config::load(args.jog_config.as_deref()))
         .transpose()?;
@@ -191,7 +220,41 @@ fn main() -> anyhow::Result<()> {
     }
     let tension =
         tension.or_else(|| jog.map(|_| s4mk3_hid_midi_bridge::tension::Config::default()));
-    open_and_run(&args, tension, jog)
+    run(args, tension, jog)
+}
+
+fn run(
+    mut args: Args,
+    tension: Option<s4mk3_hid_midi_bridge::tension::Config>,
+    jog: Option<full::jog::Config>,
+) -> anyhow::Result<()> {
+    let mut capture = args
+        .midi_capture
+        .as_deref()
+        .map(midi_capture::Capture::start)
+        .transpose()?;
+    if let Some(capture) = &capture {
+        args.capture_handle = capture.handle();
+    }
+    let mut session = (!args.list)
+        .then(|| lifecycle::Session::new(&args))
+        .transpose()?;
+    let result = open_and_run(&args, tension, jog, session.as_mut());
+    let result = match session {
+        Some(session) => session.finish(result),
+        None => result,
+    };
+    let cleanup = capture
+        .as_mut()
+        .map(midi_capture::Capture::finish)
+        .transpose();
+    if let Err(error) = cleanup {
+        if let Err(runtime) = result {
+            return Err(runtime.context(format!("MIDI capture close also failed: {error:#}")));
+        }
+        return Err(error);
+    }
+    result
 }
 
 fn motor_config_receipt(config: &full::jog::Config) -> anyhow::Result<String> {
@@ -205,6 +268,7 @@ fn open_and_run(
     args: &Args,
     tension: Option<s4mk3_hid_midi_bridge::tension::Config>,
     jog: Option<full::jog::Config>,
+    session: Option<&mut lifecycle::Session>,
 ) -> anyhow::Result<()> {
     let mut registry = DescriptorRegistry::new();
     registry.load_builtins().context("load Encdr descriptors")?;
@@ -226,6 +290,10 @@ fn open_and_run(
         );
         return Ok(());
     }
+    let session = session.context("runtime session missing")?;
+    if !session.receiver.is_empty() {
+        return Ok(());
+    }
     let mut devices = devices.into_iter();
     let device = devices.next().context(
         "no S4 MK3 found; connect USB and the S4 power adapter, then run the probe again",
@@ -241,19 +309,15 @@ fn open_and_run(
     };
     let names = registry.intern_descriptor_names(&descriptor);
     let mut parser = PacketParser::new(device.device_id, &descriptor, names);
-    let api = HidApi::new().context("initialize macOS-native HID access")?;
-    let mut collections = api.device_list().filter(|collection| {
-        collection.vendor_id() == S4_VENDOR_ID && collection.product_id() == S4_PRODUCT_ID
-    });
-    let collection = collections.next().context("no S4 HID collection found")?;
-    ensure!(
-        collections.next().is_none(),
-        "multiple S4 HID collections found; collection selection requires investigation"
-    );
+    let api = HidApi::new().context("initialize native HID access")?;
+    let collection = platform::collection(&api)?;
+    #[cfg(windows)]
+    bind_windows_screens(args, session, collection.serial_number())?;
     ownership::check()?;
     let hid = api
         .open_path(collection.path())
         .context("open S4 HID collection")?;
+    session.milestone(|ready| ready.hid = true)?;
     let tension = tension
         .map(|config| {
             api.open_path(collection.path())
@@ -277,12 +341,50 @@ fn open_and_run(
             reader,
             &mut parser,
             &mut leds,
-            config,
-            jog.context("motor output requires the full MIDI profile")?,
+            bridge_runtime::MotorSettings {
+                tension: config,
+                jog: jog.context("motor output requires the full MIDI profile")?,
+            },
+            session,
         )
     } else {
-        run_probe(args, &hid, &mut parser, &mut leds, jog)
+        run_probe(args, &hid, &mut parser, &mut leds, session)
     }
+}
+
+#[cfg(windows)]
+fn bind_windows_screens(
+    args: &Args,
+    session: &mut lifecycle::Session,
+    serial: Option<&str>,
+) -> anyhow::Result<()> {
+    if !matches!(args.midi, Some(MidiProfile::Full)) {
+        return Ok(());
+    }
+    // Bind the uniquely selected HID before initialized input can start NI I/O.
+    // An absent/rejected serial fails only screen acquisition, preserving controls.
+    if session
+        .screens
+        .as_ref()
+        .and_then(full::screens::Output::control)
+        .is_none()
+    {
+        session.screens = Some(full::screens::Output::managed(args.screens.enabled)?);
+    }
+    if let Some(control) = session
+        .screens
+        .as_ref()
+        .and_then(full::screens::Output::control)
+    {
+        if let Some(serial) = serial {
+            if let Err(error) = control.bind_selected_hid(serial) {
+                tracing::warn!(%error, "SCREENS_DISABLED: selected HID identity rejected");
+            }
+        } else {
+            tracing::warn!("SCREENS_DISABLED: selected HID serial unavailable");
+        }
+    }
+    Ok(())
 }
 
 fn run_probe(
@@ -290,25 +392,13 @@ fn run_probe(
     hid: &HidDevice,
     parser: &mut PacketParser,
     leds: &mut LedBuilder,
-    jog: Option<full::jog::Config>,
+    session: &lifecycle::Session,
 ) -> anyhow::Result<()> {
-    let led_config = matches!(args.midi, Some(MidiProfile::Full))
-        .then(|| full::leds::LedConfig::load(args.led_config.as_deref()))
-        .transpose()?;
-    let (stop_tx, stop_rx) = stop_signal()?;
     let mut midi = matches!(args.midi, Some(MidiProfile::Minimal))
-        .then(midi::MidiBridge::new)
+        .then(|| midi::MidiBridge::new(args.midi_backend, args.capture_handle.clone()))
         .transpose()?;
-    let mut full = jog
-        .map(|jog| screens_control::bridge(args, stop_tx, jog))
-        .transpose()?;
-    let mut full_leds = full
-        .as_ref()
-        .map(|_| full::output::LedOutput::new(hid))
-        .transpose()?;
-    if let Some(bridge) = &mut full {
-        initialize_full_analog(hid, parser, bridge)?;
-    }
+    session.midi_ready()?;
+    session.ready()?;
     info!(
         seconds = args.seconds.get(),
         until_stopped = args.until_stopped,
@@ -319,12 +409,12 @@ fn run_probe(
     let mut buffers = [[0_u8; 128]; 3];
     let mut events = Vec::with_capacity(128);
     while args.until_stopped || started.elapsed() < Duration::from_secs(args.seconds.get()) {
-        match stop_rx.try_recv() {
+        match session.receiver.try_recv() {
             Ok(()) => break,
             Err(crossbeam_channel::TryRecvError::Empty) => {}
             Err(crossbeam_channel::TryRecvError::Disconnected) => bail!("stop channel closed"),
         }
-        let lengths = input::read_batch(hid, full.is_some(), &mut buffers)?;
+        let lengths = input::read_batch(hid, false, &mut buffers)?;
         for (buffer, length) in buffers.iter().zip(lengths) {
             if length == 0 {
                 continue;
@@ -342,20 +432,16 @@ fn run_probe(
             events.clear();
             parser.parse_from("control", payload, &mut events);
             for event in &events {
-                record_event(event, leds, &mut counts, full.is_none())?;
+                record_event(event, leds, &mut counts, true)?;
                 if let Some(bridge) = &mut midi
                     && bridge.send(event)?
                 {
                     counts.midi_messages = counts.midi_messages.saturating_add(1);
                 }
             }
-            if let Some(bridge) = &mut full {
-                send_full_report(bridge, &events, report, &mut counts, started.elapsed())?;
-            }
-            if full.is_none()
-                && let Some(report) = leds.flush()
-            {
-                let written = hid.write(&report).context("write S4 button LED report")?;
+            if let Some(report) = leds.flush() {
+                let written =
+                    platform::write(hid, &report).context("write S4 button LED report")?;
                 ensure!(
                     written == report.len(),
                     "short S4 LED write: {written} bytes"
@@ -367,40 +453,12 @@ fn run_probe(
                 );
             }
         }
-        if let (Some(bridge), Some(output), Some(config)) = (&mut full, &mut full_leds, &led_config)
-        {
-            let now = started.elapsed();
-            let (received, sent) = bridge.drain_feedback(now)?;
-            counts.feedback_messages = counts
-                .feedback_messages
-                .saturating_add(u64::try_from(received)?);
-            counts.midi_messages = counts.midi_messages.saturating_add(u64::try_from(sent)?);
-            let writes = output.tick(
-                config,
-                bridge.feedback_state(),
-                &bridge.local_led_state(),
-                now,
-            )?;
-            counts.led_writes = counts.led_writes.saturating_add(u64::try_from(writes)?);
-            bridge.publish_screens();
-        }
+    }
+    session.stop.request(None)?;
+    if let Some(midi) = &mut midi {
+        midi.finish()?;
     }
     report_probe_counts(args, &counts)
-}
-
-fn stop_signal() -> anyhow::Result<(
-    crossbeam_channel::Sender<()>,
-    crossbeam_channel::Receiver<()>,
-)> {
-    let (sender, receiver) = crossbeam_channel::bounded(1);
-    let interrupt = sender.clone();
-    ctrlc::set_handler(move || {
-        if let Err(error) = interrupt.try_send(()) {
-            warn!(%error, "could not enqueue stop signal");
-        }
-    })
-    .context("install Ctrl-C handler")?;
-    Ok((sender, receiver))
 }
 
 fn initialize_full_analog(
@@ -440,7 +498,7 @@ fn report_probe_counts(args: &Args, counts: &ProbeCounts) -> anyhow::Result<()> 
         "Probe ended; LED visibility and audio coexistence need physical confirmation"
     );
     // Continuous service use may be idle; bounded probes still require activity.
-    if args.until_stopped {
+    if args.until_stopped || args.managed.stdin || args.screens.control_stdin {
         return Ok(());
     }
     ensure!(
@@ -768,6 +826,50 @@ mod tests {
             let args = Args::try_parse_from(arguments)?;
             // Then raw logging is enabled only by the flag.
             assert_eq!(args.raw, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn midi_capture_cli_is_opt_in_and_requires_a_midi_runtime() -> anyhow::Result<()> {
+        assert!(Args::try_parse_from(["bridge"])?.midi_capture.is_none());
+        let args = Args::try_parse_from([
+            "bridge",
+            "--midi",
+            "full",
+            "--midi-backend",
+            "loopbe",
+            "--managed-stdin",
+            "--midi-capture",
+            "/tmp/diagnostic.jsonl",
+        ])?;
+        assert_eq!(
+            args.midi_capture,
+            Some(PathBuf::from("/tmp/diagnostic.jsonl"))
+        );
+        assert_eq!(args.midi_backend, midi_transport::Backend::Loopbe);
+        assert!(args.managed.stdin);
+        for invalid in [
+            vec!["bridge", "--midi-capture", "/tmp/diagnostic.jsonl"],
+            vec![
+                "bridge",
+                "--midi",
+                "full",
+                "--midi-capture",
+                "/tmp/diagnostic.jsonl",
+                "--list",
+            ],
+            vec![
+                "bridge",
+                "--midi",
+                "full",
+                "--midi-capture",
+                "/tmp/diagnostic.jsonl",
+                "--generate-mapping",
+                "out.plist",
+            ],
+        ] {
+            assert!(Args::try_parse_from(invalid).is_err());
         }
         Ok(())
     }

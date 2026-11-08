@@ -5,7 +5,7 @@ use std::io::{BufWriter, Write as _};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context as _, ensure};
+use anyhow::Context as _;
 use crossbeam_channel::{Receiver, bounded, select_biased};
 use hidapi::{HidApi, HidDevice};
 use tracing::{info, warn};
@@ -83,7 +83,11 @@ pub fn trial(path: &Path, options: TrialOptions, control: ControlArgs) -> anyhow
     let writer = writer.context("motor writer handle missing")?;
     let stop = stop_signal()?;
     let started = Instant::now();
-    let mut session = Session::new(control, |report| Ok(writer.write(report)?), &mut log)?;
+    let mut session = Session::new(
+        control,
+        |report| crate::platform::write(&writer, report),
+        &mut log,
+    )?;
     if options.start_after_neutral {
         match options.seconds {
             Some(seconds) => session.prepare(seconds)?,
@@ -179,14 +183,7 @@ pub(super) fn create_log(path: &Path) -> anyhow::Result<BufWriter<std::fs::File>
 
 pub(super) fn open(motor: bool) -> anyhow::Result<(HidDevice, Option<HidDevice>)> {
     let api = HidApi::new().context("initialize native HID")?;
-    let mut devices = api
-        .device_list()
-        .filter(|device| device.vendor_id() == 0x17cc && device.product_id() == 0x1720);
-    let device = devices.next().context("no S4 MK3 HID collection found")?;
-    ensure!(
-        devices.next().is_none(),
-        "multiple S4 HID collections; connect only one S4"
-    );
+    let device = crate::platform::collection(&api)?;
     let reader = api
         .open_path(device.path())
         .context("open S4 snapshot reader")?;

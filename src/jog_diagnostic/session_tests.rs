@@ -14,6 +14,27 @@ fn control() -> ControlArgs {
 }
 
 #[test]
+fn windows_padded_motor_writes_start_and_neutralize_session() -> anyhow::Result<()> {
+    let mut writes = Vec::new();
+    let mut log = Vec::new();
+    {
+        let mut session = Session::new(
+            control(),
+            |report| {
+                crate::platform::write_with(report, true, |bytes| {
+                    writes.push(bytes.to_vec());
+                    Ok(95)
+                })
+            },
+            &mut log,
+        )?;
+        session.finish("test")?;
+    }
+    assert_eq!(writes, vec![neutral_report().to_vec(); 2]);
+    Ok(())
+}
+
+#[test]
 fn stop_deadline_and_reader_failures_end_with_actual_neutral_bytes() -> anyhow::Result<()> {
     // Given a real session that has begun emitting nonzero assistance.
     for event in [

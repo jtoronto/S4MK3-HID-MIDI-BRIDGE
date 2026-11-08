@@ -1024,11 +1024,8 @@ mod tests {
 
     #[test]
     fn config_rejects_unknown_keys_and_invalid_meter_ranges() -> anyhow::Result<()> {
-        let path = std::env::temp_dir().join(format!(
-            "s4-led-config-{}-{}.json",
-            std::process::id(),
-            std::thread::current().name().unwrap_or("test")
-        ));
+        let path =
+            std::env::temp_dir().join(format!("s4-led-config-invalid-{}.json", std::process::id()));
         std::fs::write(&path, r#"{"meter_gamma":0.0}"#)?;
         assert!(LedConfig::load(Some(&path)).is_err());
         std::fs::write(&path, r#"{"chase_period_ms":0}"#)?;

@@ -4,13 +4,56 @@ use std::process::Command;
 
 use anyhow::{Context as _, ensure};
 
+#[cfg(any(windows, test))]
+#[path = "ownership/process.rs"]
+mod process;
+
 pub fn check() -> anyhow::Result<()> {
-    let output = Command::new("/bin/ps")
-        .args(["-axo", "pid=,comm="])
-        .output()
-        .context("inspect competing controller processes")?;
-    ensure!(output.status.success(), "process inspection failed");
-    reject_competitors(std::str::from_utf8(&output.stdout)?, std::process::id())
+    #[cfg(windows)]
+    {
+        return windows_check();
+    }
+    #[cfg(not(windows))]
+    {
+        let output = Command::new("/bin/ps")
+            .args(["-axo", "pid=,comm="])
+            .output()
+            .context("inspect competing controller processes")?;
+        ensure!(output.status.success(), "process inspection failed");
+        reject_competitors(std::str::from_utf8(&output.stdout)?, std::process::id())
+    }
+}
+
+#[cfg(windows)]
+fn windows_check() -> anyhow::Result<()> {
+    use std::process::Stdio;
+    use std::time::Duration;
+
+    #[derive(serde::Deserialize)]
+    struct Process {
+        #[serde(rename = "Id")]
+        id: u32,
+        #[serde(rename = "ProcessName")]
+        name: String,
+    }
+    let system = std::env::var_os("SystemRoot").context("SystemRoot missing")?;
+    let executable =
+        std::path::PathBuf::from(system).join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    let mut child = Command::new(executable).args([
+        "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+        "$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); ConvertTo-Json -Compress -InputObject @(Get-Process | Select-Object Id,ProcessName)"
+    ]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
+        .spawn().context("start Windows controller process inventory")?;
+    let output = process::capture(&mut child, Duration::from_secs(5))
+        .context("inspect Windows controller processes")?;
+    let processes: Vec<Process> =
+        serde_json::from_slice(&output.stdout).context("parse Windows process inventory")?;
+    let lines = processes
+        .iter()
+        .map(|process| format!("{} {}", process.id, process.name))
+        .collect::<Vec<_>>()
+        .join("\n");
+    reject_competitors(&lines, std::process::id())
 }
 
 fn reject_competitors(processes: &str, own_pid: u32) -> anyhow::Result<()> {
@@ -22,10 +65,11 @@ fn reject_competitors(processes: &str, own_pid: u32) -> anyhow::Result<()> {
         let pid = pid.parse::<u32>().context("invalid process ID")?;
         let name = executable
             .trim()
-            .rsplit('/')
+            .rsplit(['/', '\\'])
             .next()
             .context("missing executable name")?;
         let name = name.to_lowercase();
+        let name = name.strip_suffix(".exe").unwrap_or(&name);
         ensure!(
             pid == own_pid
                 || !(name == "s4mk3-hid-midi-bridge"

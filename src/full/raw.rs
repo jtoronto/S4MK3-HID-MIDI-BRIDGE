@@ -232,4 +232,34 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn mode_report_edges_update_only_their_side_page() -> anyhow::Result<()> {
+        use crate::full::{Translator, feedback::FeedbackState, screens};
+        use s4mk3_hid_midi_bridge::screens::page::Page;
+
+        let mut parser = Parser::new()?;
+        let mut translator = Translator::default();
+        let feedback = FeedbackState::default();
+        let mut controls = Vec::new();
+        let mut report = [0; 23];
+        report[0] = 1;
+        parser.parse(&report, Duration::ZERO, &mut controls)?;
+        controls.clear();
+        report[6] = 1;
+        parser.parse(&report, Duration::from_millis(1), &mut controls)?;
+        translator.translate(&controls, None, &mut Vec::new())?;
+        let pages = screens::pages(&translator, &feedback);
+        assert!(matches!(pages[0], Page::Stems { .. }));
+        assert!(matches!(pages[1], Page::Info(_)));
+        controls.clear();
+        report[6] = 0;
+        report[13] = 2;
+        parser.parse(&report, Duration::from_millis(2), &mut controls)?;
+        translator.translate(&controls, None, &mut Vec::new())?;
+        let pages = screens::pages(&translator, &feedback);
+        assert!(matches!(pages[0], Page::Stems { .. }));
+        assert!(matches!(pages[1], Page::Stems { .. }));
+        Ok(())
+    }
 }

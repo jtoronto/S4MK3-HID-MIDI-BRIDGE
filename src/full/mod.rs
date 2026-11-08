@@ -20,8 +20,6 @@ use std::time::Duration;
 
 use anyhow::{Context as _, bail, ensure};
 use encdr::Event;
-use midir::os::unix::VirtualOutput as _;
-use midir::{MidiOutput, MidiOutputConnection};
 use num_traits::ToPrimitive as _;
 use tracing::{debug, info, warn};
 
@@ -242,7 +240,7 @@ impl Default for Translator {
 pub struct FullBridge {
     feedback_input: feedback::FeedbackInput,
     feedback: feedback::FeedbackState,
-    connection: MidiOutputConnection,
+    connection: crate::midi_transport::Output,
     translator: Translator,
     raw: raw::Parser,
     controls: Vec<Control>,
@@ -253,16 +251,16 @@ pub struct FullBridge {
 
 impl FullBridge {
     pub fn new(
-        screen_output: bool,
-        screen_control: bool,
+        screens: screens::Output,
         jog_config: jog::Config,
+        backend: crate::midi_transport::Backend,
+        capture: crate::midi_capture::Handle,
     ) -> anyhow::Result<Self> {
         jog_config.validate()?;
         // Djay can return initial state as soon as the source appears.
-        let feedback_input = feedback::FeedbackInput::new(mapping::PORT_NAME)?;
-        let connection = MidiOutput::new("S4 MK3 full bridge")?
-            .create_virtual(mapping::PORT_NAME)
-            .map_err(|error| anyhow::anyhow!("create full MIDI source: {error}"))?;
+        let feedback_input =
+            feedback::FeedbackInput::with_backend(mapping::PORT_NAME, backend, capture.clone())?;
+        let connection = crate::midi_transport::output(backend, mapping::PORT_NAME, capture)?;
         info!(port = mapping::PORT_NAME, "MIDI_FULL_READY");
         Ok(Self {
             feedback_input,
@@ -276,17 +274,9 @@ impl FullBridge {
             raw: raw::Parser::new()?,
             controls: Vec::with_capacity(160),
             messages: Vec::with_capacity(160),
-            screens: if screen_control {
-                screens::Output::managed(screen_output)?
-            } else {
-                screens::Output::new(screen_output)
-            },
+            screens,
             platter_telemetry: platter_telemetry::Telemetry::default(),
         })
-    }
-
-    pub fn screen_control(&self) -> Option<s4mk3_hid_midi_bridge::screens::Control> {
-        self.screens.control()
     }
 
     pub fn drain_feedback(&mut self, now: Duration) -> anyhow::Result<(usize, usize)> {
@@ -350,6 +340,27 @@ impl FullBridge {
             &self.feedback,
             &mut self.messages,
         )?;
+        if report.first() == Some(&1)
+            && tracing::enabled!(target: "s4_screen_route_diag", tracing::Level::DEBUG)
+        {
+            let edges: Vec<_> = self
+                .controls
+                .iter()
+                .filter(|control| matches!(control, Control::Button(name, _) if name.ends_with("_mode") || name.contains("_deck_switch_")))
+                .collect();
+            if !edges.is_empty() {
+                tracing::debug!(
+                    target: "s4_screen_route_diag",
+                    elapsed_us = now.as_micros(),
+                    report = ?report,
+                    edges = ?edges,
+                    decks = ?self.translator.decks,
+                    pad_modes = ?self.translator.pads,
+                    pages = ?screens::pages(&self.translator, &self.feedback),
+                    "SCREEN_ROUTE_INPUT"
+                );
+            }
+        }
         self.platter_telemetry.observe(
             report,
             now,
@@ -378,16 +389,24 @@ impl FullBridge {
         }
         Ok(self.messages.len())
     }
+
+    pub fn finish(&mut self) -> anyhow::Result<()> {
+        self.messages.clear();
+        self.translator.release_all(&mut self.messages);
+        let mut result = Ok(());
+        for message in &self.messages {
+            if let Err(error) = self.connection.send(message) {
+                result = Err(anyhow::anyhow!("release full-profile MIDI note: {error}"));
+            }
+        }
+        result
+    }
 }
 
 impl Drop for FullBridge {
     fn drop(&mut self) {
-        self.messages.clear();
-        self.translator.release_all(&mut self.messages);
-        for message in &self.messages {
-            if let Err(error) = self.connection.send(message) {
-                warn!(%error, "could not release full-profile MIDI note");
-            }
+        if let Err(error) = self.finish() {
+            warn!(%error, "could not release full-profile MIDI note");
         }
     }
 }

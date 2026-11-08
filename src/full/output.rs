@@ -41,7 +41,8 @@ impl<'a> LedOutput<'a> {
         // Mixxx's third sendOutputReport argument is FIFO ordering, not report type.
         for side in 0_u8..2 {
             init[1] = side;
-            let written = hid.write(&init).context("initialize S4 ring output")?;
+            let written =
+                crate::platform::write(hid, &init).context("initialize S4 ring output")?;
             ensure!(
                 written == init.len(),
                 "short S4 ring initialization output report"
@@ -110,7 +111,7 @@ impl<'a> LedOutput<'a> {
     }
 
     fn write(&self, report: &[u8]) -> anyhow::Result<()> {
-        let written = self.hid.write(report).context("write S4 LED output")?;
+        let written = crate::platform::write(self.hid, report).context("write S4 LED output")?;
         ensure!(written == report.len(), "short S4 LED output write");
         debug!(id = report[0], written, "LED_WRITE");
         Ok(())

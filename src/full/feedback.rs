@@ -1,20 +1,21 @@
 //! Bounded MIDI feedback ingestion; HID output stays on the bridge thread.
 
 pub mod info;
+mod queue;
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use anyhow::{Context as _, ensure};
-use crossbeam_channel::{Receiver, TrySendError};
-use midir::os::unix::VirtualInput as _;
-use midir::{MidiInput, MidiInputConnection};
-use tracing::{debug, info, warn};
+#[cfg(test)]
+use anyhow::Context as _;
+#[cfg(all(test, target_os = "macos"))]
+use midir::MidiInput;
+use midir::MidiInputConnection;
+#[cfg(all(test, target_os = "macos"))]
+use tracing::debug;
+use tracing::info;
 
 use super::catalog::{EQ_MODE_NOTE, EXT_THRU_CC, INTERNAL_MODE_CC};
 
-const QUEUE_CAPACITY: usize = 4096;
 pub const PAD_COLOR_TOKENS: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 pub const PAD_WHITE_TOKEN: u8 = 9;
 
@@ -237,59 +238,43 @@ impl Decoder {
 
 pub struct FeedbackInput {
     _connection: MidiInputConnection<Decoder>,
-    receiver: Receiver<Message>,
-    overflow: Arc<AtomicBool>,
+    queue: queue::Queue,
 }
 
 impl FeedbackInput {
+    #[cfg(all(test, target_os = "macos"))]
     pub fn new(port_name: &str) -> anyhow::Result<Self> {
-        let (sender, receiver) = crossbeam_channel::bounded(QUEUE_CAPACITY);
-        let overflow = Arc::new(AtomicBool::new(false));
-        let callback_overflow = Arc::clone(&overflow);
-        let connection = MidiInput::new("S4 MK3 LED feedback")
-            .context("create feedback MIDI client")?
-            .create_virtual(
-                port_name,
-                move |timestamp, bytes, decoder: &mut Decoder| {
-                    decoder.feed(bytes, |message| {
-                        debug!(timestamp, ?message, "MIDI_FEEDBACK");
-                        match sender.try_send(message) {
-                            Ok(()) => {}
-                            Err(TrySendError::Full(_)) => {
-                                callback_overflow.store(true, Ordering::Relaxed);
-                            }
-                            Err(TrySendError::Disconnected(_)) => {
-                                warn!("MIDI feedback receiver closed");
-                            }
-                        }
-                    });
-                },
-                Decoder::default(),
-            )
-            .map_err(|error| anyhow::anyhow!("create feedback destination: {error}"))?;
+        Self::with_backend(
+            port_name,
+            crate::midi_transport::Backend::CoreMidi,
+            crate::midi_capture::Handle::default(),
+        )
+    }
+
+    pub fn with_backend(
+        port_name: &str,
+        backend: crate::midi_transport::Backend,
+        capture: crate::midi_capture::Handle,
+    ) -> anyhow::Result<Self> {
+        let (queue, ingress) = queue::Queue::new(backend);
+        let connection = crate::midi_transport::input(
+            backend,
+            port_name,
+            move |_, bytes, decoder: &mut Decoder| {
+                ingress.feed(decoder, bytes);
+            },
+            Decoder::default(),
+            capture,
+        )?;
         info!(port = port_name, "MIDI_FEEDBACK_READY");
         Ok(Self {
             _connection: connection,
-            receiver,
-            overflow,
+            queue,
         })
     }
 
     pub fn drain(&self, state: &mut FeedbackState, now: Duration) -> anyhow::Result<usize> {
-        ensure!(
-            !self.overflow.load(Ordering::Relaxed),
-            "MIDI feedback queue overflow; restart to synchronize software state"
-        );
-        let mut count = 0;
-        for message in self.receiver.try_iter().take(QUEUE_CAPACITY) {
-            state.apply(message, now);
-            count += 1;
-        }
-        ensure!(
-            !self.overflow.load(Ordering::Relaxed),
-            "MIDI feedback queue overflow; restart to synchronize software state"
-        );
-        Ok(count)
+        self.queue.drain(state, now)
     }
 }
 
@@ -785,6 +770,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn virtual_destination_receives_real_midi_color_without_creating_an_echo_source()
     -> anyhow::Result<()> {
         // Given a native virtual destination already subscribed before sending.
@@ -811,7 +797,7 @@ mod tests {
             .map_err(|error| anyhow::anyhow!("connect test destination: {error}"))?;
         // When a hidden deck's color arrives through CoreMIDI.
         connection.send(&[0x92, 40, 8])?;
-        let message = input.receiver.recv_timeout(Duration::from_secs(2))?;
+        let message = input.queue.receiver.recv_timeout(Duration::from_secs(2))?;
         // Then the token is preserved and no MIDI source echoes it.
         assert_eq!(
             message,

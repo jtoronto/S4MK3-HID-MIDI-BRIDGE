@@ -23,6 +23,19 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[target.'cfg(windows)'.dependencies]
+interprocess = "=2.2.3"
+mio = { version = "=1.2.4", default-features = false, features = ["s4-cancel-pipe-writes-on-drop"] }
+process-wrap = { version = "=10.0.1", default-features = false, features = ["tokio1", "job-object", "kill-on-drop", "creation-flags"] }
+recvmsg = "=1.0.0"
+tokio = { version = "=1.54.1", features = ["rt", "time", "sync", "macros", "net", "process", "io-util"] }
+
+[dev-dependencies]
+tokio = { version = "=1.54.1", features = ["rt", "time", "sync", "macros", "test-util", "net", "process", "io-util"] }
+
+[patch.crates-io]
+mio = { path = "vendor/mio" }
+
 [lints.rust]
 unsafe_code = "forbid"
 unused_must_use = "deny"

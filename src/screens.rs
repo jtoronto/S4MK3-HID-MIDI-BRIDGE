@@ -12,6 +12,7 @@ use nusb::MaybeFuture as _;
 use nusb::transfer::{Bulk, Out};
 
 pub mod info;
+pub mod ni_service;
 pub mod page;
 mod text;
 mod worker;
@@ -40,6 +41,18 @@ impl Display {
 /// Logical top-left-origin RGB565 image. Reused between redraws.
 pub struct Frame {
     pixels: Vec<u16>,
+}
+
+// Diagnostic-only fingerprint of logical RGB565 values, shared with NI sends.
+#[cfg(any(windows, test))]
+fn route_fingerprint(pixels: &[u16]) -> u64 {
+    pixels
+        .iter()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, pixel| {
+            pixel.to_le_bytes().into_iter().fold(hash, |hash, byte| {
+                (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+            })
+        })
 }
 
 impl Default for Frame {

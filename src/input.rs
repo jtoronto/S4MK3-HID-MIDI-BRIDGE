@@ -79,9 +79,10 @@ fn read_batch_inner(
         ] {
             buffers[index][0] = id;
             lengths[index] = observed(operation, observe, || {
-                hid.get_input_report(&mut buffers[index][..size])
+                hid.get_input_report(&mut buffers[index][..if cfg!(windows) { 79 } else { size }])
                     .with_context(|| format!("request S4 input report {id}"))
             })?;
+            lengths[index] = normalized_length(&buffers[index][..lengths[index]], cfg!(windows))?;
             ensure!(
                 lengths[index] == size && buffers[index][0] == id,
                 "unexpected S4 snapshot {id} framing"
@@ -94,6 +95,7 @@ fn read_batch_inner(
         hid.read_timeout(&mut buffers[2], if full { 2 } else { 100 })
             .context("read S4 HID interrupt report")
     })?;
+    let length = normalized_length(&buffers[2][..length], cfg!(windows))?;
     if full && length != 0 && buffers[2][0] == 2 {
         // A queued analog interrupt can predate the startup GET. Use it as
         // a change notification, not as authority over a newer physical snapshot.
@@ -114,6 +116,24 @@ fn read_batch_inner(
         lengths[2] = length;
     }
     Ok(lengths)
+}
+
+fn normalized_length(report: &[u8], windows: bool) -> anyhow::Result<usize> {
+    let expected = match report.first() {
+        Some(1) => 23,
+        Some(2) => 79,
+        Some(3) => 60,
+        _ => return Ok(report.len()),
+    };
+    ensure!(
+        report.len() == expected || windows && report.len() == 79,
+        "unexpected S4 interrupt framing: ID {:?}, length {}",
+        report.first(),
+        report.len()
+    );
+    // Windows interrupt buffers have the collection maximum (79 including ID).
+    // Only the descriptor-defined report bytes belong to the shared decoder.
+    Ok(expected)
 }
 
 fn observed<T>(
@@ -150,6 +170,22 @@ const fn accepts_interrupt(report: &[u8], full: bool) -> bool {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn windows_padding_is_removed_once_without_accepting_truncation() -> anyhow::Result<()> {
+        for (id, expected) in [(1, 23), (2, 79), (3, 60)] {
+            let mut report = [0; 79];
+            report[0] = id;
+            assert_eq!(normalized_length(&report, true)?, expected);
+            assert_eq!(normalized_length(&report[..expected], false)?, expected);
+            assert!(normalized_length(&report[..expected - 1], true).is_err());
+            if expected != 79 {
+                assert!(normalized_length(&report, false).is_err());
+            }
+        }
+        assert_eq!(normalized_length(&[], true)?, 0);
+        Ok(())
+    }
 
     #[derive(Debug, PartialEq)]
     enum RecordedCall {
