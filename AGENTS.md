@@ -176,3 +176,24 @@ The working tree is shared and can contain user edits and unfinished work.
 - Preserve user-edited Djay mappings under their existing names.
 - Keep generated bundles, local capture logs, and large packet captures out
   of commits.
+
+## Windows build artifacts and evidence
+
+- Put one-off Windows builds, copied SDKs, Rust targets, and temporary packages
+  in a unique task-owned directory under `${TMPDIR:-/tmp}` on macOS, or the
+  platform temporary directory on Windows. Use a fresh child path for each
+  build; the Windows build scripts require output paths that do not yet exist.
+- Reuse the retained Windows cross-build toolchain instead of preserving
+  another SDK or dependency copy for each run. A build may stage its own copy
+  inside its temporary workspace.
+- Keep `.omo/evidence` for useful results, not whole build trees: record what
+  was tested, outcomes and limits, relevant logs and hashes, and unique
+  captures or observations. Preserve user mappings and source snapshots not
+  otherwise accounted for.
+- Keep an exact temporary package while an attended test or investigation
+  needs it. Once the work is finished, preserve the useful evidence and remove
+  the task-owned build workspace. Do not rely on the OS to clear it, and do
+  not remove user files or older artifacts of uncertain ownership.
+- After substantial Windows build work, check that task-owned temporary output
+  was removed and report anything intentionally retained, including why it is
+  still needed.
