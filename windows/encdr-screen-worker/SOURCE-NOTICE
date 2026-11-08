@@ -1,0 +1,16 @@
+This worker uses the unmodified Encdr source at commit
+a5414658a69c4330d10b95f2359371dfc8550326 from
+https://github.com/RufusIbiza/Encdr as a pinned Cargo Git dependency.
+
+Encdr is licensed GPL-3.0-or-later. Its upstream repository contains its
+source, copyright notices, README and license. The verified upstream archive
+for this revision has SHA-256
+a536295722a69aa624cca9649cc1edeb6530d05a34cdcab65a4637ee7f7159b2.
+The worker has its own Cargo.lock and does not replace the bridge's Encdr.
+Offline builds require this Git revision in Cargo's cache.
+
+The requested serial is a preference: unmodified upstream can select another
+reported serial and does not expose the selected identity.
+FRAME_OK means both upstream calls succeeded, not physical screen observation.
+STOPPED means the request handles were dropped, not service ownership restored.
+The parent supervisor must contain this process before ARM and bound all calls.

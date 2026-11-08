@@ -1,0 +1,8 @@
+bin/
+obj/
+Tests/bin/
+Tests/obj/
+publish/
+.dotnet-home/
+/SOURCE-SHA256SUMS
+/PUBLISH-SHA256SUMS

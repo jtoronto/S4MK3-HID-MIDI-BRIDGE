@@ -1,0 +1,36 @@
+[package]
+name = "s4-encdr-screen-worker"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "GPL-3.0-or-later"
+description = "Isolated NI service screen worker for the Windows S4 bridge"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+crossbeam-channel = "0.5"
+encdr = { git = "https://github.com/RufusIbiza/Encdr.git", rev = "a5414658a69c4330d10b95f2359371dfc8550326" }
+
+[target.'cfg(windows)'.dependencies]
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+let_underscore_must_use = "deny"
+
+[profile.release]
+strip = false

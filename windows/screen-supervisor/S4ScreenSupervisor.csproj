@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeFrameworkVersion>10.0.14</RuntimeFrameworkVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>s4-screen-supervisor</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Tests/**/*.cs" />
+    <InternalsVisibleTo Include="S4ScreenSupervisor.Tests" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(SelfContained)' == 'true'">
+    <Content Include="$(NuGetPackageRoot)microsoft.netcore.app.runtime.$(RuntimeIdentifier)/$(RuntimeFrameworkVersion)/LICENSE.TXT"
+             Link="DOTNET-LICENSE.txt" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="$(NuGetPackageRoot)microsoft.netcore.app.runtime.$(RuntimeIdentifier)/$(RuntimeFrameworkVersion)/THIRD-PARTY-NOTICES.TXT"
+             Link="DOTNET-THIRD-PARTY-NOTICES.txt" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+</Project>
