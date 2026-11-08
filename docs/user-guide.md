@@ -15,6 +15,57 @@ together, importing updates under a new name to preserve custom mappings.
 
 The DJ laptop needs the standalone app, not Rust, Cargo or this repository.
 
+**Windows:** the Windows build is under development and unaccepted, not a
+published ready-to-use download. Its full setup requires NI's S4 MK3
+driver and NIHardwareService for the NI-service screens path. Have Traktor
+installed first as the current supported/tested provisioning route; Traktor
+need not be running for Djay use. NI also offers separate driver downloads,
+but whether that installer supplies the required background service is
+unverified. See [Windows setup](windows-setup.md) for mapping installation,
+startup and screen access. The macOS setup
+instructions below are unchanged.
+
+On Windows, keeping NIHardwareService running is the supported workflow.
+Automatic NI service stop/restore and manual stop/restart are unsupported.
+The macOS driver-handover and restoration instructions below don't apply
+to Windows. The screen path registers with
+that service and waits for it to grant control of the S4. Registration alone
+does not mean the screens are working; check the reported screen state.
+On Windows, some lights and FX knobs may not work at startup if the bridge
+does not receive Djay's initial feedback. Starting the bridge before Djay
+has helped in testing, but it is not a reliable fix. There is no confirmed
+automatic refresh yet. In the full profile, **Screens > Enable S4 screens**
+controls the displays; check
+**Screens: active** and the physical output. Both displays have produced
+output in bounded testing, but all screen fields, both jogs with normal motor
+settings, recovery, audio and sustained use still need acceptance.
+
+The current Windows source uses a separate screen helper so a screen failure
+does not need to stop controller and MIDI handling. To retry, use
+**Screens > Retry verified access** while a full-profile bridge is running.
+Normally **Stop** releases the bridge's screen session and leaves
+NIHardwareService running; use tray **Quit S4 MK3 Bridge** to exit the app.
+The screens can retain their last image after release. If screen release is
+reported as unconfirmed, check Diagnostics rather than assuming that the
+service returned screen ownership. If **NI recovery pending** appears,
+preserve the saved state and read **Review owned recovery**. The restore
+preference isn't a working
+Windows service-restoration action, and pending state can prevent Quit.
+See [Windows startup and recovery](windows-setup.md#normal-startup-and-screens).
+
+Windows **Diagnostics > Command preview** shows unsaved editor choices while
+stopped and the actual launch command while the app owns a child process.
+Starting validates and saves preferences, then prepares screen access before
+launch; the draft preview doesn't confirm screen availability. See
+[Diagnostics command preview](windows-setup.md#diagnostics-command-preview).
+
+Use the mapping generated for your platform. The Windows mapping targets
+LoopBe1 and uses Windows-specific playback feedback; the Mac mapping targets
+the bridge's native MIDI ports. Select the generated Windows mapping for
+**LoopBe Internal MIDI** in Djay, and keep custom mappings under their existing
+names when importing an update. The intended physical control assignments
+are the same; that doesn't establish complete Windows control acceptance.
+
 ## Contents
 
 - [One-time setup](#one-time-setup)
@@ -646,6 +697,12 @@ editing them.
 
 Brief input gaps suspend tension until fresh movement arrives. If the bridge
 stops with an error, keep the Diagnostics log and report the exact message.
+
+For intermittent Windows MIDI problems, current development builds offer an
+[optional temporary MIDI incident capture](windows-setup.md#optional-temporary-midi-incident-capture).
+Enable it while stopped for one full-profile run, then click **Mark issue**
+when you notice the problem. Note the deck, control and symptom, and follow
+the linked steps to stop and check the capture before sharing it.
 
 If Djay shows a key but the latest S4 build shows `?`, retain the track and
 record the deck, title and Djay key before restarting. For a report, also

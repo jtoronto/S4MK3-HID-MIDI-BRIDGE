@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "purpose": "Field specification index; never load this as runtime defaults",
+  "default_owners": {
+    "led": ["src/full/leds.rs:86-218", "examples/led-config.json"],
+    "jog": ["src/full/jog.rs:38-268", "examples/jog-config.json"],
+    "tension": ["src/tension.rs:60-109", "examples/tension-config.json"],
+    "run": ["macos/S4BridgeApp.swift:30-57"],
+    "screen": ["macos/ScreenPreferences.swift:3-34"]
+  },
+  "unknown_fields": {"led": "reject", "jog": "reject_except_retired_field", "tension": "reject", "screen": "reject", "run": "current_synthesized_Swift_decoder_ignores"},
+  "colors": ["red","carrot","orange","honey","yellow","lime","green","aqua","cyan","sky","blue","purple","fuchsia","magenta","azalea","salmon","white"],
+  "led": [
+    {"keys": ["deck_colors","stem_colors"], "type": "color_array", "length": 4},
+    {"keys": ["djay_pad_colors","fixed_hotcue_colors"], "type": "color_array", "length": 8},
+    {"keys": ["djay_white","mute_color","loop_color"], "type": "color"},
+    {"keys": ["hotcue_colors"], "type": "enum", "values": ["djay","fixed_slots"]},
+    {"keys": ["inactive_display","quantize_mixed"], "type": "enum", "values": ["dim","dark"]},
+    {"keys": ["active_brightness"], "type": "integer", "minimum": 1, "maximum": 127},
+    {"keys": ["inactive_brightness"], "type": "integer", "minimum": 0, "maximum": 127},
+    {"keys": ["palette_active_intensity","palette_inactive_intensity"], "type": "integer", "minimum": 0, "maximum": 3},
+    {"keys": ["stem_mute_bright","loop_enabled"], "type": "boolean"},
+    {"keys": ["tempo_center_tolerance"], "type": "nullable_finite_number", "exclusiveMinimum": 0, "maximum": 0.1},
+    {"keys": ["chase_period_ms"], "type": "integer", "minimum": 250, "maximum": 10000},
+    {"keys": ["meter_brightness"], "type": "integer_enum", "values": [0,125,127]},
+    {"keys": ["meter_gamma"], "type": "finite_number", "minimum": 0.1, "maximum": 5},
+    {"keys": ["meter_stale_ms"], "type": "integer", "minimum": 100, "maximum": 5000}
+  ],
+  "jog": [
+    {"keys": ["scratch_speed","pitch_bend_speed","backspin_acceleration"], "type": "finite_number", "exclusiveMinimum": 0},
+    {"keys": ["scratch_reaction","pitch_bend_reaction"], "type": "integer", "minimum": 0, "maximum": 150},
+    {"keys": ["scratch_direction"], "type": "enum", "values": ["normal","reversed"]},
+    {"keys": ["backspin_enabled","backspin_assist_enabled","vinyl_enabled_at_startup","tt_vinyl_enabled_at_startup"], "type": "boolean"},
+    {"keys": ["backspin_assist_strength"], "type": "integer", "minimum": 0, "maximum": 100},
+    {"keys": ["backspin_speed_increase"], "type": "finite_number", "minimum": 0, "invariant": "scratch_speed + backspin_speed_increase must be finite"},
+    {"keys": ["tt_pitch_bend_floor_percent"], "type": "integer", "minimum": 1, "maximum": 95},
+    {"keys": ["tt_pitch_bend_gain"], "type": "finite_number", "minimum": 0.1, "maximum": 10},
+    {"keys": ["tt_brake_gain"], "type": "optional_nullable_finite_number", "minimum": 0.1, "maximum": 20, "fallback": "2 * tt_pitch_bend_gain"},
+    {"keys": ["tt_nudge_gain"], "type": "optional_nullable_finite_number", "minimum": 0.1, "maximum": 10, "fallback": "tt_pitch_bend_gain"},
+    {"keys": ["tt_brake_curve_exponent","tt_nudge_curve_exponent"], "type": "finite_number", "minimum": 0.25, "maximum": 4},
+    {"keys": ["platter_target_rpm"], "type": "integer", "minimum": 1, "maximum": 45},
+    {"keys": ["platter_max_force"], "type": "integer", "minimum": 1, "maximum": 25000},
+    {"keys": ["platter_base_force","platter_force_per_rpm","platter_kp","platter_ki"], "type": "integer", "minimum": 0, "maximum": 25000},
+    {"keys": ["platter_force_rise_per_second","platter_startup_force_rise_per_second"], "type": "integer", "minimum": 0, "maximum": 1000000},
+    {"keys": ["platter_startup_ms"], "type": "integer", "minimum": 0, "maximum": 2000},
+    {"keys": ["platter_overspeed_limit_rpm"], "type": "integer", "minimum": 0, "maximum": 250},
+    {"keys": ["platter_position_sensitivity"], "type": "optional_nullable_finite_number", "retired": true, "serialize": false, "runtime_effect": "ignored"}
+  ],
+  "tension": [
+    {"keys": ["tension"], "type": "integer", "minimum": -100, "maximum": 100, "default_distinction": "Rust Config::default and empty object = 0; bundled host selection comes from examples/tension-config.json"}
+  ],
+  "run": [
+    {"keys": ["profile"], "type": "enum", "values": ["full","minimal","probe"]},
+    {"keys": ["limitDuration","rawReports"], "type": "boolean"},
+    {"keys": ["durationSeconds"], "type": "integer", "minimum": 1, "maximum": 604800},
+    {"keys": ["logLevel"], "type": "enum", "values": ["warn","info","debug"]}
+  ],
+  "screen": [
+    {"keys": ["enabled","automaticallyStopNI","restoreNIOnStop","restorePending"], "type": "boolean"}
+  ],
+  "persistence": {
+    "root": "%LOCALAPPDATA%\\S4 MK3 Bridge\\",
+    "files": ["run-settings.json","led-config.json","jog-config.json","tension-config.json","screen-settings.json"],
+    "subdirectories": ["Logs","Diagnostics"],
+    "replacement": "validate and encode all first; atomic per file, not multi-file transaction",
+    "invalid_saved": "preserve files; block save/start until explicit valid recovery",
+    "reset_all": "editor defaults; retain restorePending; Save required",
+    "motorized_reset_source": "macos/S4BridgeApp.swift:331-350",
+    "led_import": "merge bundled defaults, validate, replace editor only",
+    "led_export": "validated editor LED and Palette only",
+    "mapping_export": "unsaved validated jog editor; fresh generator output; separate Windows filename"
+  },
+  "not_a_regression_test": true
+}

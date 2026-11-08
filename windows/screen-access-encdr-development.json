@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "route": "engine_managed_ni_session",
+  "accepted": true,
+  "evidence": ".omo/evidence/encdr-public-session-a5414658-20261105/upstream-v4-patterns/attended-result-20261107.md"
+}

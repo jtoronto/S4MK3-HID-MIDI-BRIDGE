@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "status": "source-audited; Djay-provider-provisional-until-task-8",
+  "channel_base": 1,
+  "endpoint": "LoopBe Internal MIDI",
+  "mapping_filename": "S4 MK3 Bridge Windows.djayMidiMapping",
+  "address_identity": ["endpoint", "direction", "channel", "family", "number"],
+  "note_statuses": [128, 144],
+  "cc_status": 176,
+  "directions": {"commands": "bridge_to_djay", "feedback": "djay_to_bridge"},
+  "sources": {
+    "catalog": "src/full/catalog.rs:1-570",
+    "routing": "src/full/mod.rs:639-1615",
+    "generator": "src/full/mapping.rs:40-475",
+    "decoder_cache": "src/full/feedback.rs:70-300",
+    "minimal": "src/midi.rs:49-99"
+  },
+  "command_domains": [
+    {"id": "deck_notes", "profile": "full", "channels": [1,2,3,4], "family": "note", "numbers": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,22,23,24,25,26,27,28,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73]},
+    {"id": "deck_cc", "profile": "full", "channels": [1,2,3,4], "family": "cc", "numbers": [0,1,2,3,4,5,6,7,32,33,34,35,36,37,40,41,42,43,44,45]},
+    {"id": "mixer_notes", "profile": "full", "channels": [5], "family": "note", "numbers": [0,1,2,3,80,81,82,83,84,85,86,87,88,89,90,91]},
+    {"id": "mixer_cc", "profile": "full", "channels": [5], "family": "cc", "numbers": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]},
+    {"id": "deck_select", "profile": "full", "channels": [6], "family": "note", "numbers": [0,1,2,3]},
+    {"id": "shifted_notes", "profile": "full", "channels": [9,10,11,12], "family": "note", "numbers": [1,2,5,6,7,12,14,23,24,25,26,33,34,35,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59]},
+    {"id": "shifted_cc", "profile": "full", "channels": [9,10,11,12], "family": "cc", "numbers": [0,1,32,33,34]},
+    {"id": "minimal_notes", "profile": "minimal", "channels": [1,2], "family": "note", "numbers": [0,1]},
+    {"id": "minimal_faders", "profile": "minimal", "channels": [1], "family": "cc", "numbers": [16,17,18,19,20]}
+  ],
+  "feedback_domains": [
+    {"id": "deck_note_states", "wire_channels": [13,14,15,16], "canonical_channels": [1,2,3,4], "family": "note", "numbers": [0,1,2,3,4,6,8,15,16,17,18,19,20,32,33,34,35,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63], "declaration": "embedded_inherited"},
+    {"id": "deck_control_info", "wire_channels": [13,14,15,16], "canonical_channels": [1,2,3,4], "family": "cc", "numbers": [21,22,32,33,34,35,36,37,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112], "declaration": "root"},
+    {"id": "mixer_pfl", "wire_channels": [8], "canonical_channels": [5], "family": "note", "numbers": [0,1,2,3], "declaration": "embedded_inherited"},
+    {"id": "loading", "wire_channels": [7], "canonical_channels": [7], "family": "note", "numbers": [0,1,2,3], "declaration": "root"},
+    {"id": "meters_playing_range", "wire_channels": [7], "canonical_channels": [7], "family": "cc", "numbers": [0,1,2,3,4,5,6,7,8], "declaration": "root"}
+  ],
+  "observed_native_counts": {"controls": 582, "embedded_outputs": 168, "root_outputs": 177, "effective_outputs": 345, "command_feedback_intersections": 192},
+  "required_loopbe_intersections": 0,
+  "ingress_order": ["decode_stream", "allowlist_wire_address", "normalize_message", "bounded_enqueue", "real_cache_apply"],
+  "unsupported_examples": [[8,"cc",20],[13,"cc",40],[9,"note",40],[6,"note",0],[7,"note",4]],
+  "preserve": ["note_off_release_velocity_normalizes_to_zero", "note_on_zero_is_inactive", "hotcue_output_omits_numeric_bounds", "sampler_bank_aliases", "cc_boolean_or_numeric_semantics", "unknown_cache", "native_generate_results"],
+  "not_a_regression_test": true
+}
