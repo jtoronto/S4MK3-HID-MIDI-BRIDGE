@@ -21,7 +21,7 @@ This is complete relative to the installed metadata and the scanned shipped pres
 
 ## How to read keys and MIDI addresses
 
-A row in the action catalog names a Djay mapping input key. The metadata `type` describes the kind of operation (for example `button-hold`, `button-toggle`, or `control`); `modelState` and `modelValue` name state/value references. `modelEnabled` is a gate, not a separate output key. Preset `controls[].output` is an embedded feedback declaration on that input control and reuses that control's MIDI address. A root-level `outputs[]` entry is a separate output assignment with its own key path and MIDI address.
+A row in the action catalog names a Djay mapping input key. The metadata `type` describes the kind of operation (for example `button-hold`, `button-toggle`, or `control`); `modelState` and `modelValue` name state/value references. `modelEnabled` is a gate, not a separate output key. Preset `controls[].output` is an embedded feedback declaration that inherits the input MIDI address unless fields are overridden. The current S4 generator uses that inherited address. A separate embedded output channel was demonstrated in the [Windows LoopBe1 proof](windows-djay-loopbe1-proof-20261104.md), with `controlType=control` for continuous crossfader feedback. A root-level `outputs[]` entry is a separate output assignment with its own key path and MIDI address.
 
 All channel labels in this document are **MIDI channels 1-based**, as requested. In the plist they are 0-based. MIDI message type `1` is Note and `3` is Control Change (CC). The generated S4 mapping uses `rotary-64` for relative controls.
 

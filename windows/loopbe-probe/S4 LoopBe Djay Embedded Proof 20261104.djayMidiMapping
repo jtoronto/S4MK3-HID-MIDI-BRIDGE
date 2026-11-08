@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>endpointName</key>
+    <string>LoopBe Internal MIDI</string>
+    <key>schemeVersion</key>
+    <integer>1</integer>
+    <key>version</key>
+    <integer>0</integer>
+    <key>controls</key>
+    <array>
+        <dict>
+            <key>keyPath</key>
+            <string>mixer.crossfade</string>
+            <key>midiChannel</key>
+            <integer>4</integer>
+            <key>midiData</key>
+            <integer>20</integer>
+            <key>midiMessageType</key>
+            <integer>3</integer>
+            <key>output</key>
+            <dict>
+                <key>controlType</key>
+                <string>control</string>
+                <key>midiChannel</key>
+                <integer>7</integer>
+                <key>midiMinValue</key>
+                <integer>0</integer>
+                <key>midiMaxValue</key>
+                <integer>127</integer>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>
