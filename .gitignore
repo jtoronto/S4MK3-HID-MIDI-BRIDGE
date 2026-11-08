@@ -6,7 +6,10 @@
 .omo
 generated-images
 .vscode
-diagnostics
+/diagnostics/
+.pytest_cache/
+__pycache__/
+*.py[cod]
 
 # BEGIN oh-my-opencode-slim worktrees
 .slim/worktrees/
