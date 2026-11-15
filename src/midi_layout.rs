@@ -7,7 +7,7 @@ use crate::midi_transport::Backend;
 pub const fn normalize(backend: Backend, mut message: Message) -> Option<Message> {
     match backend {
         Backend::CoreMidi => Some(message),
-        Backend::Loopbe => {
+        Backend::Loopbe | Backend::Bloop => {
             let channel = message.status & 0x0f;
             let family = message.status & 0xf0;
             let number = message.number;

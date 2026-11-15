@@ -1,12 +1,12 @@
 use super::*;
 
-fn session(profile: &'static str) -> Session {
+fn session_with_backend(profile: &'static str, backend: Backend) -> Session {
     let (sender, receiver) = crossbeam_channel::bounded(1);
     let shared = Arc::new(Mutex::new(Status {
         version: 1,
         state: State::Starting,
         profile,
-        backend: Backend::Loopbe,
+        backend,
         request_id: None,
         readiness: Readiness {
             hid: false,
@@ -29,6 +29,10 @@ fn session(profile: &'static str) -> Session {
         screens: None,
         led_config: None,
     }
+}
+
+fn session(profile: &'static str) -> Session {
+    session_with_backend(profile, Backend::Loopbe)
 }
 
 #[test]
@@ -54,8 +58,17 @@ fn stop_before_initialization_prevents_ready_and_keeps_first_request() -> anyhow
 
 #[test]
 fn readiness_requires_actual_profile_handles_and_initialization() -> anyhow::Result<()> {
-    for profile in ["full", "minimal", "probe"] {
-        let session = session(profile);
+    for (profile, backend, backend_name) in
+        ["full", "minimal", "probe"]
+            .into_iter()
+            .flat_map(|profile| {
+                [
+                    (profile, Backend::Loopbe, "loopbe"),
+                    (profile, Backend::Bloop, "bloop"),
+                ]
+            })
+    {
+        let session = session_with_backend(profile, backend);
         assert!(session.ready().is_err());
         session.milestone(|ready| ready.hid = true)?;
         if profile != "probe" {
@@ -80,7 +93,7 @@ fn readiness_requires_actual_profile_handles_and_initialization() -> anyhow::Res
         assert_eq!(wire["version"], 1);
         assert_eq!(wire["state"], "ready");
         assert_eq!(wire["profile"], profile);
-        assert_eq!(wire["backend"], "loopbe");
+        assert_eq!(wire["backend"], backend_name);
         assert!(wire["request_id"].is_null());
         assert!(wire["error"].is_null());
         assert_eq!(wire["readiness"]["controller_initialized"], true);

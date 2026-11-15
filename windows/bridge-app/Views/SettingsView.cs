@@ -113,7 +113,7 @@ internal sealed partial class SettingsView : Grid
         message.Text = host.Message;
         start.IsEnabled = host.CanStart && fields.Valid;
         stop.IsEnabled = host.CanStop;
-        save.Content = host.Supervisor.HasChild ? "Save and restart" : "Save preferences";
+        save.Content = host.Supervisor.HasOwnedResources ? "Save and restart" : "Save preferences";
         save.IsEnabled = !host.Operating && !host.Screens.Busy && !host.Store.RequiresReset
             && host.Supervisor.State is not ("stopping" or "checking") && fields.Valid;
         reset.IsEnabled = !host.Operating && !host.Screens.Busy;

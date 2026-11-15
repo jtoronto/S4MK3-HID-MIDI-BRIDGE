@@ -2,8 +2,8 @@
   "version": 1,
   "implementation_status": "required-future-task-5-and-14; existing-screen-lines-preserved",
   "profiles": ["full","minimal","probe"],
-  "backends": ["core-midi","loopbe"],
-  "backend_defaults": {"macos": "core-midi", "windows": "loopbe"},
+  "backends": ["core-midi","loopbe","bloop"],
+  "backend_defaults": {"macos": "core-midi", "windows": "bloop"},
   "input": {
     "bridge": "S4_BRIDGE_CONTROL <ascii-u64-decimal> STOP",
     "screen": "S4_SCREEN_CONTROL <ascii-u64-decimal> ON|OFF|RETRY",
@@ -39,7 +39,7 @@
     "platter_wheel_fields": ["deck","rpm","bend_counts_per_second","mode"],
     "platter_modes": ["off","waiting","bend","scratch","paused_scratch","manual_scratch","blocked","stale","seek","grid"]
   },
-  "example_ready": {"version":1,"state":"ready","profile":"full","backend":"loopbe","request_id":null,"readiness":{"hid":true,"midi_input":true,"midi_output":true,"controller_initialized":true,"feedback":"unknown"},"error":null},
+  "example_ready": {"version":1,"state":"ready","profile":"full","backend":"bloop","request_id":null,"readiness":{"hid":true,"midi_input":true,"midi_output":true,"controller_initialized":true,"feedback":"unknown"},"error":null},
   "cases": [
     {"id":"stop_full","profile":"full","line":"S4_BRIDGE_CONTROL 1 STOP","effect":"normal_stop"},
     {"id":"stop_minimal","profile":"minimal","line":"S4_BRIDGE_CONTROL 1 STOP","effect":"normal_stop"},

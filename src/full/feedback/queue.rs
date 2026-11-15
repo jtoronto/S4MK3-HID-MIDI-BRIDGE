@@ -86,7 +86,14 @@ mod tests {
     #[test]
     fn command_echoes_never_authorize_cache_and_genuine_split_feedback_does() -> anyhow::Result<()>
     {
-        let (queue, ingress) = Queue::new(Backend::Loopbe);
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            command_echoes_and_split_feedback(backend)?;
+        }
+        Ok(())
+    }
+
+    fn command_echoes_and_split_feedback(backend: Backend) -> anyhow::Result<()> {
+        let (queue, ingress) = Queue::new(backend);
         let mut decoder = Decoder::default();
         let mut state = FeedbackState::default();
         ingress.feed(&mut decoder, &[0x90, 0, 127, 0xb0, 32, 127, 0xb8, 32, 100]);
@@ -110,7 +117,14 @@ mod tests {
 
     #[test]
     fn queue_capacity_is_exact_and_overflow_stays_failed_after_drain() -> anyhow::Result<()> {
-        let (queue, ingress) = Queue::new(Backend::Loopbe);
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            queue_capacity_and_overflow(backend)?;
+        }
+        Ok(())
+    }
+
+    fn queue_capacity_and_overflow(backend: Backend) -> anyhow::Result<()> {
+        let (queue, ingress) = Queue::new(backend);
         let mut decoder = Decoder::default();
         let mut state = FeedbackState::default();
         for _ in 0..4096 {
@@ -123,6 +137,27 @@ mod tests {
         assert!(queue.drain(&mut state, Duration::ZERO).is_err());
         assert_eq!(queue.receiver.try_iter().count(), 4096);
         assert!(queue.drain(&mut state, Duration::ZERO).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn startup_echo_burst_does_not_displace_real_feedback() -> anyhow::Result<()> {
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            let (queue, ingress) = Queue::new(backend);
+            let mut decoder = Decoder::default();
+            let mut state = FeedbackState::default();
+            for _ in 0..CAPACITY {
+                ingress.feed(&mut decoder, &[0x90, 0, 127, 0xb0, 32, 127]);
+            }
+            for deck in 0..4 {
+                ingress.feed(&mut decoder, &[0xb6, 4 + deck, 127]);
+            }
+            assert_eq!(queue.drain(&mut state, Duration::ZERO)?, 4);
+            assert_eq!(state.playing, [Some(true); 4]);
+            assert!(state.playback_received);
+            assert_eq!(state.notes[0][0], None);
+            assert_eq!(state.fx_values[0][0], None);
+        }
         Ok(())
     }
 }

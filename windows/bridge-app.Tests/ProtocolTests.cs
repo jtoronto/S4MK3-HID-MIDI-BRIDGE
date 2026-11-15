@@ -5,13 +5,14 @@ namespace S4Bridge.Tests;
 
 internal static class ProtocolTests
 {
-    public static string Status(string profile = "full", string state = "ready", string? id = null) =>
+    public static string Status(string profile = "full", string state = "ready", string? id = null,
+        string backend = "bloop") =>
         "S4_BRIDGE_STATUS " + new JsonObject
         {
             ["version"] = 1,
             ["state"] = state,
             ["profile"] = profile,
-            ["backend"] = "loopbe",
+            ["backend"] = backend,
             ["request_id"] = id,
             ["readiness"] = new JsonObject
             {
@@ -74,10 +75,16 @@ internal static class ProtocolTests
         });
         Check.Add(tests, "profile and backend mismatch never authorize launch", () =>
         {
-            var launch = new LaunchState(Guid.NewGuid(), 42, "probe");
-            Check.True(!launch.Accept(ManagedStatus.Parse(Status())));
-            var native = ManagedStatus.Parse(Status("probe")) with { Backend = "core-midi" };
-            Check.True(!launch.Accept(native)); Check.True(!launch.IsReady);
+            foreach (var backend in new[] { "bloop", "loopbe" })
+            {
+                var launch = new LaunchState(Guid.NewGuid(), 42, "probe", backend);
+                Check.True(!launch.Accept(ManagedStatus.Parse(Status())));
+                var native = ManagedStatus.Parse(Status("probe")) with { Backend = "core-midi" };
+                Check.True(!launch.Accept(native)); Check.True(!launch.IsReady);
+                var other = backend == "bloop" ? "loopbe" : "bloop";
+                Check.True(!launch.Accept(ManagedStatus.Parse(Status("probe", backend: other))));
+                Check.True(launch.Accept(ManagedStatus.Parse(Status("probe", backend: backend))));
+            }
         });
         Check.Add(tests, "launch profiles exclude full settings in minimal and probe", () =>
         {

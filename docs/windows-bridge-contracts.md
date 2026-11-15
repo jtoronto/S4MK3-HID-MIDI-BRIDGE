@@ -8,24 +8,25 @@ The machine specifications live in `windows/contracts/`; audit receipts and
 source-traced cases live in
 `.omo/evidence/windows-bridge/20261104-01a1a4a4/task-4/`.
 
-“Current” below means inspected source, not Windows acceptance. “Required”
-means a frozen interface for subsequent tasks; neither the backend option nor
-managed bridge STOP/status exists in this source. These documents implement no
-transport, provider declaration, host or hardware feature.
+“Current” means inspected source, not Windows acceptance. The original task
+numbers below identify the contract's baseline. Transport selection and managed
+STOP/status are now implemented; the current Windows default is BLOOP, with
+LoopBe retained as an explicit alternative.
 
 ## 1. Transport, CLI and identity
 
-Task 5 introduces `src/midi_transport.rs` with the current concrete
+`src/midi_transport.rs` owns the concrete
 `midir::MidiOutputConnection` and `MidiInputConnection<Decoder>` lifetimes.
-Task 6 connects Windows WinMM to exactly one input and exactly one output named
-`LoopBe Internal MIDI`. Zero or ambiguous matches fail with direction and
+Windows WinMM connects to exactly one input and exactly one output named
+`S4 MK3 Bridge BLOOP`, or `LoopBe Internal MIDI` for the explicitly selected
+legacy backend. Zero or ambiguous matches fail with direction and
 candidate identities. Open the receive callback before exposing the send port
 or reporting readiness. Close every acquired handle on partial failure.
 Keep the 4,096-message bounded callback queue and sticky overflow failure.
-Do not add a backend framework, Microsoft MIDI Services fallback, timed echo
+Do not add a backend framework, implicit backend fallback, timed echo
 suppression or automatic reconnect.
 
-`--midi-backend core-midi|loopbe` defaults to `core-midi` on macOS and `loopbe`
+`--midi-backend core-midi|loopbe|bloop` defaults to `core-midi` on macOS and `bloop`
 on Windows. The selected enum identifies both transport and layout.
 `--generate-mapping PATH --midi-backend ...` is offline and accepts either
 layout on either build host. A runtime backend unavailable on that target fails
@@ -33,6 +34,17 @@ before HID enumeration/open/initialization. Invalid enum syntax fails in CLI
 parsing. Probe has no MIDI handles but still validates an explicit backend
 before hardware access. List and offline replay/preview retain their no-open
 behavior. No backend option creates a port during export.
+
+The Windows host creates BLOOP endpoints through the supported
+Windows.Devices.Midi2 0.99.92-preview.11 API package with Preview 13 transports.
+`Core/BloopEndpoint.cs` keeps the ownership interface free of SDK types;
+`Platform/BloopEndpointOwner.cs` contains the version-specific SDK and
+transport-configuration boundary. Prepare writes the preassigned association
+receipt before publication. The supervisor takes the lease before Create,
+records the real worker identity, and retains it through confirmed worker exit,
+output drain and exact removal. A pending SDK call is awaited, never abandoned
+on a timeout. Cleanup failure retains the lease and receipt for Stop retry.
+Probe, list and mapping export do not create an endpoint.
 
 Current arguments come from `src/main.rs:28-160`: no `--midi` means probe;
 bare `--midi` means minimal; explicit `--midi full` selects full.
@@ -46,7 +58,8 @@ the new flag. Unmanaged stdin EOF retains current behavior.
 
 Native names remain `S4 MK3 MIDI` (minimal), `S4 MK3 MIDI Full` (full,
 both directions), and `S4 MK3 Bridge.djayMidiMapping`. Windows full mapping
-is `S4 MK3 Bridge Windows.djayMidiMapping`, endpoint `LoopBe Internal MIDI`.
+is `S4 MK3 Bridge Windows.djayMidiMapping`, endpoint `S4 MK3 Bridge BLOOP`
+(`LoopBe Internal MIDI` only for an explicit LoopBe export).
 Do not install the full mapping as a claim of minimal-profile equivalence:
 minimal faders have different channels. Generator output stays create-new-only
 (`mapping.rs:21-36`); Windows host export/install must preserve user mappings

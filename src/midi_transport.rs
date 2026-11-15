@@ -6,12 +6,14 @@ use midir::{MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnec
 use serde::Serialize;
 
 pub const LOOPBE_PORT: &str = "LoopBe Internal MIDI";
+pub const BLOOP_PORT: &str = "S4 MK3 Bridge BLOOP";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Backend {
     CoreMidi,
     Loopbe,
+    Bloop,
 }
 
 impl std::fmt::Display for Backend {
@@ -19,6 +21,7 @@ impl std::fmt::Display for Backend {
         f.write_str(match self {
             Self::CoreMidi => "core-midi",
             Self::Loopbe => "loopbe",
+            Self::Bloop => "bloop",
         })
     }
 }
@@ -26,7 +29,7 @@ impl std::fmt::Display for Backend {
 impl Default for Backend {
     fn default() -> Self {
         if cfg!(windows) {
-            Self::Loopbe
+            Self::Bloop
         } else {
             Self::CoreMidi
         }
@@ -34,40 +37,48 @@ impl Default for Backend {
 }
 
 impl Backend {
+    pub const fn port_name(self) -> Option<&'static str> {
+        match self {
+            Self::CoreMidi => None,
+            Self::Loopbe => Some(LOOPBE_PORT),
+            Self::Bloop => Some(BLOOP_PORT),
+        }
+    }
+
     pub fn validate_runtime(self) -> anyhow::Result<()> {
         ensure!(
             matches!(self, Self::CoreMidi) && cfg!(target_os = "macos")
-                || matches!(self, Self::Loopbe) && cfg!(windows),
+                || matches!(self, Self::Loopbe | Self::Bloop) && cfg!(windows),
             "MIDI backend {self:?} is unavailable on this platform"
         );
         Ok(())
     }
 }
 
-fn exact_port<T: MidiIO>(io: &T, direction: &str) -> anyhow::Result<T::Port> {
+fn exact_port<T: MidiIO>(io: &T, direction: &str, name: &str) -> anyhow::Result<T::Port> {
     let ports = io.ports();
     let identities = ports
         .iter()
         .map(|port| io.port_name(port))
         .collect::<Result<Vec<_>, _>>()
         .with_context(|| format!("enumerate {direction} MIDI port names"))?;
-    let index = exact_index(&identities, direction)?;
+    let index = exact_index(&identities, direction, name)?;
     ports
         .into_iter()
         .nth(index)
         .context("selected MIDI port disappeared")
 }
 
-fn exact_index(names: &[String], direction: &str) -> anyhow::Result<usize> {
+fn exact_index(names: &[String], direction: &str, port_name: &str) -> anyhow::Result<usize> {
     let matches: Vec<_> = names
         .iter()
         .enumerate()
-        .filter(|(_, name)| name.as_str() == LOOPBE_PORT)
+        .filter(|(_, name)| name.as_str() == port_name)
         .map(|(index, _)| index)
         .collect();
     ensure!(
         matches.len() == 1,
-        "expected exactly one {direction} named {LOOPBE_PORT:?}; matches={matches:?}, candidates={names:?}"
+        "expected exactly one {direction} named {port_name:?}; matches={matches:?}, candidates={names:?}"
     );
     Ok(matches[0])
 }
@@ -111,11 +122,11 @@ pub fn output(
             #[cfg(not(target_os = "macos"))]
             anyhow::bail!("CoreMIDI unavailable: {name}")
         }
-        Backend::Loopbe => {
-            let port = exact_port(&output, "output")?;
+        Backend::Loopbe | Backend::Bloop => {
+            let port = exact_port(&output, "output", backend.port_name().context("port name")?)?;
             output
                 .connect(&port, name)
-                .map_err(|error| anyhow::anyhow!("connect LoopBe MIDI output: {error}"))
+                .map_err(|error| anyhow::anyhow!("connect {backend} MIDI output: {error}"))
         }
     }?;
     Ok(Output {
@@ -132,7 +143,7 @@ pub fn input<T: Send + 'static>(
     capture: crate::midi_capture::Handle,
 ) -> anyhow::Result<MidiInputConnection<T>> {
     backend.validate_runtime()?;
-    // Preserve midir's input policy. In the locked 0.11.0 both backends default
+    // Preserve midir's input policy. In the locked 0.11.0 all backends default
     // to Ignore::None; enabling capture must not change callback admission.
     let input = MidiInput::new("S4 MK3 feedback").context("create MIDI input client")?;
     let callback = captured_callback(capture, callback);
@@ -148,11 +159,11 @@ pub fn input<T: Send + 'static>(
             #[cfg(not(target_os = "macos"))]
             anyhow::bail!("CoreMIDI unavailable: {name}")
         }
-        Backend::Loopbe => {
-            let port = exact_port(&input, "input")?;
+        Backend::Loopbe | Backend::Bloop => {
+            let port = exact_port(&input, "input", backend.port_name().context("port name")?)?;
             input
                 .connect(&port, name, callback, data)
-                .map_err(|error| anyhow::anyhow!("connect LoopBe MIDI input: {error}"))
+                .map_err(|error| anyhow::anyhow!("connect {backend} MIDI input: {error}"))
         }
     }
 }
@@ -338,21 +349,24 @@ mod tests {
 
     #[test]
     fn port_selection_requires_one_exact_name_per_direction() -> anyhow::Result<()> {
-        let names = ["Other", LOOPBE_PORT, "LoopBe Internal MIDI 2"].map(str::to_owned);
-        assert_eq!(exact_index(&names, "input")?, 1);
-        for names in [
-            vec![],
-            vec!["loopbe internal midi".to_owned()],
-            vec!["LoopBe Internal MIDI 2".to_owned()],
-            vec![LOOPBE_PORT.to_owned(), LOOPBE_PORT.to_owned()],
-        ] {
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            let port = backend.port_name().context("shared port")?;
+            let names = vec!["Other".to_owned(), port.to_owned(), format!("{port} 2")];
             for direction in ["input", "output"] {
-                let error = exact_index(&names, direction)
-                    .err()
-                    .context("ambiguous or absent port must fail")?
-                    .to_string();
-                assert!(error.contains(direction));
-                assert!(error.contains("candidates="));
+                assert_eq!(exact_index(&names, direction, port)?, 1);
+                for names in [
+                    vec![],
+                    vec![port.to_lowercase()],
+                    vec![format!("{port} 2")],
+                    vec![port.to_owned(), port.to_owned()],
+                ] {
+                    let error = exact_index(&names, direction, port)
+                        .err()
+                        .context("ambiguous or absent port must fail")?
+                        .to_string();
+                    assert!(error.contains(direction));
+                    assert!(error.contains("candidates="));
+                }
             }
         }
         Ok(())

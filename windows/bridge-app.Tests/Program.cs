@@ -46,7 +46,8 @@ internal static class Check
     public static async Task RejectAsync(Func<Task> action)
     {
         try { await action(); }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or System.Text.Json.JsonException) { return; }
+        catch (Exception ex) when (ex is IOException or InvalidDataException
+            or InvalidOperationException or System.Text.Json.JsonException) { return; }
         throw new InvalidOperationException("Expected rejection, but async operation succeeded.");
     }
     public static void Add(List<(string, Func<Task>)> tests, string name, Action action) =>

@@ -49,6 +49,9 @@ def packager(tmp_path_factory: pytest.TempPathFactory) -> tuple[str, Path]:
     build = tmp_path_factory.mktemp("screen-packager-build")
     source = build / "source"
     shutil.copytree(PROJECT.parent, source, ignore=shutil.ignore_patterns("bin", "obj", "__pycache__"))
+    core = build / "Core"
+    core.mkdir()
+    shutil.copy2(PROJECT.parent.parent / "Core" / "BloopEndpoint.cs", core / "BloopEndpoint.cs")
     result = subprocess.run(
         [
             dotnet,
@@ -79,7 +82,8 @@ def inputs(tmp_path: Path) -> dict[str, Path]:
     (resources / "s4mk3-hid-midi-bridge.exe").write_bytes(pe_image(2))
     (resources / "screen-access.json").write_text("{}", encoding="utf-8")
     (resources / "S4 MK3 Bridge Windows.djayMidiMapping").write_text(
-        "<plist><string>LoopBe Internal MIDI</string></plist>", encoding="utf-8"
+        "<plist><dict><key>endpointName</key><string>S4 MK3 Bridge BLOOP</string></dict></plist>",
+        encoding="utf-8",
     )
     supervisor = tmp_path / "supervisor.exe"
     worker = tmp_path / "worker.exe"
@@ -199,6 +203,21 @@ def test_package_rejects_invalid_optional_engine_inventory(
 ) -> None:
     write_json(inputs["engine_inventory"] / "rust-license-manifest.json", {"packages": []})
     result = run_packager(packager, inputs, "")
+    assert result.returncode != 0
+    assert not (inputs["app"] / "runtime-manifest.json").exists()
+
+
+@pytest.mark.parametrize("endpoint", ["LoopBe Internal MIDI", "Unrelated MIDI"])
+def test_package_rejects_foreign_mapping_despite_matching_decoy(
+    packager: tuple[str, Path], inputs: dict[str, Path], endpoint: str
+) -> None:
+    mapping = inputs["app"] / "Resources" / "S4 MK3 Bridge Windows.djayMidiMapping"
+    mapping.write_text(
+        f"<plist><dict><key>endpointName</key><string>{endpoint}</string>"
+        "<key>decoy</key><string>S4 MK3 Bridge BLOOP</string></dict></plist>",
+        encoding="utf-8",
+    )
+    result = run_packager(packager, inputs, "", engine_inventory_path="")
     assert result.returncode != 0
     assert not (inputs["app"] / "runtime-manifest.json").exists()
 

@@ -1,6 +1,6 @@
 # Windows implementation: current state
 
-As of November 7, 2026, the source tree contains a Windows implementation
+As of November 15, 2026, the source tree contains a Windows implementation
 and private development packages. Windows support is **not
 accepted or published as a ready-to-use download**. Historical test results
 below apply to the particular builds in their records, not necessarily every
@@ -10,12 +10,18 @@ subsequent working-tree change. Some detailed records link to local
 ## Architecture
 
 - The shared Rust bridge handles HID, control translation, MIDI, feedback,
-  LEDs and jog behavior. The Windows full-profile mapping and WinMM transport
-  use the separately installed LoopBe1 shared MIDI bus. Feedback has separate
+  LEDs and jog behavior. The Windows app now creates its own Basic Loopback
+  (BLOOP) endpoint, **S4 MK3 Bridge BLOOP**, through Windows MIDI Services.
+  The worker still uses WinMM. LoopBe remains an explicit CLI backend, while
+  the normal app and generated Windows mapping use BLOOP. Feedback has separate
   address domains so outgoing control echoes are not treated as Djay state.
 - `windows/bridge-app/` is a self-contained win-x64 .NET/Avalonia tray host.
   It stores preferences, generates mappings through the packaged engine,
-  supervises the bridge process, and provides settings and diagnostics.
+  supervises the bridge process and its endpoint lease, and provides settings
+  and diagnostics. The endpoint is receipted before publication, retained while
+  the worker is live, and removed after actual exit and output drain. Failed
+  cleanup blocks Start and can be retried with Stop. Recovery preserves
+  unowned and saved conflicts rather than deleting by name.
   Mapping export preserves existing destinations. The optional MIDI incident
   capture records incoming messages before filtering and outgoing attempts;
   it cannot prove delivery or identify the sender on the shared bus.
@@ -40,6 +46,22 @@ See [Windows setup](windows-setup.md) and the
 
 ## Evidence and unresolved behavior
 
+- **BLOOP source integration:** the SDK boundary and integrated Windows host
+  cross-build, and the real Windows worker and its native test executables
+  cross-build. Portable process/host and packager regressions pass. These are
+  local software checks. Subsequent attended runs passed native SDK activation
+  and endpoint ownership cases, 117 host tests and 382 Rust tests, actual UI
+  export/readiness, and initial playback/cue feedback on two connections.
+  Physical crossfader control reached Djay, and independent GUI playback
+  changed the physical PLAY light. Actual app Stop, running Quit, stale owned
+  recovery, visible conflict rejection and retry also passed. The test package
+  and mapping were removed, six original preference files restored exactly,
+  and twelve original mappings retained unchanged. Broader control/LED,
+  screen, motor and audio acceptance remains open. Historical LoopBe
+  or standalone BLOOP transport results do not establish this integrated app's
+  behavior. See the
+  [BLOOP integration validation record](bloop-integration-validation-20261115.md)
+  for retained checks, package identity and bounded acceptance evidence.
 - **Software:** the November 7 MIDI-capture development build passed a
   hardware-free Windows native runner with 110 shared, 269 engine and two CLI
   tests, plus 111 host tests. An earlier Encdr integration build passed its
@@ -47,7 +69,7 @@ See [Windows setup](windows-setup.md) and the
   component checks, not end-to-end product acceptance. See
   [capture validation](windows-midi-capture-validation-20261107.md) and
   [screen integration validation](windows-encdr-screen-integration-validation-20261107.md).
-- **LoopBe and feedback:** a bounded isolated proof demonstrated Djay
+- **Historical LoopBe and feedback:** a bounded isolated proof demonstrated Djay
   crossfader control, independent mouse-driven feedback and rejection of
   outgoing echoes. MIDI-driven changes did not return feedback in that proof.
   A later attended bridge run confirmed physical crossfader control and lit
@@ -55,11 +77,11 @@ See [Windows setup](windows-setup.md) and the
   This does not prove every feedback family or control. See the
   [LoopBe proof](windows-djay-loopbe1-proof-20261104.md) and
   [recovery record](windows-recovery-validation-20261104.md).
-- **Startup:** starting the bridge before Djay has received startup feedback;
+- **Historical startup:** starting the LoopBe bridge before Djay has received startup feedback;
   opening the receiver after Djay can leave fields unknown until values
   change. Initial feedback remains an unresolved reliability boundary, not a
   guarantee that all fields synchronize on startup.
-- **loopMIDI is a separate experiment**, not the current LoopBe1 backend
+- **loopMIDI is a separate experiment**, not the normal BLOOP backend
   configuration. A separately named test port, mapping and private comparison
   build were prepared; its mapping differed in endpoint name. An attended
   test confirmed crossfader control and Djay-driven cue lights. Switching
@@ -93,9 +115,9 @@ See [Windows setup](windows-setup.md) and the
 `windows/build-app.sh` can produce an unsigned, self-contained integration
 package with the actual Windows engine and matching generated mapping, or a
 host-only handoff without them. Screen-enabled integration additionally
-requires its access declaration and both helper binaries. Djay, LoopBe1 and
-the NI components are separate dependencies; the package does not install a
-driver.
+requires its access declaration and both helper binaries. Djay, Windows MIDI
+Services with Preview 13 Basic Loopback transports, and the NI components are
+separate dependencies; the package does not install a driver.
 
 Private builds can omit the engine/host dependency inventory and the screen
 helper source/notice inventory. The packager records omissions in
@@ -107,5 +129,15 @@ proof of hardware readiness.
 
 Use a new output path for every build, including its `.zip.sha256` sidecar:
 the build script checks the directory and ZIP but can overwrite an existing
-sidecar. The host restore uses a local NuGet source, but the packager's
-separate `dotnet run` has not been established as offline-only.
+sidecar. Both host and packager restore from the local NuGet cache; the
+packager then runs with `--no-restore`. Build intermediates and generated SDK
+projection files live in a fresh directory under `TMPDIR`, removed when the
+build script exits.
+
+The developer machine needs .NET SDK 10.0.403 and cached dependencies, including
+Windows.Devices.Midi2 0.99.92-preview.11, CsWinRT 2.2.0 and Windows SDK metadata
+10.0.26100.57. The supported API package remains Preview 11 even with Preview 13
+transports; the interim Tools DLL is not a build input. On macOS, Wine generates
+the projection. Set `S4_BRIDGE_WINEPREFIX` to an existing isolated Wine prefix
+and `DOTNET` to the retained SDK executable. The DJ laptop needs neither Wine
+nor these developer tools. SDK notices and metadata are bundled with the app.

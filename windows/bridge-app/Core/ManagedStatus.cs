@@ -23,7 +23,7 @@ public sealed record ManagedStatus(string State, string Profile, string Backend,
             throw new InvalidDataException("Unsupported status version.");
         var state = Text(root, "state", ["starting", "ready", "stopping", "failed"]);
         var profile = Text(root, "profile", ["full", "minimal", "probe"]);
-        var backend = Text(root, "backend", ["loopbe", "core-midi"]);
+        var backend = Text(root, "backend", ["bloop", "loopbe", "core-midi"]);
         var request = root.GetProperty("request_id");
         ulong? id = request.ValueKind == JsonValueKind.Null ? null : ParseId(request.GetString()!);
         if (id is not null && state != "stopping")
@@ -75,11 +75,12 @@ public sealed record ManagedStatus(string State, string Profile, string Backend,
 }
 
 // The UUID and process identity are local, never accepted from child text.
-public sealed class LaunchState(Guid id, int processId, string profile)
+public sealed class LaunchState(Guid id, int processId, string profile, string backend = BloopEndpoint.Backend)
 {
     public Guid Id { get; } = id;
     public int ProcessId { get; } = processId;
     public string Profile { get; } = profile;
+    public string Backend { get; } = backend;
     public string State { get; private set; } = "starting";
     public ulong? StopRequest { get; private set; }
     public ManagedStatus? Status { get; private set; }
@@ -87,7 +88,7 @@ public sealed class LaunchState(Guid id, int processId, string profile)
     public bool IsReady => State == "ready" && !StopUnconfirmed;
     public bool Accept(ManagedStatus status)
     {
-        if (status.Profile != Profile || status.Backend != "loopbe" || StopUnconfirmed) return false;
+        if (status.Profile != Profile || status.Backend != Backend || StopUnconfirmed) return false;
         if (status.RequestId is { } request && StopRequest != request) return false;
         if (State == "stopping" && status.State == "stopping"
             && StopRequest is { } expected && status.RequestId != expected) return false;

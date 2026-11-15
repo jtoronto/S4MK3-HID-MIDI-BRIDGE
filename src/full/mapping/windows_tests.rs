@@ -20,12 +20,19 @@ fn address(value: &Value) -> anyhow::Result<(u8, u8, u8)> {
 
 #[test]
 fn windows_mapping_outputs_are_disjoint_and_reach_real_decoder_cache() -> anyhow::Result<()> {
-    let mapping = generate(&super::super::jog::DEFAULT, Backend::Loopbe)?;
+    for backend in [Backend::Loopbe, Backend::Bloop] {
+        mapping_outputs_reach_decoder_cache(backend)?;
+    }
+    Ok(())
+}
+
+fn mapping_outputs_reach_decoder_cache(backend: Backend) -> anyhow::Result<()> {
+    let mapping = generate(&super::super::jog::DEFAULT, backend)?;
     let mut xml = Vec::new();
     mapping.to_writer_xml(&mut xml)?;
     let mapping = Value::from_reader(std::io::Cursor::new(xml))?;
     let root = mapping.as_dictionary().context("root")?;
-    assert_eq!(root["endpointName"].as_string(), Some(LOOPBE_PORT));
+    assert_eq!(root["endpointName"].as_string(), backend.port_name());
     let controls = root["controls"].as_array().context("controls")?;
     let commands: BTreeSet<_> = controls
         .iter()
@@ -51,7 +58,7 @@ fn windows_mapping_outputs_are_disjoint_and_reach_real_decoder_cache() -> anyhow
         let status = (if family == 1 { 0x90 } else { 0xb0 }) | channel;
         assert_eq!(
             crate::midi_layout::normalize(
-                Backend::Loopbe,
+                backend,
                 Message {
                     status,
                     number,
@@ -79,7 +86,7 @@ fn windows_mapping_outputs_are_disjoint_and_reach_real_decoder_cache() -> anyhow
         let mut packets = Vec::new();
         decoder.feed(&[status, number, 127], |message| packets.push(message));
         assert_eq!(packets.len(), 1);
-        let normalized = crate::midi_layout::normalize(Backend::Loopbe, packets[0])
+        let normalized = crate::midi_layout::normalize(backend, packets[0])
             .context("mapping output accepted")?;
         assert_eq!(normalized.status & 0x0f, expected_channel);
         state.apply(normalized, Duration::ZERO);
@@ -96,7 +103,7 @@ fn windows_mapping_outputs_are_disjoint_and_reach_real_decoder_cache() -> anyhow
         decoder.feed(&[0xb6, number, 0], |message| packets.push(message));
         assert_eq!(packets.len(), 1);
         for message in packets {
-            let normalized = crate::midi_layout::normalize(Backend::Loopbe, message)
+            let normalized = crate::midi_layout::normalize(backend, message)
                 .context("playback feedback accepted")?;
             state.apply(normalized, Duration::ZERO);
         }

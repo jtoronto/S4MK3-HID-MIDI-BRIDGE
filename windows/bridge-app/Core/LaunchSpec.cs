@@ -4,7 +4,7 @@ using S4Bridge.Models;
 namespace S4Bridge.Core;
 
 public sealed record LaunchSpec(string Executable, string[] Arguments,
-    RunPreferences Run, bool Diagnostic = false)
+    RunPreferences Run, bool Diagnostic = false, string MidiBackend = BloopEndpoint.Backend)
 {
     public static LaunchSpec Runtime(string executable, PreferenceStore store, bool screens, string? midiCapturePath = null) =>
         Build(executable, store, store.Saved.Run, screens, midiCapturePath);
@@ -13,7 +13,7 @@ public sealed record LaunchSpec(string Executable, string[] Arguments,
     private static LaunchSpec Build(string executable, PreferenceStore store, RunPreferences preferences, bool screens, string? midiCapturePath = null)
     {
         var run = preferences with { };
-        var args = new List<string> { "--midi-backend", "loopbe", "--managed-stdin" };
+        var args = new List<string> { "--midi-backend", BloopEndpoint.Backend, "--managed-stdin" };
         if (midiCapturePath is not null)
         {
             if (!Path.IsPathFullyQualified(midiCapturePath)) throw new InvalidDataException("MIDI capture path must be absolute.");

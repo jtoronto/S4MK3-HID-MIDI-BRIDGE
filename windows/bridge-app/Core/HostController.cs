@@ -17,12 +17,13 @@ public sealed class HostController
     public string Message { get; private set; } = "";
     public string Error { get; private set; } = "";
     private readonly Dictionary<string, string> fieldErrors = [];
+    private readonly IBloopEndpointOwner? endpointOwner;
     public bool Operating { get; private set; }
     public event Action? Changed;
     public bool FieldsValid => fieldErrors.Count == 0;
     public string FieldError => string.Join("\n", fieldErrors.Values);
-    public bool CanStart => !Operating && !Supervisor.HasChild && !Store.RequiresReset && FieldsValid && File.Exists(Executable);
-    public bool CanStop => !Operating && Supervisor.HasChild && Supervisor.State != "stopping";
+    public bool CanStart => !Operating && !Supervisor.HasOwnedResources && !Store.RequiresReset && FieldsValid && File.Exists(Executable);
+    public bool CanStop => !Operating && Supervisor.HasOwnedResources && Supervisor.State != "stopping";
     public bool CanMarkMidiCaptureIssue => MidiCapture.State == "recording" && Supervisor.Launch?.IsReady == true;
     public void SetFieldError(string field, string? error)
     {
@@ -38,8 +39,9 @@ public sealed class HostController
     public Func<ScreenAccess, Task<ScreenConsent>> Consent { get; set; } =
         _ => Task.FromResult(ScreenConsent.Cancel);
 
-    public HostController(string resources, string root)
+    public HostController(string resources, string root, IBloopEndpointOwner? endpointOwner = null)
     {
+        this.endpointOwner = endpointOwner;
         Store = new(resources, root);
         Executable = Path.Combine(resources, "s4mk3-hid-midi-bridge.exe");
         Screens = new(Store, new NIServiceControl(resources));
@@ -78,7 +80,9 @@ public sealed class HostController
             {
                 var spec = LaunchSpec.Runtime(Executable, Store, screens.Value, capturePath);
                 Diagnostics.Log.Append("LAUNCH: " + spec.Preview);
-                Supervisor.Start(spec);
+                if (spec.Run.Profile == "probe") Supervisor.Start(spec);
+                else await Supervisor.StartAsync(spec, endpointOwner
+                    ?? throw new InvalidOperationException("BLOOP endpoint management is unavailable."));
             }
             catch (Exception ex) { MidiCapture.LaunchFailed(ex); throw; }
             if (Supervisor.Launch is { } launch) Screens.Started(launch.Id, screens.Value);
@@ -101,7 +105,7 @@ public sealed class HostController
         // A failed validation/write must never stop a working bridge.
         Store.Save();
         Message = "Preferences saved.";
-        if (Supervisor.HasChild)
+        if (Supervisor.HasOwnedResources)
         {
             await Supervisor.StopAsync();
             if (Supervisor.State != "stopped")
@@ -112,7 +116,7 @@ public sealed class HostController
     }
     public void Check()
     {
-        if (Operating || Supervisor.HasChild) throw new InvalidOperationException("Stop the bridge before checking controllers.");
+        if (Operating || Supervisor.HasOwnedResources) throw new InvalidOperationException("Stop the bridge before checking controllers.");
         Supervisor.Start(new(Executable, ["--list"], Store.Editor.Run with { }, true));
     }
     public void Report(Exception error)
@@ -130,7 +134,7 @@ public sealed class HostController
     {
         if (Operating || Screens.Busy) throw new InvalidOperationException("Wait for the current operation before quitting.");
         await Supervisor.StopAsync();
-        if (Supervisor.HasChild) throw new IOException("Bridge still owned. Quit cancelled.");
+        if (Supervisor.HasOwnedResources) throw new IOException("Bridge resources still owned. Quit cancelled.");
         if (Store.Saved.Screen.RestorePending) Screens.RequireOwnedRecovery();
         Diagnostics.StopCapture();
         PreferenceStore.AtomicWrite(Path.Combine(Store.Root, "Logs", "last-session.log"), Diagnostics.Log.Text);

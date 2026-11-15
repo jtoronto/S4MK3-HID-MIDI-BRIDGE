@@ -16,9 +16,13 @@ screens without requiring MIDI or development knowledge.
 ## Requirements
 
 - An Apple Silicon Mac running macOS 12 or later, plus a macOS version supported
-  by your installed Djay Pro. (Windows Support is planned!!)
+  by your installed Djay Pro.
 - Djay Pro with **PRO access**, which is required for custom MIDI mappings.
 - A Traktor Kontrol S4 MK3, its power adapter, and a USB connection to the Mac.
+
+Windows development builds have separate requirements and remain unaccepted.
+See [Windows setup](docs/windows-setup.md); the downloads described below are
+for macOS.
 
 ## Download and install
 

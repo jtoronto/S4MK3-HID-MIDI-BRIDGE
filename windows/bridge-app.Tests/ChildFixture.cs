@@ -83,13 +83,20 @@ internal static class ChildFixture
     }
     public static int Generate(string[] args)
     {
+        if (args[Array.IndexOf(args, "--midi-backend") + 1] != "bloop")
+        {
+            Console.Error.WriteLine("WRONG_GENERATOR_BACKEND");
+            return 7;
+        }
         var output = args[Array.IndexOf(args, "--generate-mapping") + 1];
         var config = args[Array.IndexOf(args, "--jog-config") + 1];
         var jog = JsonNode.Parse(File.ReadAllText(config))!.AsObject();
         if (jog["scratch_reaction"]!.GetValue<int>() == 149) { Console.Error.WriteLine("GENERATOR_FAILURE"); return 7; }
         if (jog["scratch_speed"]!.GetValue<double>() == 13) return 0;
         var doc = new XDocument(new XElement("plist", new XElement("dict",
-            new XElement("key", "endpoint"), new XElement("string", "LoopBe Internal MIDI"),
+            new XElement("key", "endpointName"), new XElement("string",
+                jog["scratch_reaction"]!.GetValue<int>() == 148 ? "Foreign MIDI" : "S4 MK3 Bridge BLOOP"),
+            new XElement("key", "decoy"), new XElement("string", "S4 MK3 Bridge BLOOP"),
             new XElement("key", "scratch"), new XElement("real", jog["scratch_speed"]!.GetValue<double>()))));
         using var stream = new FileStream(output, FileMode.CreateNew, FileAccess.Write);
         doc.Save(stream); return 0;

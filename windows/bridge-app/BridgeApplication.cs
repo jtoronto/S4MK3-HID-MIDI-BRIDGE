@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 using S4Bridge.Core;
+using S4Bridge.Platform;
 using S4Bridge.Views;
 
 namespace S4Bridge;
@@ -35,7 +36,7 @@ internal sealed class BridgeApplication : Application
             try { instance = new(Path.Combine(root, ".instance.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
             catch (IOException ex) { throw new IOException("Another S4 Bridge host may already be running. Close it before starting this copy.", ex); }
             var resources = Path.Combine(AppContext.BaseDirectory, "Resources");
-            host = new(resources, root);
+            host = new(resources, root, new BloopEndpointOwner(root));
             settings = new(host);
             desktop.MainWindow = settings;
             trayImages = new(Path.Combine(resources, "AppIcon.png"));
@@ -52,7 +53,7 @@ internal sealed class BridgeApplication : Application
                 Menu("Install Djay mapping...",()=>{settings.ShowSettings();return settings.InstallMappingAsync();},
                     ()=>!host.Exporter.IsExporting && File.Exists(host.Executable)),
                 Menu("Check controller",()=>{host.Check();return Task.CompletedTask;},
-                    ()=>!host.Supervisor.HasChild && !host.Operating && File.Exists(host.Executable)),
+                    ()=>!host.Supervisor.HasOwnedResources && !host.Operating && File.Exists(host.Executable)),
                 Menu("Quit S4 MK3 Bridge",QuitAsync)
             }) menu.Items.Add(item);
             tray.Menu = menu;

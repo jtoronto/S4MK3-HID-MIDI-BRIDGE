@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Xml.Linq;
+using S4Bridge.Core;
 
 if (args.Length != 7) throw new ArgumentException("Expected publish-root, assets-json, retained-inventory-root, engine-mode, screen-supervisor, screen-worker, screen-inventory.");
 var app = Path.GetFullPath(args[0]);
@@ -34,9 +35,11 @@ if (!hostOnly)
 {
     PackageValidation.RequireX64Executable(engine);
     var mapping = XDocument.Load(Path.Combine(app, "Resources", "S4 MK3 Bridge Windows.djayMidiMapping"));
+    var endpoint = mapping.Root?.Element("dict")?.Elements("key")
+        .SingleOrDefault(key => key.Value == "endpointName")?.ElementsAfterSelf().FirstOrDefault();
     if (mapping.Root?.Name.LocalName != "plist" ||
-        !mapping.Descendants("string").Any(e => e.Value == "LoopBe Internal MIDI"))
-        throw new InvalidDataException("Bundled mapping lacks Windows LoopBe identity.");
+        endpoint?.Name.LocalName != "string" || endpoint.Value != BloopEndpoint.PortName)
+        throw new InvalidDataException("Bundled mapping lacks the Windows BLOOP endpoint identity.");
 }
 else if (File.Exists(engine)) throw new InvalidDataException("Host-only publish must not contain an engine.");
 if (screenEnabled)

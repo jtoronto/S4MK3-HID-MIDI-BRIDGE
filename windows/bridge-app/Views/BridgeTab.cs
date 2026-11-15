@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using S4Bridge.Core;
 
 namespace S4Bridge.Views;
 
@@ -17,7 +18,7 @@ internal sealed partial class SettingsView
                 fields.Number("Run duration (seconds)", () => run.DurationSeconds, v => run.DurationSeconds = (int)v!, 1, 604800, true),
                 UiTheme.Text("Continuous mode runs until Stop or Quit. Closing Settings leaves the tray app running.", true)),
             UiTheme.SectionView("Djay mapping",
-                UiTheme.Text("Export a new Windows mapping and select it for LoopBe Internal MIDI in Djay. Existing mappings are never replaced."),
+                UiTheme.Text($"With the bridge running, select this Windows mapping for {BloopEndpoint.PortName} in Djay. Existing mappings are never replaced."),
                 UiTheme.Actions(Action("Install Djay mapping...", () => ExportMappingAsync(true)),
                     Action("Export mapping...", () => ExportMappingAsync(false)),
                     Action("Check controller", () => { host.Check(); return Task.CompletedTask; })),
@@ -27,7 +28,7 @@ internal sealed partial class SettingsView
                 Action("Show preferences", RevealPreferences),
                 UiTheme.Text("Editor changes are separate from saved JSON and the current launch. Save validates all files first, then replaces each file atomically. A partial I/O failure never restarts the bridge.", true),
                 Action("Show saved / launched values", ShowValuesAsync),
-                UiTheme.Text("The self-contained host needs no .NET, Rust or Cargo installation. LoopBe1 must already be installed. Audio stays routed directly through the S4.", true)));
+                UiTheme.Text("The self-contained host needs no .NET, Rust or Cargo installation. Windows MIDI Services with Basic Loopback (Preview 13 transports) is required. Start creates the MIDI endpoint; Stop and Quit remove it after the worker exits. Audio stays routed directly through the S4.", true)));
     }
     private async Task ShowValuesAsync()
     {

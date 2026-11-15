@@ -3,20 +3,17 @@
 use anyhow::Context as _;
 use plist::Value;
 
-use crate::{
-    midi_layout,
-    midi_transport::{Backend, LOOPBE_PORT},
-};
+use crate::{midi_layout, midi_transport::Backend};
 
 pub fn generate(jog: &super::jog::Config, backend: Backend) -> anyhow::Result<Value> {
     let mut mapping = super::generate_with_jog(jog)?;
-    if backend == Backend::CoreMidi {
+    let Some(port_name) = backend.port_name() else {
         return Ok(mapping);
-    }
+    };
     let root = mapping.as_dictionary_mut().context("mapping root")?;
     root.insert(
         "endpointName".to_owned(),
-        Value::String(LOOPBE_PORT.to_owned()),
+        Value::String(port_name.to_owned()),
     );
     for item in root
         .get_mut("controls")

@@ -9,6 +9,10 @@ public sealed class BridgeSupervisor
     private readonly SemaphoreSlim inputGate = new(1, 1);
     private Process? process;
     private LaunchState? launch;
+    private IBloopEndpointLease? endpoint;
+    private Task? starting;
+    private Task<bool>? releasing;
+    private Task workerExited = Task.CompletedTask;
     private Task completion = Task.CompletedTask;
     private Task? stopping;
     private ulong request;
@@ -20,6 +24,10 @@ public sealed class BridgeSupervisor
     public event Action<Guid, int>? Exited;
     public LaunchState? Launch { get { lock (gate) return launch; } }
     public bool HasChild { get { lock (gate) return process is not null; } }
+    public bool HasOwnedResources
+    {
+        get { lock (gate) return process is not null || endpoint is not null || starting is { IsCompleted: false }; }
+    }
     public string State { get; private set; } = "stopped";
     public string Error { get; private set; } = "";
     public LaunchSpec? ActiveSpec { get; private set; }
@@ -29,24 +37,79 @@ public sealed class BridgeSupervisor
     {
         lock (gate)
         {
-            if (process is not null) throw new InvalidOperationException("A bridge process is already owned.");
-            var child = new Process { StartInfo = spec.StartInfo() };
-            var id = Guid.NewGuid();
-            try { child.Start(); }
-            catch { child.Dispose(); throw; }
-            process = child;
-            launch = new(id, child.Id, spec.Run.Profile);
-            ActiveSpec = spec;
-            request = 0;
+            if (HasOwnedResources) throw new InvalidOperationException("Bridge resources are already owned. Stop before starting.");
             stopping = null;
-            State = spec.Diagnostic ? "checking" : "starting";
+            StartProcess(spec);
+        }
+        Changed?.Invoke();
+    }
+    public Task StartAsync(LaunchSpec spec, IBloopEndpointOwner owner)
+    {
+        lock (gate)
+        {
+            if (HasOwnedResources) throw new InvalidOperationException("Bridge resources are already owned. Stop before starting.");
+            State = "starting";
             Error = "";
+            stopping = null;
+            starting = Task.Run(() => StartOwned(spec, owner));
+            return starting;
+        }
+    }
+    private async Task StartOwned(LaunchSpec spec, IBloopEndpointOwner owner)
+    {
+        Changed?.Invoke();
+        try
+        {
+            var lease = await owner.PrepareAsync().ConfigureAwait(false);
+            lock (gate) endpoint = lease;
+            Output?.Invoke(Guid.Empty, $"BLOOP_PREPARED: {lease.AssociationId}");
+            await lease.CreateAsync().ConfigureAwait(false);
+            Output?.Invoke(Guid.Empty, $"BLOOP_CREATED: {lease.EndpointDeviceId}");
+            lock (gate) StartProcess(spec);
+            Changed?.Invoke();
+        }
+        catch (Exception error)
+        {
+            Output?.Invoke(Guid.Empty, $"BLOOP_START_FAILED: {error.Message}");
+            lock (gate) { State = "failed"; Error = error.Message; }
+            Exception? cleanupError = null;
+            try
+            {
+                Task? stop;
+                lock (gate) stop = process is null ? null : StopOwned(process, launch!.Id);
+                if (stop is not null) await stop.ConfigureAwait(false);
+                else await ReleaseEndpoint().ConfigureAwait(false);
+            }
+            catch (Exception cleanup) { cleanupError = cleanup; }
+            lock (gate) State = "failed";
+            Changed?.Invoke();
+            if (cleanupError is not null)
+                throw new IOException(Error, new AggregateException(error, cleanupError));
+            throw;
+        }
+    }
+    // Called under gate; the lease remains owned if starting the process or recording it fails.
+    private void StartProcess(LaunchSpec spec)
+    {
+        var child = new Process { StartInfo = spec.StartInfo() };
+        var id = Guid.NewGuid();
+        try { child.Start(); }
+        catch { child.Dispose(); throw; }
+        process = child;
+        launch = new(id, child.Id, spec.Run.Profile, spec.MidiBackend);
+        ActiveSpec = spec;
+        request = 0;
+        State = spec.Diagnostic ? "checking" : "starting";
+        Error = "";
+        try { endpoint?.RecordWorker(child.Id, child.StartTime.ToUniversalTime()); }
+        finally
+        {
             Launched?.Invoke(id);
             var stdout = Drain(child.StandardOutput, child, id, true);
             var stderr = Drain(child.StandardError, child, id, false);
-            completion = ObserveExit(child, id, Task.WhenAll(stdout, stderr));
+            workerExited = Task.WhenAll(child.WaitForExitAsync(), stdout, stderr);
+            completion = ObserveExit(child, id, workerExited);
         }
-        Changed?.Invoke();
     }
     private bool Current(Process child, Guid id) =>
         ReferenceEquals(process, child) && launch?.Id == id && launch.ProcessId == child.Id;
@@ -120,18 +183,20 @@ public sealed class BridgeSupervisor
     }
     private async Task ObserveExit(Process child, Guid id, Task readers)
     {
-        await child.WaitForExitAsync().ConfigureAwait(false);
         await readers.ConfigureAwait(false);
         var exit = child.ExitCode;
+        bool failed;
         lock (gate)
         {
             if (!Current(child, id)) return;
-            var failed = exit != 0 || State == "failed";
-            State = failed ? "failed" : "stopped";
+            failed = exit != 0 || State == "failed";
+            State = endpoint is null ? (failed ? "failed" : "stopped") : "stopping";
             if (exit != 0) Error = $"Bridge exited with status {exit}. See Diagnostics.";
             process = null;
             child.Dispose();
         }
+        var removed = await ReleaseEndpoint().ConfigureAwait(false);
+        lock (gate) State = failed || !removed ? "failed" : "stopped";
         Output?.Invoke(id, $"EXIT: {exit}");
         Exited?.Invoke(id, exit);
         Changed?.Invoke();
@@ -140,13 +205,66 @@ public sealed class BridgeSupervisor
     {
         lock (gate)
         {
-            if (process is null) return Task.CompletedTask;
-            return stopping ??= StopOwned(process, launch!.Id);
+            if (starting is { IsCompleted: false })
+                return stopping ??= StopAfterStart(starting);
+            return StopResources();
+        }
+    }
+    private async Task StopAfterStart(Task pending)
+    {
+        try { await pending.ConfigureAwait(false); }
+        catch (Exception error) { Output?.Invoke(Guid.Empty, $"START_ENDED: {error.Message}"); }
+        Task stop;
+        lock (gate) { stopping = null; stop = StopResources(); }
+        await stop.ConfigureAwait(false);
+    }
+    private Task StopResources()
+    {
+        if (process is not null) return stopping ??= StopOwned(process, launch!.Id);
+        if (endpoint is null) return Task.CompletedTask;
+        return stopping is { IsCompleted: false } ? stopping : stopping = CleanupOnly();
+    }
+    private async Task CleanupOnly()
+    {
+        State = "stopping";
+        Changed?.Invoke();
+        if (!await ReleaseEndpoint().ConfigureAwait(false)) throw new IOException(Error);
+        lock (gate) { State = "stopped"; Error = ""; }
+        Changed?.Invoke();
+    }
+    private Task<bool> ReleaseEndpoint()
+    {
+        lock (gate)
+        {
+            if (endpoint is null) return Task.FromResult(true);
+            return releasing is { IsCompleted: false } ? releasing : releasing = ReleaseOwnedEndpoint(endpoint);
+        }
+    }
+    private async Task<bool> ReleaseOwnedEndpoint(IBloopEndpointLease lease)
+    {
+        try
+        {
+            await lease.DisposeAsync().ConfigureAwait(false);
+            lock (gate) endpoint = null;
+            Output?.Invoke(Guid.Empty, $"BLOOP_REMOVED: {lease.AssociationId}");
+            return true;
+        }
+        catch (Exception error)
+        {
+            lock (gate)
+            {
+                State = "failed";
+                var detail = $"BLOOP endpoint cleanup failed: {error.Message}. Use Stop to retry.";
+                Error = string.IsNullOrWhiteSpace(Error) ? detail : Error + "\n" + detail;
+            }
+            Changed?.Invoke();
+            return false;
         }
     }
     private async Task StopOwned(Process child, Guid id)
     {
         Task exited;
+        Task worker;
         ulong stopRequest;
         lock (gate)
         {
@@ -155,26 +273,32 @@ public sealed class BridgeSupervisor
             launch!.RequestStop(next);
             State = "stopping";
             exited = completion;
+            worker = workerExited;
         }
         Changed?.Invoke();
         try
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             await WriteInputAsync(child, id, $"S4_BRIDGE_CONTROL {stopRequest} STOP", true, deadline.Token).ConfigureAwait(false);
-            await exited.WaitAsync(deadline.Token).ConfigureAwait(false);
+            await worker.WaitAsync(deadline.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
         {
             lock (gate)
             {
-                if (!Current(child, id)) return;
-                launch!.Unconfirmed();
-                State = "failed";
-                Error = $"Stop unconfirmed: {ex.Message}. Process retained; neutral state unknown. No automatic kill or service restoration.";
+                if (Current(child, id))
+                {
+                    launch!.Unconfirmed();
+                    State = "failed";
+                    Error = $"Stop unconfirmed: {ex.Message}. Process and endpoint retained; neutral state unknown. No automatic kill or service restoration.";
+                    Changed?.Invoke();
+                    throw new IOException(Error, ex);
+                }
             }
-            Changed?.Invoke();
-            throw new IOException(Error, ex);
         }
+        // The native SDK call is not cancellable. Retain ownership until it finishes.
+        await exited.ConfigureAwait(false);
+        if (HasOwnedResources && endpoint is not null) throw new IOException(Error);
     }
     public async Task SendScreenAsync(ulong id, string command)
     {

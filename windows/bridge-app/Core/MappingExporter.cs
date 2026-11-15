@@ -40,7 +40,7 @@ public sealed class MappingExporter(string executable, string temporaryRoot)
                 RedirectStandardError = true,
                 RedirectStandardInput = true
             };
-            foreach (var arg in new[] { "--generate-mapping", output, "--midi-backend", "loopbe", "--jog-config", jog })
+            foreach (var arg in new[] { "--generate-mapping", output, "--midi-backend", BloopEndpoint.Backend, "--jog-config", jog })
                 info.ArgumentList.Add(arg);
             using var child = new Process { StartInfo = info };
             child.Start();
@@ -61,9 +61,11 @@ public sealed class MappingExporter(string executable, string temporaryRoot)
             if (child.ExitCode != 0) throw new IOException($"Mapping generator failed with status {child.ExitCode}.");
             if (!File.Exists(output)) throw new IOException("Mapping generator produced no file.");
             var doc = XDocument.Load(output);
+            var endpoint = doc.Root?.Element("dict")?.Elements("key")
+                .SingleOrDefault(key => key.Value == "endpointName")?.ElementsAfterSelf().FirstOrDefault();
             if (doc.Root?.Name.LocalName != "plist"
-                || !doc.Descendants("string").Any(e => e.Value == "LoopBe Internal MIDI"))
-                throw new InvalidDataException("Generated mapping lacks the Windows LoopBe identity.");
+                || endpoint?.Name.LocalName != "string" || endpoint.Value != BloopEndpoint.PortName)
+                throw new InvalidDataException("Generated mapping lacks the Windows BLOOP endpoint identity.");
             // A sibling staged file permits atomic, create-new installation across volumes.
             var parent = Path.GetDirectoryName(Path.GetFullPath(destination))!;
             Directory.CreateDirectory(parent);

@@ -25,16 +25,24 @@ unverified. See [Windows setup](windows-setup.md) for mapping installation,
 startup and screen access. The macOS setup
 instructions below are unchanged.
 
+The Windows development app uses Windows MIDI Services **Basic Loopback
+(BLOOP)** with Preview 13 transports. LoopBe1 is not required for normal app
+operation. **Start bridge** creates **S4 MK3 Bridge BLOOP**; **Stop** and running
+**Quit** remove that connection after the bridge process exits. The endpoint
+is only available for selection in Djay while the bridge is running.
+
 On Windows, keeping NIHardwareService running is the supported workflow.
 Automatic NI service stop/restore and manual stop/restart are unsupported.
 The macOS driver-handover and restoration instructions below don't apply
 to Windows. The screen path registers with
 that service and waits for it to grant control of the S4. Registration alone
 does not mean the screens are working; check the reported screen state.
-On Windows, some lights and FX knobs may not work at startup if the bridge
-does not receive Djay's initial feedback. Starting the bridge before Djay
-has helped in testing, but it is not a reliable fix. There is no confirmed
-automatic refresh yet. In the full profile, **Screens > Enable S4 screens**
+Lights and FX pickup depend on real feedback from Djay. **Bridge: ready**
+confirms the controller and MIDI connections, not that every Djay value has
+arrived. Djay can already be open when you start or restart the bridge.
+Check playback and headphone cue lights against Djay after connecting;
+other feedback can remain unknown until Djay sends it.
+In the full profile, **Screens > Enable S4 screens**
 controls the displays; check
 **Screens: active** and the physical output. Both displays have produced
 output in bounded testing, but all screen fields, both jogs with normal motor
@@ -55,14 +63,15 @@ See [Windows startup and recovery](windows-setup.md#normal-startup-and-screens).
 
 Windows **Diagnostics > Command preview** shows unsaved editor choices while
 stopped and the actual launch command while the app owns a child process.
-Starting validates and saves preferences, then prepares screen access before
-launch; the draft preview doesn't confirm screen availability. See
+Starting validates and saves preferences, prepares screen access and creates
+the owned BLOOP endpoint before launch; the draft preview doesn't confirm
+screen availability. See
 [Diagnostics command preview](windows-setup.md#diagnostics-command-preview).
 
 Use the mapping generated for your platform. The Windows mapping targets
-LoopBe1 and uses Windows-specific playback feedback; the Mac mapping targets
+BLOOP and uses Windows-specific playback feedback; the Mac mapping targets
 the bridge's native MIDI ports. Select the generated Windows mapping for
-**LoopBe Internal MIDI** in Djay, and keep custom mappings under their existing
+**S4 MK3 Bridge BLOOP** in Djay, and keep custom mappings under their existing
 names when importing an update. The intended physical control assignments
 are the same; that doesn't establish complete Windows control acceptance.
 

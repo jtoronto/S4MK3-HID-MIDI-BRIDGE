@@ -48,7 +48,7 @@ for item in tests:
 ' "$output"
 # Export with the real host-build generator. This mode opens no HID or MIDI.
 CARGO_TARGET_DIR="$output/host-target" cargo run --locked --release --bin s4mk3-hid-midi-bridge -- \
-    --generate-mapping "$output/runtime/S4 MK3 Bridge Windows.djayMidiMapping" --midi-backend loopbe
+    --generate-mapping "$output/runtime/S4 MK3 Bridge Windows.djayMidiMapping" --midi-backend bloop
 cp windows/test.ps1 "$output/runtime/test.ps1"
 cp examples/led-config.json "$output/runtime/default-led-config.json"
 cp examples/jog-config.json "$output/runtime/default-jog-config.json"

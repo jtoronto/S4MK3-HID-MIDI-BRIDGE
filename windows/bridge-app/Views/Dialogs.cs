@@ -22,7 +22,7 @@ internal sealed partial class SettingsView
             var staged = await host.Exporter.StageInstallAsync(host.Store.Root, host.Store.Editor.Jog);
             try { await OpenPath(staged); }
             catch (Exception ex) { throw new IOException($"Mapping retained at {staged}, but Windows could not open it in Djay.", ex); }
-            await NoticeAsync("Mapping ready for import", $"A generated mapping is retained at {staged}.\n\nComplete the import in Djay, then select it for LoopBe Internal MIDI. Opening the file does not confirm import; existing mappings were not overwritten.");
+            await NoticeAsync("Mapping ready for import", $"A generated mapping is retained at {staged}.\n\nComplete the import in Djay. With the bridge running, select it for {BloopEndpoint.PortName}. Opening the file does not confirm import; existing mappings were not overwritten.");
             return;
         }
         var music = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
@@ -42,7 +42,7 @@ internal sealed partial class SettingsView
         if (file is null) return;
         var destination = file.TryGetLocalPath() ?? throw new IOException("Select a local mapping destination.");
         await host.Exporter.ExportAsync(destination, host.Store.Editor.Jog);
-        await NoticeAsync("Mapping saved", "Select the new Windows mapping for LoopBe Internal MIDI in Djay. Existing user mappings were preserved.");
+        await NoticeAsync("Mapping saved", $"With the bridge running, select the new Windows mapping for {BloopEndpoint.PortName} in Djay. Existing user mappings were preserved.");
     }
     private async Task ImportLedAsync()
     {

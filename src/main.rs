@@ -52,10 +52,10 @@ enum ReplayFixture {
 struct Args {
     #[command(flatten)]
     managed: ManagedArgs,
-    /// MIDI transport and mapping layout; export accepts either backend offline.
+    /// MIDI transport and mapping layout; export accepts every backend offline.
     #[arg(long, value_enum, default_value_t = midi_transport::Backend::default())]
     midi_backend: midi_transport::Backend,
-    /// Temporary raw MIDI JSONL capture (`LoopBe` only); creates a new absolute path.
+    /// Temporary raw MIDI JSONL capture (`LoopBe` or BLOOP); creates a new absolute path.
     #[arg(long, value_name = "PATH", requires = "midi")]
     midi_capture: Option<PathBuf>,
     #[arg(skip)]
@@ -141,8 +141,8 @@ struct ProbeCounts {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     ensure!(
-        args.midi_capture.is_none() || args.midi_backend == midi_transport::Backend::Loopbe,
-        "--midi-capture requires --midi-backend loopbe"
+        args.midi_capture.is_none() || args.midi_backend.port_name().is_some(),
+        "--midi-capture requires --midi-backend loopbe or bloop"
     );
     ensure!(
         args.jog_config.is_none()
@@ -832,23 +832,37 @@ mod tests {
 
     #[test]
     fn midi_capture_cli_is_opt_in_and_requires_a_midi_runtime() -> anyhow::Result<()> {
-        assert!(Args::try_parse_from(["bridge"])?.midi_capture.is_none());
-        let args = Args::try_parse_from([
-            "bridge",
-            "--midi",
-            "full",
-            "--midi-backend",
-            "loopbe",
-            "--managed-stdin",
-            "--midi-capture",
-            "/tmp/diagnostic.jsonl",
-        ])?;
+        let defaults = Args::try_parse_from(["bridge"])?;
+        assert!(defaults.midi_capture.is_none());
         assert_eq!(
-            args.midi_capture,
-            Some(PathBuf::from("/tmp/diagnostic.jsonl"))
+            defaults.midi_backend,
+            if cfg!(windows) {
+                midi_transport::Backend::Bloop
+            } else {
+                midi_transport::Backend::CoreMidi
+            }
         );
-        assert_eq!(args.midi_backend, midi_transport::Backend::Loopbe);
-        assert!(args.managed.stdin);
+        for (name, backend) in [
+            ("loopbe", midi_transport::Backend::Loopbe),
+            ("bloop", midi_transport::Backend::Bloop),
+        ] {
+            let args = Args::try_parse_from([
+                "bridge",
+                "--midi",
+                "full",
+                "--midi-backend",
+                name,
+                "--managed-stdin",
+                "--midi-capture",
+                "/tmp/diagnostic.jsonl",
+            ])?;
+            assert_eq!(
+                args.midi_capture,
+                Some(PathBuf::from("/tmp/diagnostic.jsonl"))
+            );
+            assert_eq!(args.midi_backend, backend);
+            assert!(args.managed.stdin);
+        }
         for invalid in [
             vec!["bridge", "--midi-capture", "/tmp/diagnostic.jsonl"],
             vec![
