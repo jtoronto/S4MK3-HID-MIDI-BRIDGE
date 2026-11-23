@@ -7,8 +7,194 @@ namespace S4Bridge.Tests;
 
 internal static class ProcessTests
 {
+    public static void RegisterScreenMotor(List<(string, Func<Task>)> tests)
+    {
+        tests.Add(("diagnostic begins only after prepared worker and endpoint publication", async () =>
+        {
+            using var f = new Fixture();
+            var owner = new TestEndpointOwner(f.PathFor("receipt"));
+            owner.Lease.CreateBarrier = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            var supervisor = new BridgeSupervisor();
+            var preparing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var prepared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var began = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            supervisor.Output += (_, line) =>
+            {
+                if (line == "FIXTURE_PREPARING") preparing.TrySetResult();
+                if (line == "S4_SCREEN_DIAG_PREPARED 1") prepared.TrySetResult();
+                if (line == "FIXTURE_BEGAN_WITH_ENDPOINT") began.TrySetResult();
+            };
+            var (exe, args) = Fixture.Child("screen-diag-gated", "full", owner.Lease.ReceiptPath);
+            var config = f.PathFor("diagnostic.json");
+            File.WriteAllText(config, System.Text.Json.JsonSerializer.Serialize(new {
+                version = 1, @case = "normal", capture_path = f.PathFor("capture.jsonl"), capture = false
+            }));
+            var store = new PreferenceStore(f.Resources, f.Root);
+            var generated = LaunchSpec.Runtime(exe, store, false, null, config);
+            var starting = supervisor.StartAsync(generated with { Arguments = [.. args, .. generated.Arguments] }, owner);
+            try
+            {
+                await preparing.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                Check.True(!owner.Lease.CreateEntered.Task.IsCompleted);
+                await supervisor.SendScreenAsync(1, "ON");
+                await owner.Lease.CreateEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await prepared.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                Check.True(supervisor.HasChild);
+                Check.True(!began.Task.IsCompleted);
+                owner.Lease.CreateBarrier.TrySetResult();
+                await starting.WaitAsync(TimeSpan.FromSeconds(10));
+                await began.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await supervisor.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                Check.True(!supervisor.HasOwnedResources);
+            }
+            finally
+            {
+                owner.Lease.CreateBarrier.TrySetResult();
+                if (supervisor.HasChild) supervisor.CloseInput();
+                try { await starting.WaitAsync(TimeSpan.FromSeconds(10)); }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or OperationCanceledException) { }
+                await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                if (supervisor.HasOwnedResources) await supervisor.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            }
+        }));
+        foreach (var mode in new[] { "screen-diag-fail", "screen-diag-wait" })
+        {
+            tests.Add(($"diagnostic {mode} leaves no endpoint or worker", async () =>
+            {
+                using var f = new Fixture();
+                var owner = new TestEndpointOwner(f.PathFor("receipt"));
+                var supervisor = new BridgeSupervisor();
+                var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                supervisor.Output += (_, line) => { if (line == "FIXTURE_WAITING") waiting.TrySetResult(); };
+                var (exe, args) = Fixture.Child(mode, "full", owner.Lease.ReceiptPath,
+                    "--prepare-screen-motor-diagnostics");
+                var starting = supervisor.StartAsync(new(exe, args, new() { Profile = "full" }), owner);
+                try
+                {
+                    if (mode == "screen-diag-wait")
+                    {
+                        await waiting.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                        supervisor.CloseInput();
+                    }
+                    await Check.RejectAsync(() => starting.WaitAsync(TimeSpan.FromSeconds(10)));
+                    await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                    Check.True(!owner.Lease.CreateEntered.Task.IsCompleted);
+                    Check.True(!supervisor.HasOwnedResources);
+                    Check.True(!File.Exists(owner.Lease.ReceiptPath));
+                }
+                finally
+                {
+                    if (supervisor.HasChild) supervisor.CloseInput();
+                    await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                }
+            }));
+        }
+        tests.Add(("diagnostic endpoint failure terminates prepared worker", async () =>
+        {
+            using var f = new Fixture();
+            var owner = new TestEndpointOwner(f.PathFor("receipt"));
+            owner.Lease.FailCreate = true;
+            var supervisor = new BridgeSupervisor();
+            var (exe, args) = Fixture.Child("screen-diag", "full", owner.Lease.ReceiptPath,
+                "--prepare-screen-motor-diagnostics");
+            try
+            {
+                await Check.RejectAsync(() => supervisor.StartAsync(new(exe, args, new() { Profile = "full" }), owner)
+                    .WaitAsync(TimeSpan.FromSeconds(10)));
+                await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                Check.True(owner.Lease.CreateEntered.Task.IsCompletedSuccessfully);
+                Check.True(!supervisor.HasOwnedResources);
+                Check.True(!File.Exists(owner.Lease.ReceiptPath));
+            }
+            finally
+            {
+                if (supervisor.HasChild) supervisor.CloseInput();
+                await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+        }));
+        tests.Add(("diagnostic Stop before preparation leaves no endpoint or worker", async () =>
+        {
+            using var f = new Fixture();
+            var owner = new TestEndpointOwner(f.PathFor("receipt"));
+            var supervisor = new BridgeSupervisor();
+            var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            supervisor.Output += (_, line) => { if (line == "FIXTURE_WAITING") waiting.TrySetResult(); };
+            var (exe, args) = Fixture.Child("screen-diag-wait", "full", owner.Lease.ReceiptPath,
+                "--prepare-screen-motor-diagnostics");
+            var starting = supervisor.StartAsync(new(exe, args, new() { Profile = "full" }), owner);
+            try
+            {
+                await waiting.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                await supervisor.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                try { await starting.WaitAsync(TimeSpan.FromSeconds(10)); }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or OperationCanceledException) { }
+                Check.True(!owner.Lease.CreateEntered.Task.IsCompleted);
+                Check.True(!supervisor.HasOwnedResources);
+                Check.True(!File.Exists(owner.Lease.ReceiptPath));
+            }
+            finally
+            {
+                if (supervisor.HasChild) supervisor.CloseInput();
+                await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+        }));
+    }
+
     public static void Register(List<(string, Func<Task>)> tests)
     {
+        Check.Add(tests, "NI decks opt-in preserves default launch and isolates preferences", () =>
+        {
+            using var f = new Fixture();
+            Check.True(LaunchSpec.ExperimentalEnabled("1"));
+            foreach (var value in new[] { null, "", "true", " 1", "0", "01" })
+                Check.True(!LaunchSpec.ExperimentalEnabled(value));
+            Check.Equal(f.Root, PreferenceStore.HostPreferencesRoot(f.Root, false));
+            var root = PreferenceStore.HostPreferencesRoot(f.Root, true);
+            Check.True(root != f.Root);
+            var store = new PreferenceStore(f.Resources, root);
+            store.Editor.Run.Profile = "minimal";
+            store.Editor.Run.LimitDuration = true;
+            store.Save();
+            var normal = LaunchSpec.Runtime("engine", store, false, null, null);
+            Check.Equal("minimal", normal.Run.Profile);
+            Check.True(!normal.Arguments.Contains("--ni-decks"));
+            Check.True(normal.Arguments.Contains("--seconds"));
+            var spec = LaunchSpec.Experimental("engine", store, false, null, null);
+            foreach (var arg in new[] { "--ni-decks", "--midi", "full", "--midi-backend", "bloop",
+                "--until-stopped", "--managed-stdin", "--led-config", "--jog-config" })
+                Check.True(spec.Arguments.Contains(arg), arg);
+            foreach (var arg in new[] { "--seconds", "--screen-control-stdin", "--tension-config",
+                "--screen-motor-diagnostic-config", "--screens", "--midi-capture" })
+                Check.True(!spec.Arguments.Contains(arg), arg);
+            Check.Equal("full", spec.Run.Profile);
+            Check.True(!spec.Run.LimitDuration);
+            Check.Reject(() => LaunchSpec.Experimental("engine", store, false, f.PathFor("capture"), null));
+            Check.Reject(() => LaunchSpec.Experimental("engine", store, false, null, f.PathFor("config")));
+        });
+        tests.Add(("NI decks launch uses supervised BLOOP lifecycle", async () =>
+        {
+            using var f = new Fixture();
+            var owner = new TestEndpointOwner(f.PathFor("receipt"));
+            var supervisor = new BridgeSupervisor();
+            var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            supervisor.Changed += () => { if (supervisor.State == "ready") ready.TrySetResult(); };
+            var (exe, args) = Fixture.Child("managed", "full");
+            var spec = LaunchSpec.Experimental(exe, new PreferenceStore(f.Resources, f.Root), false, null, null);
+            await supervisor.StartAsync(spec with { Arguments = [.. args, .. spec.Arguments] }, owner);
+            try
+            {
+                await ready.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                Check.True(File.Exists(owner.Lease.ReceiptPath));
+                await supervisor.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                Check.True(!supervisor.HasOwnedResources);
+                Check.True(!File.Exists(owner.Lease.ReceiptPath));
+            }
+            finally
+            {
+                if (supervisor.HasChild) supervisor.CloseInput();
+                await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+        }));
         foreach (var profile in new[] { "full", "minimal", "probe" })
         {
             tests.Add(($"real supervised pipes STOP and drain tail for {profile}", async () =>

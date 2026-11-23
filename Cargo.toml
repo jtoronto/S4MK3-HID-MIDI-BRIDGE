@@ -7,6 +7,14 @@ description = "Native Instruments S4 MK3 HID-to-MIDI bridge for Djay Pro on macO
 publish = false
 default-run = "s4mk3-hid-midi-bridge"
 
+[features]
+attended-ni-jog = []
+
+[[bin]]
+name = "s4-ni-left-jog"
+path = "src/bin/s4-ni-left-jog.rs"
+required-features = ["attended-ni-jog"]
+
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }

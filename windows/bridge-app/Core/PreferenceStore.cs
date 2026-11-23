@@ -23,6 +23,8 @@ public sealed class PreferenceStore
             throw new IOException("LOCALAPPDATA could not be resolved. No portable-directory fallback is allowed.");
         return Path.Combine(local, "S4 MK3 Bridge");
     }
+    public static string HostPreferencesRoot(string sharedRoot, bool experimental) =>
+        experimental ? Path.Combine(sharedRoot, "Experimental NI Decks") : sharedRoot;
     public PreferenceStore(string resources, string root)
     {
         Root = Path.GetFullPath(root);

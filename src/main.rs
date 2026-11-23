@@ -1,5 +1,6 @@
 //! A bounded S4 MK3 HID probe with optional minimal MIDI output.
 
+mod args;
 mod bridge_runtime;
 mod full;
 mod input;
@@ -11,14 +12,16 @@ mod midi_transport;
 #[path = "jog_diagnostic/ownership.rs"]
 mod ownership;
 mod platform;
+mod screen_motor_capture;
 mod screens_control;
 
-use std::num::NonZeroU64;
+#[cfg(test)]
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, bail, ensure};
-use clap::{Parser, ValueEnum};
+use args::{Args, MidiProfile};
+use clap::Parser;
 use encdr::core::descriptor::{ButtonItemDesc, HexU16, InputItemDesc, SliderItemDesc};
 use encdr::device::led_builder::LedBuilder;
 use encdr::device::loader::DescriptorRegistry;
@@ -32,104 +35,6 @@ use tracing_subscriber::EnvFilter;
 const S4_VENDOR_ID: u16 = 0x17cc;
 const S4_PRODUCT_ID: u16 = 0x1720;
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
-enum MidiProfile {
-    Minimal,
-    Full,
-}
-
-#[derive(Clone, Copy, Debug, ValueEnum)]
-enum ReplayFixture {
-    Playback,
-}
-
-#[derive(Debug, Parser)]
-#[command(
-    version,
-    about,
-    group(clap::ArgGroup::new("jog_context").args(["generate_mapping", "midi", "replay_motor_fixture"]))
-)]
-struct Args {
-    #[command(flatten)]
-    managed: ManagedArgs,
-    /// MIDI transport and mapping layout; export accepts every backend offline.
-    #[arg(long, value_enum, default_value_t = midi_transport::Backend::default())]
-    midi_backend: midi_transport::Backend,
-    /// Temporary raw MIDI JSONL capture (`LoopBe` or BLOOP); creates a new absolute path.
-    #[arg(long, value_name = "PATH", requires = "midi")]
-    midi_capture: Option<PathBuf>,
-    #[arg(skip)]
-    capture_handle: midi_capture::Handle,
-    /// Replay the built-in motor playback fixture without opening HID or MIDI.
-    #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "playback", conflicts_with_all = ["midi", "list", "generate_mapping", "generate_screen_previews", "raw"])]
-    replay_motor_fixture: Option<ReplayFixture>,
-    /// List attached S4 MK3 devices without opening their USB interfaces.
-    #[arg(long)]
-    list: bool,
-
-    /// Log every complete input HID report in hex, including its report ID.
-    #[arg(long)]
-    raw: bool,
-
-    /// Publish virtual MIDI; bare --midi retains the verified minimal profile.
-    #[arg(long, value_enum, num_args = 0..=1, default_missing_value = "minimal", conflicts_with_all = ["list", "generate_mapping"])]
-    midi: Option<MidiProfile>,
-
-    /// JSON LED preferences for the full profile; restart after editing.
-    #[arg(long, value_name = "PATH", requires = "midi", conflicts_with_all = ["list", "generate_mapping"])]
-    led_config: Option<PathBuf>,
-
-    /// Saved hardware tension for the full profile; restart after editing.
-    #[arg(long, value_name = "PATH", requires = "midi", conflicts_with_all = ["list", "generate_mapping"])]
-    tension_config: Option<PathBuf>,
-
-    #[command(flatten)]
-    screens: ScreenArgs,
-
-    /// Export the full native Djay mapping without opening HID or MIDI.
-    #[arg(long, value_name = "PATH", conflicts_with_all = ["midi", "list", "raw"])]
-    generate_mapping: Option<PathBuf>,
-
-    /// JSON jog preferences for mapping export or full-profile backspin behavior.
-    #[arg(
-        long,
-        value_name = "PATH",
-        requires = "jog_context",
-        conflicts_with = "list"
-    )]
-    jog_config: Option<PathBuf>,
-
-    /// Maximum probe duration; stop earlier with Ctrl-C.
-    #[arg(long, default_value = "30")]
-    seconds: NonZeroU64,
-
-    /// Run until Ctrl-C instead of stopping after a fixed duration.
-    #[arg(long, conflicts_with = "seconds")]
-    until_stopped: bool,
-}
-
-#[derive(Debug, clap::Args)]
-struct ManagedArgs {
-    /// Accept managed STOP commands and stop normally when stdin closes.
-    #[arg(long = "managed-stdin", id = "managed_stdin", conflicts_with_all = ["list", "generate_mapping", "generate_screen_previews", "replay_motor_fixture"])]
-    stdin: bool,
-}
-
-#[derive(Debug, clap::Args)]
-struct ScreenArgs {
-    /// Experimental Djay feedback and reactive STEMS on both S4 screens (full profile).
-    #[arg(long = "screens", requires = "midi", conflicts_with_all = ["list", "generate_mapping"])]
-    enabled: bool,
-
-    /// Accept live screen ON/OFF/RETRY commands on stdin; EOF stops the bridge.
-    #[arg(long = "screen-control-stdin", requires = "midi", conflicts_with_all = ["list", "generate_mapping", "generate_screen_previews"])]
-    control_stdin: bool,
-
-    /// Export screen routing, feedback, and held-pad rasters without USB or MIDI.
-    #[arg(long, value_name = "DIR", conflicts_with_all = ["midi", "list", "raw", "generate_mapping", "jog_config"])]
-    generate_screen_previews: Option<PathBuf>,
-}
-
 #[derive(Debug, Default)]
 struct ProbeCounts {
     input_events: u64,
@@ -140,6 +45,7 @@ struct ProbeCounts {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    validate_ni_decks(&args)?;
     ensure!(
         args.midi_capture.is_none() || args.midi_backend.port_name().is_some(),
         "--midi-capture requires --midi-backend loopbe or bloop"
@@ -173,7 +79,11 @@ fn main() -> anyhow::Result<()> {
         .map(|path| s4mk3_hid_midi_bridge::tension::Config::load(Some(path)))
         .transpose()?;
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?)
+        .with_env_filter(if args.screen_motor_diagnostic_config.is_some() {
+            EnvFilter::try_new("info")?
+        } else {
+            EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?
+        })
         .with_target(false)
         .with_ansi(false)
         .with_writer(std::io::stderr)
@@ -223,7 +133,36 @@ fn main() -> anyhow::Result<()> {
     run(args, tension, jog)
 }
 
+fn validate_ni_decks(args: &Args) -> anyhow::Result<()> {
+    ensure!(
+        !args.screens.ni_decks
+            || (cfg!(windows)
+                && matches!(args.midi, Some(MidiProfile::Full))
+                && matches!(args.midi_backend, midi_transport::Backend::Bloop)),
+        "--ni-decks requires Windows, --midi full, and --midi-backend bloop"
+    );
+    Ok(())
+}
+
 fn run(
+    args: Args,
+    tension: Option<s4mk3_hid_midi_bridge::tension::Config>,
+    jog: Option<full::jog::Config>,
+) -> anyhow::Result<()> {
+    let capture = screen_motor_capture::Session::start(&args)?;
+    let result =
+        screen_motor_capture::await_endpoint(args.managed.prepare_screen_motor_diagnostics)
+            .and_then(|begin| {
+                if begin {
+                    run_owned(args, tension, jog)
+                } else {
+                    Ok(())
+                }
+            });
+    capture.finish(result)
+}
+
+fn run_owned(
     mut args: Args,
     tension: Option<s4mk3_hid_midi_bridge::tension::Config>,
     jog: Option<full::jog::Config>,
@@ -311,6 +250,20 @@ fn open_and_run(
     let mut parser = PacketParser::new(device.device_id, &descriptor, names);
     let api = HidApi::new().context("initialize native HID access")?;
     let collection = platform::collection(&api)?;
+    s4mk3_hid_midi_bridge::screen_motor_diag::record(
+        s4mk3_hid_midi_bridge::screen_motor_diag::Kind::Lifecycle,
+        [
+            10,
+            u64::from(collection.usage_page()),
+            u64::from(collection.usage()),
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+        collection.serial_number().unwrap_or("").as_bytes(),
+    );
     #[cfg(windows)]
     bind_windows_screens(args, session, collection.serial_number())?;
     ownership::check()?;
@@ -360,6 +313,14 @@ fn bind_windows_screens(
 ) -> anyhow::Result<()> {
     if !matches!(args.midi, Some(MidiProfile::Full)) {
         return Ok(());
+    }
+    if args.screens.ni_decks {
+        return session
+            .screens
+            .as_ref()
+            .and_then(full::screens::Output::control)
+            .context("NI deck worker missing")?
+            .bind_selected_hid(serial.context("selected S4 has no serial for NI deck output")?);
     }
     // Bind the uniquely selected HID before initialized input can start NI I/O.
     // An absent/rejected serial fails only screen acquisition, preserving controls.

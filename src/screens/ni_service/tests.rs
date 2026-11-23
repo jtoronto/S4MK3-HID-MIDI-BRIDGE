@@ -6,6 +6,12 @@ use std::sync::{
 };
 use tokio::sync::mpsc;
 
+#[path = "decks_tests.rs"]
+mod decks_tests;
+#[cfg(feature = "attended-ni-jog")]
+#[path = "left_jog_tests.rs"]
+mod left_jog_tests;
+
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 const YES: [u8; 4] = [0x65, 0x75, 0x72, 0x74];
 const ACTIVE: [u8; 8] = [0, 0x4e, 0x43, 3, 0x65, 0x75, 0x72, 0x74];
@@ -258,18 +264,17 @@ async fn service_session_gates_control_and_publishes_both_bgr_rasters() -> TestR
     let (result, accepted) = tokio::join!(session.publish_pair([left, right]), async {
         for index in [0_u8, 1] {
             let message = peer.instance.read().await?;
-            assert_eq!(message.len(), 153_648);
+            assert_eq!(message.len(), 68);
             assert_eq!(
                 &message[..20],
                 &[
-                    0x44, 0x73, 0x64, 3, index, 0, 0, 0, 0, 0, 0, 0, 0xf0, 0, 0x40, 1, 0x1c, 0x58,
-                    2, 0
+                    0x44, 0x73, 0x64, 3, index, 0, 0, 0, 0, 0, 0, 0, 0xf0, 0, 0x40, 1, 48, 0, 0, 0
                 ]
             );
             assert_eq!(
                 &message[20..40],
                 &[
-                    0x84, 0, index, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0x40, 0, 0xf0, 0, 0, 0xff, 0
+                    0x84, 0, index, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0x40, 0, 0xf0, 0, 0, 0, 1
                 ]
             );
             assert_eq!(
@@ -280,8 +285,11 @@ async fn service_session_gates_control_and_publishes_both_bgr_rasters() -> TestR
                     &[0xf8, 0, 7, 0xe0]
                 }
             );
-            assert_eq!(&message[153_638..153_640], &[0xf8, 0]);
-            assert_eq!(&message[153_640..], &[3, 0, 0, 0, 0x40, 0, index, 0]);
+            assert_eq!(
+                &message[44..60],
+                &[1, 0, 0x95, 0xfe, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0xf8, 0]
+            );
+            assert_eq!(&message[60..], &[3, 0, 0, 0, 0x40, 0, 0, 0]);
             peer.instance.write(&YES).await?;
         }
         Ok::<(), Error>(())
@@ -368,7 +376,7 @@ async fn in_flight_loss_rejection_timeout_and_disconnect_stop_second_screen() ->
         let raster = Raster::new(&pixels)?;
         let (result, accepted) = tokio::join!(session.publish_pair([raster, raster]), async {
             let frame = peer.instance.read().await?;
-            assert_eq!(frame.len(), 153_648);
+            assert_eq!(frame.len(), 52);
             match outcome {
                 0 => {
                     peer.instance_notes.write(&LOST).await?;
@@ -421,7 +429,7 @@ async fn unsolicited_late_reply_and_short_write_cannot_acknowledge_a_frame() -> 
                 .ok_or("missing live resources")?
                 .instance
                 .request
-                .max_write = Some(64);
+                .max_write = Some(32);
         } else {
             peer.instance.write(&YES).await?;
         }
@@ -432,11 +440,11 @@ async fn unsolicited_late_reply_and_short_write_cannot_acknowledge_a_frame() -> 
             assert!(matches!(
                 result,
                 Err(Error::ShortWrite {
-                    expected: 153_648,
-                    actual: 64
+                    expected: 52,
+                    actual: 32
                 })
             ));
-            assert_eq!(peer.instance.read().await?.len(), 64);
+            assert_eq!(peer.instance.read().await?.len(), 32);
         } else {
             assert!(matches!(
                 result,
@@ -512,7 +520,7 @@ async fn cancellation_and_dropped_publish_future_release_live_session() -> TestR
                     result?;
                     return Err("unexpected publish completion".into());
                 }
-                message = peer.instance.read() => assert_eq!(message?.len(), 153_648),
+                message = peer.instance.read() => assert_eq!(message?.len(), 52),
             }
             if !drop_future {
                 cancel.send(true)?;

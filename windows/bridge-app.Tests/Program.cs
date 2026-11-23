@@ -10,14 +10,30 @@ internal static class Program
         if (args.FirstOrDefault() == "--fixture") return await ChildFixture.Run(args[1..]);
         if (args.FirstOrDefault() == "--real-generator") return await RealGeneratorTest.Run(args[1..]);
         var tests = new List<(string, Func<Task>)>();
-        RenderedLogTests.Register(tests);
-        PreferenceTests.Register(tests);
-        ProtocolTests.Register(tests);
-        MidiCaptureTests.Register(tests);
-        DiagnosticsTests.Register(tests);
-        ControlTests.Register(tests);
-        PackagingTests.Register(tests);
-        ProcessTests.Register(tests);
+        if (args.Contains("--motor-readiness-tests"))
+        {
+            MotorReadinessTests.Register(tests);
+        }
+        else if (args.Contains("--screen-motor-tests"))
+        {
+            MotorReadinessTests.Register(tests);
+            ScreenMotorDiagnosticsTests.Register(tests);
+            ProcessTests.RegisterScreenMotor(tests);
+        }
+        else
+        {
+            RenderedLogTests.Register(tests);
+            PreferenceTests.Register(tests);
+            ProtocolTests.Register(tests);
+            MidiCaptureTests.Register(tests);
+            ScreenMotorDiagnosticsTests.Register(tests);
+            MotorReadinessTests.Register(tests);
+            DiagnosticsTests.Register(tests);
+            ControlTests.Register(tests);
+            PackagingTests.Register(tests);
+            ProcessTests.Register(tests);
+            ProcessTests.RegisterScreenMotor(tests);
+        }
         var failed = 0;
         foreach (var (name, test) in tests)
         {

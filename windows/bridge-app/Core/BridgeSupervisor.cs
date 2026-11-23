@@ -1,20 +1,24 @@
 using System.Diagnostics;
-using System.Text;
 
 namespace S4Bridge.Core;
 
-public sealed class BridgeSupervisor
+// allow: SIZE_OK -- Keep the owned-process lifecycle under one lock and launch identity; startup and output have separate partials.
+public sealed partial class BridgeSupervisor
 {
     private readonly object gate = new();
     private readonly SemaphoreSlim inputGate = new(1, 1);
     private Process? process;
     private LaunchState? launch;
     private IBloopEndpointLease? endpoint;
+    private DiagnosticMotorReadiness? motorReadiness;
     private Task? starting;
     private Task<bool>? releasing;
     private Task workerExited = Task.CompletedTask;
     private Task completion = Task.CompletedTask;
     private Task? stopping;
+    private CancellationTokenSource? preparationStop;
+    private TaskCompletionSource? prepared;
+    private TaskCompletionSource? startupEndpointBarrier;
     private ulong request;
     public event Action? Changed;
     public event Action<Guid>? Launched;
@@ -39,60 +43,19 @@ public sealed class BridgeSupervisor
         {
             if (HasOwnedResources) throw new InvalidOperationException("Bridge resources are already owned. Stop before starting.");
             stopping = null;
+            prepared = null;
+            startupEndpointBarrier = null;
+            preparationStop = null;
             StartProcess(spec);
         }
         Changed?.Invoke();
     }
-    public Task StartAsync(LaunchSpec spec, IBloopEndpointOwner owner)
-    {
-        lock (gate)
-        {
-            if (HasOwnedResources) throw new InvalidOperationException("Bridge resources are already owned. Stop before starting.");
-            State = "starting";
-            Error = "";
-            stopping = null;
-            starting = Task.Run(() => StartOwned(spec, owner));
-            return starting;
-        }
-    }
-    private async Task StartOwned(LaunchSpec spec, IBloopEndpointOwner owner)
-    {
-        Changed?.Invoke();
-        try
-        {
-            var lease = await owner.PrepareAsync().ConfigureAwait(false);
-            lock (gate) endpoint = lease;
-            Output?.Invoke(Guid.Empty, $"BLOOP_PREPARED: {lease.AssociationId}");
-            await lease.CreateAsync().ConfigureAwait(false);
-            Output?.Invoke(Guid.Empty, $"BLOOP_CREATED: {lease.EndpointDeviceId}");
-            lock (gate) StartProcess(spec);
-            Changed?.Invoke();
-        }
-        catch (Exception error)
-        {
-            Output?.Invoke(Guid.Empty, $"BLOOP_START_FAILED: {error.Message}");
-            lock (gate) { State = "failed"; Error = error.Message; }
-            Exception? cleanupError = null;
-            try
-            {
-                Task? stop;
-                lock (gate) stop = process is null ? null : StopOwned(process, launch!.Id);
-                if (stop is not null) await stop.ConfigureAwait(false);
-                else await ReleaseEndpoint().ConfigureAwait(false);
-            }
-            catch (Exception cleanup) { cleanupError = cleanup; }
-            lock (gate) State = "failed";
-            Changed?.Invoke();
-            if (cleanupError is not null)
-                throw new IOException(Error, new AggregateException(error, cleanupError));
-            throw;
-        }
-    }
     // Called under gate; the lease remains owned if starting the process or recording it fails.
-    private void StartProcess(LaunchSpec spec)
+    private void StartProcess(LaunchSpec spec, bool recordWorker = true)
     {
-        var child = new Process { StartInfo = spec.StartInfo() };
         var id = Guid.NewGuid();
+        motorReadiness = DiagnosticMotorReadiness.Prepare(spec, id);
+        var child = new Process { StartInfo = spec.StartInfo() };
         try { child.Start(); }
         catch { child.Dispose(); throw; }
         process = child;
@@ -101,7 +64,11 @@ public sealed class BridgeSupervisor
         request = 0;
         State = spec.Diagnostic ? "checking" : "starting";
         Error = "";
-        try { endpoint?.RecordWorker(child.Id, child.StartTime.ToUniversalTime()); }
+        try
+        {
+            motorReadiness?.Bind(child.Id);
+            if (recordWorker) endpoint?.RecordWorker(child.Id, child.StartTime.ToUniversalTime());
+        }
         finally
         {
             Launched?.Invoke(id);
@@ -114,87 +81,24 @@ public sealed class BridgeSupervisor
     private bool Current(Process child, Guid id) =>
         ReferenceEquals(process, child) && launch?.Id == id && launch.ProcessId == child.Id;
 
-    private async Task Drain(StreamReader reader, Process child, Guid id, bool stdout)
-    {
-        var buffer = new char[4096];
-        var line = new StringBuilder();
-        var discarded = false;
-        try
-        {
-            while (await reader.ReadAsync(buffer).ConfigureAwait(false) is var count && count > 0)
-            {
-                for (var i = 0; i < count; i++)
-                {
-                    var c = buffer[i];
-                    if (c == '\n')
-                    {
-                        Ingest(child, id, discarded ? "[oversized output line rejected]" :
-                            line.ToString().TrimEnd('\r'), stdout);
-                        line.Clear(); discarded = false;
-                    }
-                    else if (!discarded)
-                    {
-                        if (line.Length == 65536) { line.Clear(); discarded = true; }
-                        else line.Append(c);
-                    }
-                }
-            }
-            if (line.Length > 0) Ingest(child, id, line.ToString(), stdout);
-        }
-        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
-        {
-            lock (gate)
-            {
-                if (!Current(child, id)) return;
-                Error = $"Process output read failed: {ex.Message}";
-                State = "failed";
-            }
-            Changed?.Invoke();
-        }
-    }
-    private void Ingest(Process child, Guid id, string text, bool stdout)
-    {
-        bool changed = false;
-        lock (gate)
-        {
-            if (!Current(child, id)) return;
-            if (stdout && text.StartsWith(ManagedStatus.Prefix, StringComparison.Ordinal))
-            {
-                try
-                {
-                    if (!launch!.Accept(ManagedStatus.Parse(text)))
-                        text = "Rejected stale/mismatched lifecycle status: " + text;
-                    else
-                    {
-                        State = launch.State;
-                        if (launch.Status?.Error is { } failure) Error = failure;
-                        changed = true;
-                    }
-                }
-                catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidDataException
-                         or KeyNotFoundException or InvalidOperationException or FormatException)
-                { text = $"Rejected invalid lifecycle status ({ex.Message}): {text}"; }
-            }
-            if (stdout) Protocol?.Invoke(id, text);
-            else StderrLine?.Invoke(id, text);
-            Output?.Invoke(id, text);
-        }
-        if (changed) Changed?.Invoke();
-    }
     private async Task ObserveExit(Process child, Guid id, Task readers)
     {
         await readers.ConfigureAwait(false);
         var exit = child.ExitCode;
         bool failed;
+        Task? barrier;
         lock (gate)
         {
             if (!Current(child, id)) return;
             failed = exit != 0 || State == "failed";
             State = endpoint is null ? (failed ? "failed" : "stopped") : "stopping";
+            motorReadiness?.Stop();
             if (exit != 0) Error = $"Bridge exited with status {exit}. See Diagnostics.";
             process = null;
             child.Dispose();
+            barrier = startupEndpointBarrier?.Task;
         }
+        if (barrier is not null) await barrier.ConfigureAwait(false);
         var removed = await ReleaseEndpoint().ConfigureAwait(false);
         lock (gate) State = failed || !removed ? "failed" : "stopped";
         Output?.Invoke(id, $"EXIT: {exit}");
@@ -206,17 +110,25 @@ public sealed class BridgeSupervisor
         lock (gate)
         {
             if (starting is { IsCompleted: false })
-                return stopping ??= StopAfterStart(starting);
+            {
+                preparationStop?.Cancel();
+                return stopping ??= StopAfterStart(starting, preparationStop is not null);
+            }
             return StopResources();
         }
     }
-    private async Task StopAfterStart(Task pending)
+    private async Task StopAfterStart(Task pending, bool diagnosticPreparation)
     {
         try { await pending.ConfigureAwait(false); }
         catch (Exception error) { Output?.Invoke(Guid.Empty, $"START_ENDED: {error.Message}"); }
         Task stop;
         lock (gate) { stopping = null; stop = StopResources(); }
         await stop.ConfigureAwait(false);
+        if (diagnosticPreparation) lock (gate)
+        {
+            if (process is null && endpoint is null) { State = "stopped"; Error = ""; }
+        }
+        Changed?.Invoke();
     }
     private Task StopResources()
     {

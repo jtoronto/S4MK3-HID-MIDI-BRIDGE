@@ -81,8 +81,9 @@ internal sealed partial class SettingsView : Grid
     }
     internal void StopRefresh() => refresh.Stop();
     internal Task InstallMappingAsync() => ExportMappingAsync(true);
-    internal Task ToggleScreensAsync() => host.Screens.SetEnabledAsync(
-        !host.Store.Editor.Screen.Enabled, host.Supervisor, ScreenConsentAsync);
+    internal Task ToggleScreensAsync() => host.ExperimentalNiDecks
+        ? throw new InvalidOperationException("Screen controls are unavailable in NI decks mode.")
+        : host.Screens.SetEnabledAsync(!host.Store.Editor.Screen.Enabled, host.Supervisor, ScreenConsentAsync);
     private void BuildTabs()
     {
         var selected = tabs.SelectedIndex;
@@ -92,7 +93,9 @@ internal sealed partial class SettingsView : Grid
         tabs.ItemsSource = builtTabs = new TabItem[]
         {
             new(){Header="Bridge",Content=BridgeTab()},
-            new(){Header="Screens",Content=ScreensTab()},
+            new(){Header="Screens",Content=host.ExperimentalNiDecks
+                ? UiTheme.BodyView(UiTheme.Text("Screen controls are unavailable in experimental NI decks mode."))
+                : ScreensTab()},
             new(){Header="Jog",Content=JogTab()},
             new(){Header="LEDs",Content=LedTab()},
             new(){Header="Palette",Content=PaletteTab()},
@@ -119,7 +122,7 @@ internal sealed partial class SettingsView : Grid
         reset.IsEnabled = !host.Operating && !host.Screens.Busy;
         foreach (var field in captureLocked) field.IsEnabled = !host.Diagnostics.Capturing;
         if (profileControl is not null)
-            profileControl.IsEnabled = !host.Screens.Busy && !host.Diagnostics.Capturing;
+            profileControl.IsEnabled = !host.ExperimentalNiDecks && !host.Screens.Busy && !host.Diagnostics.Capturing;
         if (ledNotice is not null) ledNotice.IsVisible = host.Store.Editor.Run.Profile != "full";
         UpdateScreens();
         UpdateDiagnosticsControls();

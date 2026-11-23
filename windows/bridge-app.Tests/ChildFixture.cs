@@ -10,7 +10,40 @@ internal static class ChildFixture
     public static async Task<int> Run(string[] args)
     {
         if (args.Contains("--generate-mapping")) return Generate(args);
+        if (args[0] == "motor-readiness") return await MotorReadinessFixture.Run();
         var profile = args.ElementAtOrDefault(1) ?? "full";
+        if (args[0].StartsWith("screen-diag", StringComparison.Ordinal))
+        {
+            if (!args.Contains("--prepare-screen-motor-diagnostics"))
+                return 11;
+            if (args[0] == "screen-diag-fail") return 12;
+            if (args[0] == "screen-diag-gated")
+            {
+                Console.WriteLine("FIXTURE_PREPARING");
+                if (await Console.In.ReadLineAsync() != "S4_SCREEN_CONTROL 1 ON") return 0;
+            }
+            if (args[0] == "screen-diag-wait")
+                Console.WriteLine("FIXTURE_WAITING");
+            else
+                Console.WriteLine("S4_SCREEN_DIAG_PREPARED 1");
+            var began = false;
+            while (await Console.In.ReadLineAsync() is { } command)
+            {
+                if (command.StartsWith("S4_BRIDGE_CONTROL ", StringComparison.Ordinal) &&
+                    command.EndsWith(" STOP", StringComparison.Ordinal))
+                    return 0;
+                if (command == "S4_SCREEN_DIAG_BEGIN 1" && args[0] != "screen-diag-wait")
+                {
+                    if (File.ReadAllText(args[2]) != "published") return 13;
+                    Console.WriteLine("FIXTURE_BEGAN_WITH_ENDPOINT");
+                    Console.WriteLine(ProtocolTests.Status(profile, "starting"));
+                    Console.WriteLine(ProtocolTests.Status(profile));
+                    began = true;
+                    break;
+                }
+            }
+            if (!began) return 0;
+        }
         if (args[0] == "exit7") { Console.WriteLine("SUCCESS-LOOKING OUTPUT"); return 7; }
         if (args[0] == "motor-stderr")
         {

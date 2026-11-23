@@ -1,7 +1,8 @@
 //! Prearmed overlapped bootstrap; nonblocking message pipes after registration.
 
 use super::{
-    Cancellation, Connector, Error, Identity, Pipe, Raster, Session, bootstrap, protocol, write,
+    Cancellation, Connector, DeckOutput, Error, Identity, Pipe, Raster, Session, bootstrap,
+    protocol, write,
 };
 use interprocess::os::windows::named_pipe::{
     DuplexPipeStream, PipeListener, PipeListenerOptions, PipeMode, pipe_mode,
@@ -50,6 +51,47 @@ impl NiService {
     /// session. Dropping this future also closes it.
     pub async fn poll_control(&mut self) -> Result<(), Error> {
         self.0.poll_control().await
+    }
+
+    /// Submit changed deck outputs, including the JOG playback haptic state.
+    ///
+    /// # Errors
+    /// Transport loss closes the session and leaves the physical state unconfirmed.
+    pub async fn set_deck_output(&mut self, desired: [DeckOutput; 2]) -> Result<(), Error> {
+        self.0.set_deck_output(desired).await
+    }
+
+    /// Apply outputs, checking `allow_play` immediately before each Play write.
+    ///
+    /// Returns submitted states; a rejected Play has `playing` set to false.
+    /// A rejected Play does not close the session.
+    ///
+    /// # Errors
+    /// Transport loss closes the session and leaves physical state unconfirmed.
+    pub async fn set_deck_output_guarded(
+        &mut self,
+        desired: [DeckOutput; 2],
+        allow_play: impl Fn(usize) -> bool + Send + Sync,
+    ) -> Result<[DeckOutput; 2], Error> {
+        self.0.set_deck_output_guarded(desired, allow_play).await
+    }
+
+    /// Pause both motors, clear both rings and restore JOG mode.
+    ///
+    /// # Errors
+    /// Transport loss closes the session; the physical stop is unconfirmed.
+    pub async fn quiesce_decks(&mut self) -> Result<(), Error> {
+        self.0.quiesce_decks().await
+    }
+
+    /// Run one attended left platter trial while publishing both screen rasters.
+    ///
+    /// # Errors
+    /// Returns any transport failure and closes the session. An interrupted
+    /// exchange can make motor-off delivery unverifiable.
+    #[cfg(feature = "attended-ni-jog")]
+    pub async fn run_left_jog_once(&mut self, stop: Cancellation) -> Result<(), Error> {
+        self.0.run_left_jog_once(stop).await
     }
 
     /// Close this adapter's resources only, without a shutdown image or flush.
@@ -170,6 +212,15 @@ impl Pipe for Owned {
     async fn write(&mut self, message: &[u8]) -> Result<(), Error> {
         let stream = self.stream()?;
         write::message(message, |bytes| stream.send(bytes)).await
+    }
+
+    async fn write_guarded(
+        &mut self,
+        message: &[u8],
+        guard: &(dyn Fn() -> bool + Sync),
+    ) -> Result<bool, Error> {
+        let stream = self.stream()?;
+        write::guarded_message(message, |bytes| stream.send(bytes), guard).await
     }
 }
 

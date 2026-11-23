@@ -31,6 +31,15 @@ operation. **Start bridge** creates **S4 MK3 Bridge BLOOP**; **Stop** and runnin
 **Quit** remove that connection after the bridge process exits. The endpoint
 is only available for selection in Djay while the bridge is running.
 
+An opt-in Windows NI two-platter trial is available only as a separately
+staged development package. Its host creates and removes its own BLOOP
+connection; it does not change the installed desktop app or install or edit
+the existing BLOOP setup or Djay mapping. Both platters can move, so follow the
+[attended trial instructions](../windows/qa/ni-bridge/ATTENDED-RUN.md) only
+while watching, with the power switch accessible. In this trial, NI supplies
+the platter force and braking. The bridge's usual tension and TT braking
+controls do not tune NI output. This trial is unaccepted.
+
 On Windows, keeping NIHardwareService running is the supported workflow.
 Automatic NI service stop/restore and manual stop/restart are unsupported.
 The macOS driver-handover and restoration instructions below don't apply
@@ -41,15 +50,18 @@ Lights and FX pickup depend on real feedback from Djay. **Bridge: ready**
 confirms the controller and MIDI connections, not that every Djay value has
 arrived. Djay can already be open when you start or restart the bridge.
 Check playback and headphone cue lights against Djay after connecting;
-other feedback can remain unknown until Djay sends it.
+other feedback can remain unknown until Djay sends it. If the initial
+feedback is missing, save the diagnostics and open Djay after the bridge
+is ready.
 In the full profile, **Screens > Enable S4 screens**
 controls the displays; check
 **Screens: active** and the physical output. Both displays have produced
 output in bounded testing, but all screen fields, both jogs with normal motor
 settings, recovery, audio and sustained use still need acceptance.
 
-The current Windows source uses a separate screen helper so a screen failure
-does not need to stop controller and MIDI handling. To retry, use
+The normal Windows desktop path uses a separate screen helper so a screen
+failure does not need to stop controller and MIDI handling; the opt-in trial
+above instead uses an in-process NI session. To retry normal screens, use
 **Screens > Retry verified access** while a full-profile bridge is running.
 Normally **Stop** releases the bridge's screen session and leaves
 NIHardwareService running; use tray **Quit S4 MK3 Bridge** to exit the app.
@@ -61,12 +73,29 @@ preference isn't a working
 Windows service-restoration action, and pending state can prevent Quit.
 See [Windows startup and recovery](windows-setup.md#normal-startup-and-screens).
 
+For screenless direct HID, launch the ordinary `S4Bridge.exe` with screens
+disabled. Direct HID does not use the NI background service for controls
+or platter drive.
+
 Windows **Diagnostics > Command preview** shows unsaved editor choices while
 stopped and the actual launch command while the app owns a child process.
 Starting validates and saves preferences, prepares screen access and creates
 the owned BLOOP endpoint before launch; the draft preview doesn't confirm
 screen availability. See
 [Diagnostics command preview](windows-setup.md#diagnostics-command-preview).
+
+The separately supplied development diagnostic package can record USB traffic
+alongside a screens-off run and a screen-acquired/no-images run using
+**07-usb-pair.cmd**. Follow its [USB capture instructions](../windows/qa/screen-motor/USB%20CAPTURE%20START%20HERE.txt)
+when you are available and watching. This pair uses right-side Deck B in TT
+playback with both wheels untouched. Stop and quit the GUI before entering
+motor/ring notes. A complete recording does not mean the hardware behaved
+correctly; report the physical response separately.
+In the repaired paired workflow, establish Djay's deck state after the new
+feedback connection: keep Deck B paused, confirm its software Internal mode,
+eject/reload the agreed track, then select Play and right TT. The console checks
+actual motor authorization before beginning observation. **Bridge: ready** alone
+cannot substitute for missing Loaded or Internal feedback.
 
 Use the mapping generated for your platform. The Windows mapping targets
 BLOOP and uses Windows-specific playback feedback; the Mac mapping targets
@@ -275,6 +304,12 @@ Channel volume, gain, high/mid/low EQ and filter control the corresponding
 Djay channel. Use the **small channel headphone/CUE button** for pre-cue,
 not the deck's large transport CUE button. Master, booth, headphone level and
 headphone mix remain hardware-local controls.
+
+Current source builds refresh faders and knobs on every full-controller input
+cycle, including when the controller sends no analog-change notification.
+This requires a rebuilt bridge, with no mapping or preference change. Physical
+response on Windows still needs verification; see the
+[analog input validation record](analog-snapshot-validation-20261115.md).
 
 Crossfader assignment switches choose a side or **THRU**. THRU means the channel
 bypasses the crossfader, not that it is muted. Djay may show **Crossfader
@@ -577,6 +612,16 @@ running. These controls aren't live and don't need a new mapping.
 Detailed motor tuning and limits are in the
 [bridge function reference](bridge-function-reference.md#current-source-motorized-playback-testing).
 
+The separately packaged **Windows NI Decks trial** uses NIHardwareService
+instead of the bridge's motor and ring output. In JOG it uses NI's stock
+playback signal to animate the needle without asking for TT rotation. NI
+also renders the pitch-bend ticks you can feel when nudging the rim in JOG.
+These are wheel detents, not Djay beat-grid or cue-point markers. The bridge's
+wheel tension and motor-force settings do not tune NI's force in this trial.
+The trial starts listening for Djay feedback before controller setup, but
+still needs Djay to send the current deck state. Missing feedback does not
+authorize TT rotation. These changes do not affect the ordinary desktop bridge.
+
 #### See what braking is doing
 
 Open **Diagnostics > Live platter diagnostics** with the full-controller
@@ -712,6 +757,17 @@ For intermittent Windows MIDI problems, current development builds offer an
 Enable it while stopped for one full-profile run, then click **Mark issue**
 when you notice the problem. Note the deck, control and symptom, and follow
 the linked steps to stop and check the capture before sharing it.
+
+For a Windows motor or ring problem that appears when screens are enabled,
+the separate **S4 Screen Motor Diagnostics** development package provides an
+[ordered test procedure](../windows/qa/screen-motor/README.md). Its launchers
+prepare a fresh run, then ask you to confirm watching before opening the
+stopped app. Start and Stop remain under your control. Keep the resulting
+capture folder and describe motor response and ring behavior separately.
+Current diagnostic builds finish capture preparation before publishing the
+MIDI connection to Djay. Wait for normal bridge and case readiness afterward.
+These temporary diagnostic cases are not saved screen preferences or a
+published feature of the ordinary app.
 
 If Djay shows a key but the latest S4 build shows `?`, retain the track and
 record the deck, title and Djay key before restarting. For a report, also

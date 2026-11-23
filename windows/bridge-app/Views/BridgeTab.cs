@@ -10,12 +10,18 @@ internal sealed partial class SettingsView
         var run = host.Store.Editor.Run;
         var profile = fields.Choice("Profile", run.Profile, ["full", "minimal", "probe"], v => run.Profile = v);
         profileControl = profile;
+        var durationToggle = fields.Toggle("Stop after a fixed duration", run.LimitDuration, v => run.LimitDuration = v);
+        var duration = fields.Number("Run duration (seconds)", () => run.DurationSeconds, v => run.DurationSeconds = (int)v!, 1, 604800, true);
+        durationToggle.IsEnabled = duration.IsEnabled = !host.ExperimentalNiDecks;
         return UiTheme.BodyView(
             UiTheme.SectionView("Bridge operation",
+                UiTheme.Text(host.ExperimentalNiDecks
+                    ? "Experimental NI decks mode: full profile, BLOOP and continuous operation are fixed for this host session."
+                    : "Choose the bridge profile and run duration.", true),
                 profile,
                 UiTheme.Text("Full: all controls and feedback. Minimal: Play, Cue and faders only. Probe: HID diagnostics, no MIDI.", true),
-                fields.Toggle("Stop after a fixed duration", run.LimitDuration, v => run.LimitDuration = v),
-                fields.Number("Run duration (seconds)", () => run.DurationSeconds, v => run.DurationSeconds = (int)v!, 1, 604800, true),
+                durationToggle,
+                duration,
                 UiTheme.Text("Continuous mode runs until Stop or Quit. Closing Settings leaves the tray app running.", true)),
             UiTheme.SectionView("Djay mapping",
                 UiTheme.Text($"With the bridge running, select this Windows mapping for {BloopEndpoint.PortName} in Djay. Existing mappings are never replaced."),

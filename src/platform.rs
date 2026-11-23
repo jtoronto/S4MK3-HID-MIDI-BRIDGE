@@ -12,7 +12,39 @@ pub fn write_with(
     windows: bool,
     writer: impl FnOnce(&[u8]) -> HidResult<usize>,
 ) -> anyhow::Result<usize> {
-    let written = writer(report)?;
+    use s4mk3_hid_midi_bridge::screen_motor_diag::{self as diag, Kind};
+    let operation = diag::record(
+        Kind::NativeWriteBegin,
+        [
+            u64::from(report.first().copied().unwrap_or(0)),
+            u64::try_from(report.len())?,
+            u64::from(windows),
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+        report,
+    );
+    let result = writer(report);
+    diag::record(
+        Kind::NativeWriteEnd,
+        [
+            operation,
+            u64::from(result.is_ok()),
+            result
+                .as_ref()
+                .map_or(0, |written| u64::try_from(*written).unwrap_or(u64::MAX)),
+            0,
+            0,
+            0,
+            0,
+            0,
+        ],
+        &[],
+    );
+    let written = result?;
     // The inventoried MI_03 collection has a 95-byte output capability.
     // The selected Windows hidapi C backend pads shorter reports to that size.
     if windows && report.len() < 95 {
@@ -69,6 +101,10 @@ fn windows_control(interface: i32, page: u16, usage: u16, path: &str) -> bool {
         && usage == 0
         && path.to_ascii_lowercase().split('#').nth(1) == Some("vid_17cc&pid_1720&mi_03")
 }
+
+#[cfg(test)]
+#[path = "platform/diagnostic_tests.rs"]
+mod diagnostic_tests;
 
 #[cfg(test)]
 mod tests {

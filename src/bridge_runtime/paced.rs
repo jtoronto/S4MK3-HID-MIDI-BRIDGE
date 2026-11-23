@@ -2,6 +2,7 @@
 
 use anyhow::{Context as _, bail};
 use crossbeam_channel::{Receiver, TryRecvError, select_biased};
+use s4mk3_hid_midi_bridge::screen_motor_diag::{self as diag, Kind};
 use s4mk3_hid_midi_bridge::{
     jog::decode::FRESHNESS_US,
     tension::{Engine, PlaybackState, neutral_report},
@@ -22,6 +23,7 @@ pub enum Action<'a> {
 
 pub struct Output<F: FnMut(Action<'_>) -> anyhow::Result<()>> {
     service: F,
+    native_motor: bool,
     finished: bool,
     recovery_since_us: Option<u64>,
     input_seen: bool,
@@ -29,14 +31,26 @@ pub struct Output<F: FnMut(Action<'_>) -> anyhow::Result<()>> {
 
 impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
     pub fn new(service: F) -> anyhow::Result<Self> {
+        Self::with_native_motor(true, service)
+    }
+
+    pub fn with_native_motor(native_motor: bool, service: F) -> anyhow::Result<Self> {
         let mut output = Self {
             service,
+            native_motor,
             finished: false,
             recovery_since_us: None,
             input_seen: false,
         };
-        (output.service)(Action::Motor(neutral_report()))?;
+        output.motor(neutral_report())?;
         Ok(output)
+    }
+
+    fn motor(&mut self, report: [u8; 11]) -> anyhow::Result<()> {
+        if self.native_motor {
+            (self.service)(Action::Motor(report))?;
+        }
+        Ok(())
     }
 
     pub fn initialize(&mut self) -> anyhow::Result<()> {
@@ -45,9 +59,11 @@ impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
 
     pub fn finish(&mut self) -> anyhow::Result<()> {
         if !self.finished {
-            (self.service)(Action::Motor(neutral_report()))?;
+            self.motor(neutral_report())?;
             self.finished = true;
-            info!("TENSION_FINAL_NEUTRAL: native write accepted");
+            if self.native_motor {
+                info!("TENSION_FINAL_NEUTRAL: native write accepted");
+            }
         }
         Ok(())
     }
@@ -55,14 +71,21 @@ impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
     fn expire_tension(&mut self, engine: &mut Engine, now_us: u64) -> anyhow::Result<()> {
         let deadline_us = engine.input_deadline_us();
         if self.recovery_since_us.is_none() && now_us >= deadline_us {
-            (self.service)(Action::Motor(neutral_report()))?;
+            diag::record(
+                Kind::InputTimeout,
+                [now_us, deadline_us, 0, 0, 0, 0, 0, 0],
+                &[],
+            );
+            self.motor(neutral_report())?;
             engine.clear_motion();
             self.recovery_since_us = Some(now_us);
-            warn!(
-                now_us,
-                deadline_us,
-                "TENSION_SUSPENDED: input freshness timeout; force cleared; waiting for fresh input"
-            );
+            if self.native_motor {
+                warn!(
+                    now_us,
+                    deadline_us,
+                    "TENSION_SUSPENDED: input freshness timeout; force cleared; waiting for fresh input"
+                );
+            }
         }
         Ok(())
     }
@@ -73,6 +96,20 @@ impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
         frame: &Frame,
         now_us: u64,
     ) -> anyhow::Result<()> {
+        diag::record(
+            Kind::BatchConsumed,
+            [
+                frame.host_us,
+                now_us,
+                now_us.saturating_sub(frame.host_us),
+                0,
+                0,
+                0,
+                0,
+                0,
+            ],
+            &[],
+        );
         self.expire_tension(engine, now_us)?;
         if self.recovery_since_us.is_none_or(|suspended_us| {
             frame.host_us > suspended_us && now_us.saturating_sub(frame.host_us) <= FRESHNESS_US
@@ -80,19 +117,26 @@ impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
             if let Some(report) =
                 engine.observe(frame.report(0), frame.report(1), frame.host_us, now_us)?
             {
-                (self.service)(Action::Motor(report))?;
+                self.motor(report)?;
             }
             if self.recovery_since_us.take().is_some() {
-                info!(
-                    host_us = frame.host_us,
-                    "TENSION_INPUT_RECOVERED: fresh baseline; force requires new qualified movement"
+                diag::record(
+                    Kind::InputRecovered,
+                    [frame.host_us, now_us, 0, 0, 0, 0, 0, 0],
+                    &[],
                 );
+                if self.native_motor {
+                    info!(
+                        host_us = frame.host_us,
+                        "TENSION_INPUT_RECOVERED: fresh baseline; force requires new qualified movement"
+                    );
+                }
             }
         }
         let mut backspin = [false; 2];
         (self.service)(Action::Frame(frame, &mut backspin))?;
         if let Some(report) = engine.set_backspin(backspin) {
-            (self.service)(Action::Motor(report))?;
+            self.motor(report)?;
         }
         self.playback(engine, now_us)?;
         self.input_seen = true;
@@ -102,8 +146,22 @@ impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
     fn playback(&mut self, engine: &mut Engine, now_us: u64) -> anyhow::Result<()> {
         let mut state = PlaybackState::default();
         (self.service)(Action::Playback(now_us, &mut state))?;
+        diag::record(
+            Kind::Playback,
+            [
+                now_us,
+                u64::from(state.enabled[0]),
+                u64::from(state.enabled[1]),
+                u64::from(state.owned[0]),
+                u64::from(state.owned[1]),
+                u64::from(state.continuous[0]),
+                u64::from(state.continuous[1]),
+                0,
+            ],
+            &[],
+        );
         if let Some(report) = engine.set_playback(state) {
-            (self.service)(Action::Motor(report))?;
+            self.motor(report)?;
         }
         Ok(())
     }
@@ -116,7 +174,21 @@ impl<F: FnMut(Action<'_>) -> anyhow::Result<()>> Output<F> {
         } else {
             engine.tick(tick_us)?
         };
-        (self.service)(Action::Motor(report))?;
+        diag::record(
+            Kind::Decision,
+            [
+                tick_us,
+                u64::from(self.recovery_since_us.is_some()),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ],
+            &report,
+        );
+        self.motor(report)?;
         (self.service)(Action::Feedback(tick_us))?;
         if self.input_seen {
             (self.service)(Action::Screens)?;

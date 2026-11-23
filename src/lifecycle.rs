@@ -86,6 +86,7 @@ pub struct Stop {
 
 impl Stop {
     pub fn request(&self, id: Option<u64>) -> anyhow::Result<()> {
+        s4mk3_hid_midi_bridge::screen_motor_diag::request_stop();
         let mut status = self
             .shared
             .lock()
@@ -107,16 +108,35 @@ pub struct Session {
     pub receiver: Receiver<()>,
     pub screens: Option<full::screens::Output>,
     pub led_config: Option<full::leds::LedConfig>,
+    pub feedback_input: Option<full::feedback::FeedbackInput>,
+}
+
+fn feedback_before_controller(profile: Option<MidiProfile>, backend: Backend) -> bool {
+    matches!(profile, Some(MidiProfile::Full)) && backend == Backend::Bloop
 }
 
 impl Session {
     pub fn new(args: &Args) -> anyhow::Result<Self> {
         let full = matches!(args.midi, Some(MidiProfile::Full));
+        // Djay can send its initial state as soon as the host publishes BLOOP.
+        let feedback_input = feedback_before_controller(args.midi, args.midi_backend)
+            .then(|| {
+                full::feedback::FeedbackInput::with_backend(
+                    full::mapping::PORT_NAME,
+                    args.midi_backend,
+                    args.capture_handle.clone(),
+                )
+            })
+            .transpose()?;
         let led_config = full
             .then(|| full::leds::LedConfig::load(args.led_config.as_deref()))
             .transpose()?;
         let screens = full
             .then(|| {
+                #[cfg(windows)]
+                if args.screens.ni_decks {
+                    return full::screens::Output::ni_decks();
+                }
                 if args.managed.stdin || args.screens.control_stdin {
                     full::screens::Output::managed(args.screens.enabled)
                 } else {
@@ -160,7 +180,10 @@ impl Session {
         .context("install Ctrl-C handler")?;
         if args.managed.stdin || args.screens.control_stdin {
             crate::screens_control::start(
-                screens.as_ref().and_then(full::screens::Output::control),
+                screens
+                    .as_ref()
+                    .filter(|_| !args.screens.ni_decks)
+                    .and_then(full::screens::Output::control),
                 stop.clone(),
                 args.capture_handle.clone(),
             )?;
@@ -182,6 +205,7 @@ impl Session {
             receiver,
             screens,
             led_config,
+            feedback_input,
         })
     }
 

@@ -17,6 +17,8 @@ mod service;
 use service::run;
 #[cfg(any(windows, test))]
 mod ni;
+#[cfg(any(windows, test))]
+mod ni_decks;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -62,6 +64,8 @@ struct Mailbox {
     identity: Option<super::ni_service::Identity>,
     #[cfg(any(windows, test))]
     cancellation: Option<tokio::sync::watch::Sender<bool>>,
+    #[cfg(any(windows, test))]
+    decks: Option<ni_decks::DeckMailbox>,
 }
 
 type Shared = Arc<(Mutex<Mailbox>, Condvar)>;
@@ -75,6 +79,10 @@ impl Control {
     pub fn request(&self, id: u64, action: Action) {
         match self.shared.0.lock() {
             Ok(mut mailbox) => {
+                #[cfg(any(windows, test))]
+                if mailbox.decks.is_some() {
+                    return;
+                }
                 if mailbox.stop {
                     return;
                 }
@@ -137,6 +145,8 @@ pub struct Worker {
     shared: Shared,
     thread: Option<JoinHandle<()>>,
     last: Option<[page::Page; 2]>,
+    #[cfg(any(windows, test))]
+    deck_completion: Option<crossbeam_channel::Receiver<()>>,
 }
 
 impl Worker {
@@ -275,6 +285,8 @@ impl Worker {
             shared,
             thread: Some(thread),
             last: None,
+            #[cfg(any(windows, test))]
+            deck_completion: None,
         })
     }
 
@@ -316,6 +328,15 @@ impl Worker {
 
 impl Drop for Worker {
     fn drop(&mut self) {
+        #[cfg(any(windows, test))]
+        if self.deck_completion.is_some() {
+            if self.thread.is_some()
+                && let Err(error) = self.stop_ni_decks()
+            {
+                tracing::warn!(%error, "NI_DECK_STOP_UNCONFIRMED");
+            }
+            return;
+        }
         match self.shared.0.lock() {
             Ok(mut mailbox) => {
                 mailbox.stop = true;

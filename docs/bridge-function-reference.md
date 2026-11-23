@@ -21,6 +21,16 @@ color taking precedence. Central buttons aggregate actual FX state across armed
 decks rather than choosing one deck's feedback. Missing state is not guessed.
 These changes use the existing generated mapping addresses.
 
+### Opt-in Windows screen/motor diagnostics
+
+The separate diagnostic package records production input, sensor freshness,
+selected force, native output and screen transactions in bounded memory.
+It exports after managed Stop and teardown. Temporary cases isolate no
+screen session, acquisition without frames, one static pair, bounded updates
+and the normal production route. They do not change motor laws or MIDI
+addresses. See the [operator procedure](../windows/qa/screen-motor/README.md)
+and [event schema](windows-screen-motor-diagnostic-schema.md).
+
 ### Current-source motorized playback testing
 
 TT toggles motorized playback independently per physical side, initially off.
@@ -301,8 +311,10 @@ under a new filename and preserve custom maps. See
 The full profile seeds its real parser from an initial numbered analog report 2
 GET without emitting bootstrap slider MIDI. After raw playback feedback opens
 the existing mapping-ready gate, sixteen channel-volume/EQ CCs apply their latest
-physical positions once. Full-mode analog interrupts trigger fresh snapshots
-rather than replaying queued values older than the startup GET. Minimal is unchanged.
+physical positions once. The full profile now requests a fresh analog report 2
+on every input batch, even without an analog interrupt. Queued analog values
+cannot overwrite the current snapshot. Minimal is unchanged. This is
+current-source behavior; see the [verification limits](analog-snapshot-validation-20261115.md).
 
 FX uses six actual values per deck from explicit root control outputs on CC 32-37:
 three parameters and three wet/dry values. Shared physical knobs are not replayed
@@ -341,8 +353,9 @@ logical-deck value or a mixer-fader assignment. The shared law is the same
 decoder, qualification and smoothing used by the physically validated
 diagnostic. Djay jog MIDI and held-touch ownership remain separate.
 
-An explicitly paced bounded reader delivers full snapshots and preserves
-ordinary analog interrupts. One bridge thread writes motor and LED reports.
+An explicitly paced bounded reader delivers button, jog and analog snapshots.
+Its bounded interrupt read remains, but full mode uses current snapshots
+instead of queued input values. One bridge thread writes motor and LED reports.
 Startup neutral precedes native initialization; queued zero gates precede
 overdue output ticks. Stop and detected faults attempt full neutral before
 reader teardown. Input older than 50ms fails closed. There is no automatic

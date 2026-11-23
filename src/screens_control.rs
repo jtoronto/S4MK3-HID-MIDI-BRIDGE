@@ -23,7 +23,7 @@ fn parse(line: &str) -> Option<(u64, ControlAction)> {
     Some((id.parse().ok()?, action))
 }
 
-fn parse_stop(line: &str) -> Option<u64> {
+pub fn parse_stop(line: &str) -> Option<u64> {
     let mut parts = line.split(' ');
     let ("S4_BRIDGE_CONTROL", Some(id), Some("STOP"), None) =
         (parts.next()?, parts.next(), parts.next(), parts.next())
@@ -105,6 +105,7 @@ pub fn bridge(
         jog,
         args.midi_backend,
         args.capture_handle.clone(),
+        session.feedback_input.take(),
     )
 }
 

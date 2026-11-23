@@ -138,7 +138,9 @@ internal sealed partial class SettingsView
         logCursor = delta.Cursor;
         command.Text = host.Supervisor.HasChild ? host.Supervisor.ActiveSpec!.Preview :
             "Next launch from editor (validation, save, and screen-access preparation precede launch): " +
-            Core.LaunchSpec.EditorPreview(host.Executable, host.Store).Preview;
+            (host.ExperimentalNiDecks
+                ? Core.LaunchSpec.Experimental(host.Executable, host.Store, true, null, null)
+                : Core.LaunchSpec.EditorPreview(host.Executable, host.Store)).Preview;
         UpdateDiagnosticsControls();
     }
     private void UpdateDiagnosticsControls()
@@ -146,13 +148,14 @@ internal sealed partial class SettingsView
         if (captureButton is null) return;
         var run = host.Supervisor.HasChild ? host.Supervisor.ActiveSpec!.Run : host.Store.Editor.Run;
         captureButton.Content = host.Diagnostics.Capturing ? "Stop motor capture" : "Start motor capture";
-        captureButton.IsEnabled = host.Diagnostics.Capturing || (run.Profile == "full" && run.LogLevel == "debug");
+        captureButton.IsEnabled = !host.ExperimentalNiDecks &&
+            (host.Diagnostics.Capturing || (run.Profile == "full" && run.LogLevel == "debug"));
         if (capturePath is not null) capturePath.Text = host.Diagnostics.CapturePath ?? "No capture created.";
         var midi = host.MidiCapture;
         if (midiCaptureEnabled is not null)
         {
             midiCaptureEnabled.IsChecked = midi.EnabledForNextLaunch;
-            midiCaptureEnabled.IsEnabled = !host.Operating;
+            midiCaptureEnabled.IsEnabled = !host.ExperimentalNiDecks && !host.Operating;
         }
         if (midiMarkerPending && (midi.LastMarkerId != midiPreviousMarker ||
             !string.IsNullOrEmpty(midi.MarkerError) || midi.State is not ("recording" or "limited")))

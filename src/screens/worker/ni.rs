@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 const CONTROL_POLL: Duration = Duration::from_millis(50);
+pub(super) use lifecycle::Presentation;
 
 mod ipc;
 mod lifecycle;
@@ -123,5 +124,7 @@ fn log_render(owner: (u64, u64), rendered: [(page::Page, bool); 2], frames: &[Fr
     }
 }
 
+#[cfg(test)]
+mod diagnostic_failures;
 #[cfg(test)]
 mod tests;

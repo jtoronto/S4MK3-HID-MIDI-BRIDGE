@@ -47,6 +47,23 @@ internal static class ControlTests
     }
     public static void Register(List<(string, Func<Task>)> tests)
     {
+        Check.Add(tests, "experimental NI decks disables screen and capture controls", () =>
+        {
+            using var f = new Fixture();
+            var host = new HostController(f.Resources, f.PathFor("experimental"), experimentalNiDecks: true);
+            using var diagnostics = host.Diagnostics;
+            var view = new SettingsView(host);
+            try
+            {
+                Check.True(!FindCombo(view.BuiltTabs[0], "Profile").IsEnabled);
+                Check.True(!view.BuiltTabs[1].GetLogicalDescendants().OfType<Button>()
+                    .Any(b => Equals(b.Content, "Retry verified access")));
+                Check.True(!FindCheck(view.BuiltTabs[5], "Capture MIDI on the next full-profile launch").IsEnabled);
+                Check.True(!FindButton(view.BuiltTabs[5], "Start motor capture").IsEnabled);
+                Check.Reject(() => view.ToggleScreensAsync().GetAwaiter().GetResult());
+            }
+            finally { view.StopRefresh(); }
+        });
         Check.Add(tests, "MIDI opt-in and marker control follow actual capture lifecycle", () =>
         {
             using var f = new Fixture();

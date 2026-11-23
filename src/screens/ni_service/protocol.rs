@@ -193,21 +193,55 @@ pub fn setup() -> Vec<Vec<u8>> {
 
 pub fn display(index: u8, pixels: &[u16], output: &mut Vec<u8>) {
     output.clear();
-    output.extend_from_slice(&words(&[
-        0x0364_7344,
-        u32::from(index),
-        0,
-        0x0140_00f0,
-        153_628,
-    ]));
+    output.extend_from_slice(&words(&[0x0364_7344, u32::from(index), 0, 0x0140_00f0, 0]));
     output.extend_from_slice(&[
-        0x84, 0, index, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0x40, 0, 0xf0, 0, 0, 0xff, 0,
+        0x84, 0, index, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0x40, 0, 0xf0,
     ]);
-    for &rgb in pixels {
-        let bgr = ((rgb & 0x001f) << 11) | (rgb & 0x07e0) | ((rgb & 0xf800) >> 11);
-        output.extend_from_slice(&bgr.to_be_bytes());
+    let pairs: Vec<_> = pixels.chunks_exact(2).collect();
+    let mut i = 0;
+    while i < pairs.len() {
+        let start = i;
+        while i < pairs.len() && pairs[i] == pairs[start] {
+            i += 1;
+        }
+        let run = i - start;
+        if run >= 4 {
+            let count = run.to_be_bytes();
+            output.extend_from_slice(&[
+                1,
+                count[count.len() - 3],
+                count[count.len() - 2],
+                count[count.len() - 1],
+            ]);
+            for &rgb in pairs[start] {
+                let bgr = ((rgb & 0x001f) << 11) | (rgb & 0x07e0) | ((rgb & 0xf800) >> 11);
+                output.extend_from_slice(&bgr.to_be_bytes());
+            }
+        } else {
+            while i < pairs.len() {
+                if i + 4 <= pairs.len() && (1..4).all(|n| pairs[i] == pairs[i + n]) {
+                    break;
+                }
+                i += 1;
+            }
+            let count = (i - start).to_be_bytes();
+            output.extend_from_slice(&[
+                0,
+                count[count.len() - 3],
+                count[count.len() - 2],
+                count[count.len() - 1],
+            ]);
+            for pair in &pairs[start..i] {
+                for &rgb in *pair {
+                    let bgr = ((rgb & 0x001f) << 11) | (rgb & 0x07e0) | ((rgb & 0xf800) >> 11);
+                    output.extend_from_slice(&bgr.to_be_bytes());
+                }
+            }
+        }
     }
-    output.extend_from_slice(&[3, 0, 0, 0, 0x40, 0, index, 0]);
+    output.extend_from_slice(&[3, 0, 0, 0, 0x40, 0, 0, 0]);
+    let len = (output.len() - 20).to_le_bytes();
+    output[16..20].copy_from_slice(&len[..4]);
 }
 
 #[cfg(test)]

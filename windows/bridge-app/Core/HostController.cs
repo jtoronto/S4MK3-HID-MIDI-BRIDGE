@@ -13,6 +13,7 @@ public sealed class HostController
     public ScreenCoordinator Screens { get; }
     public MappingExporter Exporter { get; }
     public string Executable { get; }
+    public bool ExperimentalNiDecks { get; }
     public Preferences? LaunchedPreferences { get; private set; }
     public string Message { get; private set; } = "";
     public string Error { get; private set; } = "";
@@ -39,9 +40,11 @@ public sealed class HostController
     public Func<ScreenAccess, Task<ScreenConsent>> Consent { get; set; } =
         _ => Task.FromResult(ScreenConsent.Cancel);
 
-    public HostController(string resources, string root, IBloopEndpointOwner? endpointOwner = null)
+    public HostController(string resources, string root, IBloopEndpointOwner? endpointOwner = null,
+        bool experimentalNiDecks = false)
     {
         this.endpointOwner = endpointOwner;
+        ExperimentalNiDecks = experimentalNiDecks;
         Store = new(resources, root);
         Executable = Path.Combine(resources, "s4mk3-hid-midi-bridge.exe");
         Screens = new(Store, new NIServiceControl(resources));
@@ -53,12 +56,12 @@ public sealed class HostController
         {
             Diagnostics.BeginLaunch(id);
             MidiCapture.Launched(id);
-            Screens.Started(id, false);
+            if (!ExperimentalNiDecks) Screens.Started(id, false);
         };
         Supervisor.Output += (_, line) => Diagnostics.Log.Append(line);
-        Supervisor.Protocol += (id, line) => { Diagnostics.Accept(id, line); Screens.Accept(id, line); MidiCapture.Accept(id, line); };
+        Supervisor.Protocol += (id, line) => { Diagnostics.Accept(id, line); if (!ExperimentalNiDecks) Screens.Accept(id, line); MidiCapture.Accept(id, line); };
         Supervisor.StderrLine += (id, line) => Diagnostics.AcceptStderr(id, line);
-        Supervisor.Exited += (id, _) => { Screens.Exited(id); MidiCapture.Exited(id); };
+        Supervisor.Exited += (id, _) => { if (!ExperimentalNiDecks) Screens.Exited(id); MidiCapture.Exited(id); };
         Supervisor.Changed += () => Changed?.Invoke();
         Screens.Changed += () => Changed?.Invoke();
         MidiCapture.Changed += () => Changed?.Invoke();
@@ -72,20 +75,26 @@ public sealed class HostController
         try
         {
             Store.Save();
-            var screens = await Screens.PrepareAsync(Consent);
+            var screens = ExperimentalNiDecks ? false : await Screens.PrepareAsync(Consent);
             if (screens is null) { Message = "Start cancelled. No process launched."; return; }
             LaunchedPreferences = Store.Saved.Copy();
+            if (ExperimentalNiDecks && (MidiCapture.EnabledForNextLaunch || Diagnostics.Capturing))
+                throw new InvalidOperationException("NI decks mode cannot run with diagnostic capture.");
             var capturePath = MidiCapture.PrepareLaunch(Store.Root, Store.Saved.Run.Profile);
             try
             {
-                var spec = LaunchSpec.Runtime(Executable, Store, screens.Value, capturePath);
+                var spec = ExperimentalNiDecks
+                    ? LaunchSpec.Experimental(Executable, Store, false, capturePath,
+                        Environment.GetEnvironmentVariable(ScreenMotorDiagnostics.EnvironmentVariable))
+                    : LaunchSpec.Runtime(Executable, Store, screens.Value, capturePath);
+                if (ExperimentalNiDecks) LaunchedPreferences = LaunchedPreferences with { Run = spec.Run };
                 Diagnostics.Log.Append("LAUNCH: " + spec.Preview);
                 if (spec.Run.Profile == "probe") Supervisor.Start(spec);
                 else await Supervisor.StartAsync(spec, endpointOwner
                     ?? throw new InvalidOperationException("BLOOP endpoint management is unavailable."));
             }
             catch (Exception ex) { MidiCapture.LaunchFailed(ex); throw; }
-            if (Supervisor.Launch is { } launch) Screens.Started(launch.Id, screens.Value);
+            if (!ExperimentalNiDecks && Supervisor.Launch is { } launch) Screens.Started(launch.Id, screens.Value);
             Error = "";
         }
         finally { Operating = false; Changed?.Invoke(); }

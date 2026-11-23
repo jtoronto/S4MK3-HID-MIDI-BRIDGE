@@ -2,10 +2,31 @@ use super::*;
 use std::cell::{Cell, RefCell};
 
 mod backspin;
+mod diagnostics;
 mod playback;
 mod recovery;
 mod tt_gesture;
 mod watchdog;
+
+#[test]
+fn ni_owner_omits_all_native_motor_writes_including_startup_and_drop() -> anyhow::Result<()> {
+    let writes = Cell::new(0);
+    let mut engine = active_engine(10)?;
+    {
+        let mut output = Output::with_native_motor(false, |action| {
+            if matches!(action, Action::Motor(_)) {
+                writes.set(writes.get() + 1);
+            }
+            Ok(())
+        })?;
+        output.initialize()?;
+        output.sample(&mut engine, &frame(16_001, [80, 80], 0x30), 16_001)?;
+        output.tick(&mut engine, 18_001)?;
+        output.tick(&mut engine, 90_000)?;
+    }
+    assert_eq!(writes.get(), 0);
+    Ok(())
+}
 
 fn config(value: i32) -> anyhow::Result<s4mk3_hid_midi_bridge::tension::Config> {
     Ok(serde_json::from_str(&format!(r#"{{"tension":{value}}}"#))?)

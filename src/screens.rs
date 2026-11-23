@@ -23,6 +23,15 @@ pub const HEIGHT: usize = 240;
 pub const PIXEL_BYTES: usize = WIDTH * HEIGHT * 2;
 pub const PACKET_BYTES: usize = 16 + PIXEL_BYTES + 4;
 
+/// Desired output for one physical NI deck; the default is paused, dark JOG.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DeckOutput {
+    pub turntable: bool,
+    pub playing: bool,
+    /// NI ring color value, or dark when absent.
+    pub ring: Option<u8>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Display {
     Left,

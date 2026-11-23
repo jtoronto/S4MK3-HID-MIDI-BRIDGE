@@ -90,16 +90,22 @@ settings; restarting the bridge alone doesn't update Djay's mapping.
 
 ## Normal startup and screens
 
-1. Connect and power the S4. Close Traktor and any other bridge instance, leaving
-   NIHardwareService running.
+For a screenless direct-HID run, open `S4Bridge.exe` directly and keep
+**Enable S4 screens** off. This path does not use NIHardwareService; the
+separate NI-decks launcher opts into the NI-managed path. Djay PRO is
+required for the custom mapping.
+
+1. Connect and power the S4. Close Traktor and any other bridge instance.
+   If using the NI display path, leave NIHardwareService running.
 2. Open the bridge. In Settings, select **full** and, if
    wanted, turn on **Enable S4 screens** in **Screens**.
 3. Start the bridge and wait for **Bridge: ready**. In Djay, select the
-   Windows mapping for **S4 MK3 Bridge BLOOP**. Djay can already be open;
-   Stop/Start recreates the endpoint so Djay can publish initial feedback
-   again. Ready confirms the controller and MIDI handles. Check playback and
+   Windows mapping for **S4 MK3 Bridge BLOOP**. Djay can already be open,
+   but may send its refresh before the bridge starts listening. Ready
+   confirms the controller and MIDI handles, not feedback. Check playback and
    headphone cue lights against Djay; other values remain unknown until Djay
-   sends them. If feedback is missing, keep the diagnostic evidence; switching
+   sends them. If the initial feedback is missing, save the diagnostics and
+   fully quit and reopen Djay while the bridge is ready. Switching
    mappings is not an established safe refresh.
 4. Check **Screens: active** and the actual displays. The screen worker requests
    access through NIHardwareService; registration alone isn't enough. A

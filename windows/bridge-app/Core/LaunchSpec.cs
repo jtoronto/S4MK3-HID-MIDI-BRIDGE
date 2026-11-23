@@ -6,14 +6,51 @@ namespace S4Bridge.Core;
 public sealed record LaunchSpec(string Executable, string[] Arguments,
     RunPreferences Run, bool Diagnostic = false, string MidiBackend = BloopEndpoint.Backend)
 {
+    public const string ExperimentalEnvironmentVariable = "S4_BRIDGE_EXPERIMENTAL_NI_DECKS";
+    public static bool ExperimentalEnabled(string? value) => value == "1";
+    public static LaunchSpec Experimental(string executable, PreferenceStore store, bool preview,
+        string? midiCapturePath, string? screenMotorConfig)
+    {
+        if (midiCapturePath is not null || screenMotorConfig is not null)
+            throw new InvalidOperationException("NI decks mode cannot run with MIDI capture or screen/motor diagnostics.");
+        var run = (preview ? store.Editor.Run : store.Saved.Run) with
+        { Profile = "full", LimitDuration = false };
+        var args = new List<string> { "--ni-decks", "--midi", "full", "--midi-backend", BloopEndpoint.Backend,
+            "--managed-stdin", "--until-stopped" };
+        foreach (var config in new[] { "led", "jog" })
+            args.AddRange([$"--{config}-config", Path.Combine(store.Root, $"{config}-config.json")]);
+        if (run.RawReports) args.Add("--raw");
+        return new(executable, [.. args], run);
+    }
     public static LaunchSpec Runtime(string executable, PreferenceStore store, bool screens, string? midiCapturePath = null) =>
-        Build(executable, store, store.Saved.Run, screens, midiCapturePath);
+        Runtime(executable, store, screens, midiCapturePath,
+            Environment.GetEnvironmentVariable(ScreenMotorDiagnostics.EnvironmentVariable));
+    public static LaunchSpec Runtime(string executable, PreferenceStore store, bool screens, string? midiCapturePath,
+        string? screenMotorConfig) =>
+        Build(executable, store, store.Saved.Run, screens, midiCapturePath, screenMotorConfig);
     public static LaunchSpec EditorPreview(string executable, PreferenceStore store) =>
-        Build(executable, store, store.Editor.Run, store.Editor.Screen.Enabled);
-    private static LaunchSpec Build(string executable, PreferenceStore store, RunPreferences preferences, bool screens, string? midiCapturePath = null)
+        EditorPreview(executable, store, Environment.GetEnvironmentVariable(ScreenMotorDiagnostics.EnvironmentVariable));
+    public static LaunchSpec EditorPreview(string executable, PreferenceStore store, string? screenMotorConfig) =>
+        Build(executable, store, store.Editor.Run, store.Editor.Screen.Enabled, null,
+            screenMotorConfig, preview: true);
+    private static LaunchSpec Build(string executable, PreferenceStore store, RunPreferences preferences, bool screens,
+        string? midiCapturePath = null, string? screenMotorConfig = null, bool preview = false)
     {
         var run = preferences with { };
         var args = new List<string> { "--midi-backend", BloopEndpoint.Backend, "--managed-stdin" };
+        if (screenMotorConfig is not null)
+        {
+            var diagnosticCase = ScreenMotorDiagnostics.Validate(screenMotorConfig, preview);
+            if (!preview)
+            {
+                if (run.Profile != "full") throw new InvalidOperationException("Screen/motor diagnostics require the full controller profile.");
+                if (midiCapturePath is not null) throw new InvalidOperationException("Screen/motor diagnostics cannot run with MIDI capture.");
+            }
+            screens = diagnosticCase != "off";
+            run = run with { RawReports = false, LogLevel = "info", LimitDuration = false };
+            args.AddRange(["--screen-motor-diagnostic-config", screenMotorConfig,
+                "--prepare-screen-motor-diagnostics"]);
+        }
         if (midiCapturePath is not null)
         {
             if (!Path.IsPathFullyQualified(midiCapturePath)) throw new InvalidDataException("MIDI capture path must be absolute.");

@@ -22,6 +22,7 @@ mod ring_tests;
 
 pub struct LedOutput<'a> {
     hid: &'a HidDevice,
+    native_rings: bool,
     buttons: Option<[u8; 95]>,
     rings: [Option<[u8; 41]>; 2],
     meters: Option<[u8; 79]>,
@@ -32,14 +33,14 @@ pub struct LedOutput<'a> {
 }
 
 impl<'a> LedOutput<'a> {
-    pub fn new(hid: &'a HidDevice) -> anyhow::Result<Self> {
+    pub fn new(hid: &'a HidDevice, native_rings: bool) -> anyhow::Result<Self> {
         // Traktor capture: 28 bytes including ID; separate motor report is excluded.
         let mut init = [0_u8; 28];
         init[0] = 0x30;
         init[2] = 1;
         init[3] = 3;
         // Mixxx's third sendOutputReport argument is FIFO ordering, not report type.
-        for side in 0_u8..2 {
+        for side in (0_u8..2).filter(|_| native_rings) {
             init[1] = side;
             let written =
                 crate::platform::write(hid, &init).context("initialize S4 ring output")?;
@@ -52,6 +53,7 @@ impl<'a> LedOutput<'a> {
         info!("END_WARNING_UNAVAILABLE: no verified Djay remaining-time/end-warning output");
         Ok(Self {
             hid,
+            native_rings,
             buttons: None,
             rings: [None; 2],
             meters: None,
@@ -70,9 +72,13 @@ impl<'a> LedOutput<'a> {
         now: Duration,
     ) -> anyhow::Result<usize> {
         let mut writes = 0;
-        // Update phase on every service tick, independently of HID write pacing.
-        let mut presented = *local;
-        presented.ring_positions = self.ring_phase.positions(config, feedback, local, now)?;
+        let presented = if self.native_rings {
+            let mut state = *local;
+            state.ring_positions = self.ring_phase.positions(config, feedback, local, now)?;
+            Some(state)
+        } else {
+            None
+        };
         if due(self.button_written, now, BUTTON_INTERVAL) {
             let report = render_button_frame(config, feedback, local, now);
             if self.buttons != Some(report) {
@@ -82,18 +88,10 @@ impl<'a> LedOutput<'a> {
                 writes += 1;
             }
         }
-        if due(self.ring_written, now, RING_INTERVAL) {
-            for side in 0_u8..2 {
-                let report = render_ring(config, feedback, &presented, side, now);
-                let index = usize::from(side);
-                if self.rings[index] != Some(report) {
-                    self.write(&report)?;
-                    debug!(side, mode = report[2], color = report[5], "RING_LED_WRITE");
-                    self.rings[index] = Some(report);
-                    self.ring_written = Some(now);
-                    writes += 1;
-                }
-            }
+        if let Some(presented) = presented
+            && due(self.ring_written, now, RING_INTERVAL)
+        {
+            writes += self.tick_rings(config, feedback, &presented, now)?;
         }
         // Until Djay supplies a level, do not write the meter report at all.
         if (self.meters.is_some() || feedback.meters.iter().any(Option::is_some))
@@ -104,6 +102,28 @@ impl<'a> LedOutput<'a> {
                 self.write(&report)?;
                 self.meters = Some(report);
                 self.meter_written = Some(now);
+                writes += 1;
+            }
+        }
+        Ok(writes)
+    }
+
+    fn tick_rings(
+        &mut self,
+        config: &LedConfig,
+        feedback: &FeedbackState,
+        local: &LocalState,
+        now: Duration,
+    ) -> anyhow::Result<usize> {
+        let mut writes = 0;
+        for side in 0_u8..2 {
+            let report = render_ring(config, feedback, local, side, now);
+            let index = usize::from(side);
+            if self.rings[index] != Some(report) {
+                self.write(&report)?;
+                debug!(side, mode = report[2], color = report[5], "RING_LED_WRITE");
+                self.rings[index] = Some(report);
+                self.ring_written = Some(now);
                 writes += 1;
             }
         }
@@ -121,7 +141,7 @@ impl<'a> LedOutput<'a> {
         let mut buttons = [0; 95];
         buttons[0] = 0x80;
         self.write(&buttons)?;
-        for side in 0_u8..2 {
+        for side in (0_u8..2).filter(|_| self.native_rings) {
             let mut report = [0; 41];
             report[0] = 0x32;
             report[1] = side;

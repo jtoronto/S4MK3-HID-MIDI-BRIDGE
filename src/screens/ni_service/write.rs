@@ -18,6 +18,25 @@ pub(super) async fn message(
     }
 }
 
+pub(super) async fn guarded_message(
+    bytes: &[u8],
+    mut send: impl FnMut(&[u8]) -> io::Result<usize> + Send,
+    guard: &(dyn Fn() -> bool + Sync),
+) -> Result<bool, Error> {
+    loop {
+        if !guard() {
+            return Ok(false);
+        }
+        let actual = send(bytes)?;
+        if actual == 0 && !bytes.is_empty() {
+            tokio::time::sleep(POLL).await;
+        } else {
+            written(bytes.len(), actual)?;
+            return Ok(true);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -36,6 +55,24 @@ mod tests {
         .await;
         assert!(result.is_ok(), "{result:?}");
         assert_eq!(attempts, vec![b"test".to_vec(); 3]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn revoked_guard_prevents_retry_after_zero_progress() {
+        let allowed = std::sync::atomic::AtomicBool::new(true);
+        let mut attempts = 0;
+        let result = guarded_message(
+            b"play",
+            |_| {
+                attempts += 1;
+                allowed.store(false, std::sync::atomic::Ordering::SeqCst);
+                Ok(0)
+            },
+            &|| allowed.load(std::sync::atomic::Ordering::SeqCst),
+        )
+        .await;
+        assert!(matches!(result, Ok(false)));
+        assert_eq!(attempts, 1);
     }
 
     #[tokio::test(start_paused = true)]

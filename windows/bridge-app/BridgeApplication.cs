@@ -36,7 +36,10 @@ internal sealed class BridgeApplication : Application
             try { instance = new(Path.Combine(root, ".instance.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
             catch (IOException ex) { throw new IOException("Another S4 Bridge host may already be running. Close it before starting this copy.", ex); }
             var resources = Path.Combine(AppContext.BaseDirectory, "Resources");
-            host = new(resources, root, new BloopEndpointOwner(root));
+            var experimental = LaunchSpec.ExperimentalEnabled(
+                Environment.GetEnvironmentVariable(LaunchSpec.ExperimentalEnvironmentVariable));
+            var preferencesRoot = PreferenceStore.HostPreferencesRoot(root, experimental);
+            host = new(resources, preferencesRoot, new BloopEndpointOwner(root), experimental);
             settings = new(host);
             desktop.MainWindow = settings;
             trayImages = new(Path.Combine(resources, "AppIcon.png"));
@@ -46,7 +49,7 @@ internal sealed class BridgeApplication : Application
             {
                 bridgeStatus,screenStatus,new NativeMenuItemSeparator(),start,stop,screenToggle,
                 Menu("Retry screens",()=>host.Screens.RetryAsync(host.Supervisor),
-                    ()=>host.Supervisor.State=="ready" && host.Supervisor.ActiveSpec?.Run.Profile=="full" && !host.Screens.Busy),
+                    ()=>!host.ExperimentalNiDecks && host.Supervisor.State=="ready" && host.Supervisor.ActiveSpec?.Run.Profile=="full" && !host.Screens.Busy),
                 Menu("Review NI recovery",()=>{host.Screens.RequireOwnedRecovery();return Task.CompletedTask;}),
                 new NativeMenuItemSeparator(),
                 Menu("Settings...",()=>{settings.ShowSettings();return Task.CompletedTask;}),
@@ -105,7 +108,7 @@ internal sealed class BridgeApplication : Application
         screenStatus.Header = "Screens: " + host.Screens.State;
         start.IsEnabled = host.CanStart; stop.IsEnabled = host.CanStop;
         screenToggle.IsChecked = host.Store.Editor.Screen.Enabled;
-        screenToggle.IsEnabled = !host.Screens.Busy && host.Supervisor.State != "stopping";
+        screenToggle.IsEnabled = !host.ExperimentalNiDecks && !host.Screens.Busy && host.Supervisor.State != "stopping";
         foreach (var (item, enabled) in menuGates) item.IsEnabled = enabled();
         tray.ToolTipText = $"S4 MK3 Bridge | {host.Supervisor.State} | Screens {host.Screens.State}";
         if (trayImages is not null)

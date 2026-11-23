@@ -115,6 +115,9 @@ fn fixture(block: bool, poll: Option<Receiver<()>>) -> anyhow::Result<(Worker, R
     Ok((worker, receiver))
 }
 
+mod capture;
+mod cases;
+
 #[test]
 fn off_closes_without_overwrite_and_retry_repaints_latest_pair() -> anyhow::Result<()> {
     let (mut worker, events) = fixture(false, None)?;

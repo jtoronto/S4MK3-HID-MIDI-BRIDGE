@@ -54,7 +54,9 @@ internal sealed partial class SettingsView
         { jog.BackspinEnabled = v; backspinControls.IsEnabled = v; assistStrength.IsEnabled = v && jog.BackspinAssistEnabled; });
         return UiTheme.BodyView(
             UiTheme.SectionView("Motorized platters",
-                UiTheme.Text("Experimental. Save and restart applies motor settings; no mapping export is required. Turn TT off or Stop bridge before closing Djay.", true),
+                UiTheme.Text(host.ExperimentalNiDecks
+                    ? "NIHardwareService renders platter force in this trial. The bridge's force, braking and wheel tension controls do not tune NI force. Turn TT off or Stop bridge before closing Djay."
+                    : "Experimental. Save and restart applies motor settings; no mapping export is required. Turn TT off or Stop bridge before closing Djay.", true),
                 Action("Restore motorized defaults", () =>
                 { host.Store.ResetMotorized(); host.Edited(); BuildTabs(); return Task.CompletedTask; }),
                 fields.Slider("Base force (units)", jog.PlatterBaseForce, v => jog.PlatterBaseForce = (int)v, 0, 25000, 50),

@@ -193,6 +193,75 @@ fn tt_backspin_fraction_does_not_change_same_frame_normal_mode_motion() -> anyho
 }
 
 #[test]
+fn ni_tt_resumes_playing_after_released_backspin_comes_to_rest() -> anyhow::Result<()> {
+    let mut fixture = Fixture::new();
+    let colors = crate::full::leds::LedConfig::default();
+    fixture.drive(330, 150)?;
+    fixture.translator.translate(
+        &[Control::Button("left_wheel_touch", true)],
+        None,
+        &mut Vec::new(),
+    )?;
+    fixture.drive(-1200, 40)?;
+    assert_eq!(fixture.translator.backspin_deck(0), Some(0));
+    assert!(
+        !fixture
+            .translator
+            .ni_deck_output(&fixture.feedback, &colors, true)[0]
+            .playing
+    );
+    fixture.translator.translate(
+        &[Control::Button("left_wheel_touch", false)],
+        None,
+        &mut Vec::new(),
+    )?;
+    fixture.drive(-1200, 20)?;
+    assert!(
+        !fixture
+            .translator
+            .ni_deck_output(&fixture.feedback, &colors, true)[0]
+            .playing
+    );
+
+    fixture.drive(0, 100)?;
+    assert_eq!(fixture.translator.backspin_deck(0), None);
+    assert!(
+        fixture
+            .translator
+            .ni_deck_output(&fixture.feedback, &colors, true)[0]
+            .playing
+    );
+    assert!(
+        !fixture
+            .translator
+            .ni_deck_output(&fixture.feedback, &colors, false)[0]
+            .playing
+    );
+    fixture.feedback.playing[0] = Some(false);
+    fixture
+        .translator
+        .sync_front_panel(&fixture.feedback, &mut Vec::new())?;
+    assert!(
+        !fixture
+            .translator
+            .ni_deck_output(&fixture.feedback, &colors, true)[0]
+            .playing
+    );
+    fixture.feedback.playing[0] = Some(true);
+    fixture
+        .translator
+        .sync_front_panel(&fixture.feedback, &mut Vec::new())?;
+    fixture.drive(100, 50)?;
+    assert!(
+        fixture
+            .translator
+            .ni_deck_output(&fixture.feedback, &colors, true)[0]
+            .playing
+    );
+    Ok(())
+}
+
+#[test]
 fn tt_shift_requires_top_contact_for_seek_but_normal_shift_does_not() -> anyhow::Result<()> {
     for (side, deck) in [(0, Deck::A), (0, Deck::C), (1, Deck::B), (1, Deck::D)] {
         for motor_enabled in [false, true] {

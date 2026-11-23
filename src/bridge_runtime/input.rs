@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context as _, bail};
 use crossbeam_channel::{Receiver, Sender, TryRecvError, bounded};
 use hidapi::HidDevice;
+use s4mk3_hid_midi_bridge::screen_motor_diag::{self as diag, Kind, Role};
 use tracing::warn;
 
 pub const INTERVAL_US: u64 = 2_000;
@@ -39,6 +40,7 @@ impl Reader {
         let handle = std::thread::Builder::new()
             .name("s4-snapshots".to_owned())
             .spawn(move || {
+                let _trace = diag::enter(Role::Input);
                 let result = (|| {
                     let mut next_poll = started;
                     loop {
@@ -57,12 +59,28 @@ impl Reader {
                             Ok(()) | Err(TryRecvError::Disconnected) => return Ok(()),
                             Err(TryRecvError::Empty) => {}
                         }
-                        tx.try_send(Frame {
-                            host_us: u64::try_from(started.elapsed().as_micros())?,
+                        let host_us = u64::try_from(started.elapsed().as_micros())?;
+                        let published = tx.try_send(Frame {
+                            host_us,
                             buffers,
                             lengths,
-                        })
-                        .context("full-profile snapshot queue overflow or consumer stopped")?;
+                        });
+                        diag::record(
+                            Kind::BatchPublished,
+                            [
+                                host_us,
+                                u64::from(published.is_ok()),
+                                u64::try_from(tx.len())?,
+                                u64::try_from(lengths[0])?,
+                                u64::try_from(lengths[1])?,
+                                u64::try_from(lengths[2])?,
+                                0,
+                                0,
+                            ],
+                            &[],
+                        );
+                        published
+                            .context("full-profile snapshot queue overflow or consumer stopped")?;
                     }
                 })();
                 drop(hid);
@@ -98,7 +116,7 @@ impl Reader {
         Ok(())
     }
 
-    fn cancel(&self) -> anyhow::Result<()> {
+    pub(super) fn cancel(&self) -> anyhow::Result<()> {
         match self.cancel.try_send(()) {
             Ok(()) | Err(crossbeam_channel::TrySendError::Disconnected(())) => Ok(()),
             Err(error) => bail!("cancel snapshot reader: {error}"),

@@ -31,6 +31,24 @@ impl Output {
         })
     }
 
+    #[cfg(windows)]
+    pub fn ni_decks() -> anyhow::Result<Self> {
+        Ok(Self {
+            enabled: true,
+            managed: true,
+            worker: Some(s4mk3_hid_midi_bridge::screens::Worker::start_ni_decks()?),
+        })
+    }
+
+    #[cfg(windows)]
+    pub fn stop_ni_decks(&mut self) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        self.worker
+            .as_mut()
+            .context("NI deck worker missing at shutdown")?
+            .stop_ni_decks()
+    }
+
     pub fn control(&self) -> Option<s4mk3_hid_midi_bridge::screens::Control> {
         self.worker
             .as_ref()

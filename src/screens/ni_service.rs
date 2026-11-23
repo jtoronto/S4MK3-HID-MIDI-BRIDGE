@@ -21,9 +21,15 @@ use tokio::time::{Instant, timeout_at};
 
 #[path = "ni_service/bootstrap.rs"]
 mod bootstrap;
+#[path = "ni_service/decks.rs"]
+mod decks;
+pub use super::DeckOutput;
 #[cfg(test)]
 #[path = "ni_service/fixtures.rs"]
 mod fixtures;
+#[cfg(feature = "attended-ni-jog")]
+#[path = "ni_service/left_jog.rs"]
+mod left_jog;
 #[path = "ni_service/protocol.rs"]
 mod protocol;
 #[cfg(windows)]
@@ -201,6 +207,20 @@ async fn bounded<T: Send>(
 trait Pipe: Send {
     fn read(&mut self) -> impl Future<Output = Result<Vec<u8>, Error>> + Send;
     fn write(&mut self, message: &[u8]) -> impl Future<Output = Result<(), Error>> + Send;
+
+    fn write_guarded(
+        &mut self,
+        message: &[u8],
+        guard: &(dyn Fn() -> bool + Sync),
+    ) -> impl Future<Output = Result<bool, Error>> + Send {
+        async move {
+            if !guard() {
+                return Ok(false);
+            }
+            self.write(message).await?;
+            Ok(true)
+        }
+    }
 }
 
 trait Connector: Send + Sync {
@@ -333,6 +353,8 @@ struct Session<C: Connector> {
     cancel: Cancellation,
     identity: Identity,
     packet: Vec<u8>,
+    decks: Option<[DeckOutput; 2]>,
+    deck_speeds_initialized: bool,
 }
 
 struct Resources<C: Connector> {
@@ -408,6 +430,8 @@ impl<C: Connector> Session<C> {
             cancel,
             identity,
             packet: Vec::with_capacity(protocol::DISPLAY_BYTES),
+            decks: None,
+            deck_speeds_initialized: false,
         })
     }
 
@@ -418,8 +442,9 @@ impl<C: Connector> Session<C> {
         serial: &str,
         cancel: &mut Cancellation,
         packet: &[u8],
+        budget: Duration,
     ) -> Result<(), Error> {
-        let deadline = Instant::now() + IO_TIMEOUT;
+        let deadline = Instant::now() + budget;
         Self::inspect(resources, serial, cancel, deadline).await?;
         Self::transact(resources, serial, cancel, packet, deadline).await
     }
@@ -517,6 +542,14 @@ impl<C: Connector> Session<C> {
     }
 
     async fn publish_pair(&mut self, frames: [Raster<'_>; 2]) -> Result<(), Error> {
+        self.publish_pair_with_budget(frames, IO_TIMEOUT).await
+    }
+
+    async fn publish_pair_with_budget(
+        &mut self,
+        frames: [Raster<'_>; 2],
+        per_frame: Duration,
+    ) -> Result<(), Error> {
         // Move ownership into this future. Dropping the future mid-exchange
         // closes all pipes rather than returning a half-used session to callers.
         let mut resources = self.resources.take().ok_or(Error::Disconnected)?;
@@ -528,7 +561,6 @@ impl<C: Connector> Session<C> {
                     target_index,
                     header_target = self.packet[4],
                     embedded_target = self.packet[22],
-                    footer_target = self.packet[self.packet.len() - 2],
                     hash = crate::screens::route_fingerprint(raster.0),
                     "SCREEN_ROUTE_SEND"
                 );
@@ -538,6 +570,7 @@ impl<C: Connector> Session<C> {
                 &self.identity.serial,
                 &mut self.cancel,
                 &self.packet,
+                per_frame,
             )
             .await;
             tracing::debug!(target: "s4_screen_route_diag", target_index, result = ?result, "SCREEN_ROUTE_RESPONSE");

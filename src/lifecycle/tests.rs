@@ -1,5 +1,22 @@
 use super::*;
 
+#[test]
+fn full_bloop_subscribes_before_controller_setup_in_both_deck_modes() {
+    assert!(feedback_before_controller(
+        Some(MidiProfile::Full),
+        Backend::Bloop
+    ));
+    for profile in [Some(MidiProfile::Minimal), None] {
+        assert!(!feedback_before_controller(profile, Backend::Bloop));
+    }
+    for backend in [Backend::CoreMidi, Backend::Loopbe] {
+        assert!(!feedback_before_controller(
+            Some(MidiProfile::Full),
+            backend
+        ));
+    }
+}
+
 fn session_with_backend(profile: &'static str, backend: Backend) -> Session {
     let (sender, receiver) = crossbeam_channel::bounded(1);
     let shared = Arc::new(Mutex::new(Status {
@@ -28,6 +45,7 @@ fn session_with_backend(profile: &'static str, backend: Backend) -> Session {
         receiver,
         screens: None,
         led_config: None,
+        feedback_input: None,
     }
 }
 

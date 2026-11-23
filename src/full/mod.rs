@@ -255,11 +255,16 @@ impl FullBridge {
         jog_config: jog::Config,
         backend: crate::midi_transport::Backend,
         capture: crate::midi_capture::Handle,
+        feedback_input: Option<feedback::FeedbackInput>,
     ) -> anyhow::Result<Self> {
         jog_config.validate()?;
         // Djay can return initial state as soon as the source appears.
-        let feedback_input =
-            feedback::FeedbackInput::with_backend(mapping::PORT_NAME, backend, capture.clone())?;
+        let feedback_input = match feedback_input {
+            Some(input) => input,
+            None => {
+                feedback::FeedbackInput::with_backend(mapping::PORT_NAME, backend, capture.clone())?
+            }
+        };
         let connection = crate::midi_transport::output(backend, mapping::PORT_NAME, capture)?;
         info!(port = mapping::PORT_NAME, "MIDI_FULL_READY");
         Ok(Self {
@@ -311,6 +316,26 @@ impl FullBridge {
 
     pub fn playback_state(&self) -> s4mk3_hid_midi_bridge::tension::PlaybackState {
         self.translator.playback_state()
+    }
+
+    #[cfg(windows)]
+    pub fn update_ni_decks(
+        &self,
+        colors: &leds::LedConfig,
+        input_fresh: bool,
+    ) -> anyhow::Result<()> {
+        self.screens
+            .control()
+            .ok_or_else(|| anyhow::anyhow!("NI deck worker missing"))?
+            .set_ni_decks(
+                self.translator
+                    .ni_deck_output(&self.feedback, colors, input_fresh),
+            )
+    }
+
+    #[cfg(windows)]
+    pub fn stop_ni_decks(&mut self) -> anyhow::Result<()> {
+        self.screens.stop_ni_decks()
     }
 
     pub fn seed_analog(&mut self, events: &[Event]) -> anyhow::Result<()> {
@@ -411,6 +436,9 @@ impl Drop for FullBridge {
     }
 }
 
+#[cfg(test)]
+mod ni_deck_tests;
+
 impl Translator {
     fn report(
         &mut self,
@@ -452,6 +480,46 @@ impl Translator {
             }),
             continuous: self.motor_enabled,
         }
+    }
+
+    #[cfg(any(windows, test))]
+    fn ni_deck_output(
+        &self,
+        feedback: &feedback::FeedbackState,
+        colors: &leds::LedConfig,
+        input_fresh: bool,
+    ) -> [s4mk3_hid_midi_bridge::screens::DeckOutput; 2] {
+        use s4mk3_hid_midi_bridge::screens::DeckOutput;
+        let playback = self.playback_state();
+        std::array::from_fn(|side| {
+            let deck = usize::from(self.decks[side].channel());
+            let eligible = input_fresh
+                && feedback.loaded[deck] == Some(true)
+                && feedback.internal[deck] == Some(true)
+                && feedback.thru[deck] != Some(true)
+                && feedback.playing[deck].is_some();
+            DeckOutput {
+                turntable: input_fresh && self.motor_enabled[side],
+                playing: eligible
+                    && if self.motor_enabled[side] {
+                        playback.enabled[side]
+                            && (!playback.owned[side]
+                                // Scratch custody ends at forward speed; NI
+                                // must be allowed to supply that speed first.
+                                || (self.wheels[side].is_none()
+                                    && self.platter_scratch[side].is_some()
+                                    && self.touch_decks[side].is_none()
+                                    && self.wheel_motion[side].forward_or_rest(self.jog_now)))
+                    } else {
+                        feedback.playing[deck] == Some(true)
+                    },
+                ring: eligible.then(|| {
+                    colors.deck_colors[deck]
+                        .base()
+                        .saturating_add(colors.palette_active_intensity)
+                }),
+            }
+        })
     }
 
     fn observe_jog(
