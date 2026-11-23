@@ -41,7 +41,7 @@ impl<C: Connector> Session<C> {
 
     async fn mode(&mut self, side: u32, turntable: bool) -> Result<(), Error> {
         for command in [
-            (TICKS, if turntable { 0 } else { 12 }),
+            (TICKS, 0),
             (MODE, if turntable { 2 } else { 1 }),
             (TIMELINE, TRUE),
         ] {

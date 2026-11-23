@@ -74,11 +74,38 @@ receipts, hashes and packet evidence are retained locally under
 `.omo/evidence/s4-ni-decks-trial-20261123/`. The archives and raw captures
 are not source artifacts.
 
-In NI mode, NI renders force and JOG pitch-bend detents; the bridge's
-native tension and TT brake settings do not tune either. The trial sends
-the stock nudge tick value of 12 in JOG and 0 in TT; the exact angular
-origin and physical count are unverified. The separate
+## JOG detents and scratch beat feedback
+
+NI renders platter force in the opt-in trial. The bridge's native wheel
+tension and motor-force settings do not tune NI's force. The separate
 [NI service investigation](windows-ni-motor-service-investigation-20261123.md)
-identifies candidate service controls but no verified TT braking-force
-setter. NI force tuning is separate work and must keep NI as the sole
-motor and ring writer.
+found no verified TT brake-strength setting.
+
+The r5 trial sent a nudge-tick value of 12 in JOG and 0 in TT. The
+unreleased follow-up sets the JOG value to 0 on both platters, including
+when returning from TT. It leaves pitch-bend MIDI, TT behavior and the
+direct-HID motor path unchanged. The NI packet regression failed with
+the old JOG value and passed with zero. Host checks and the Windows x64
+cross-build passed; the change has not been deployed or felt on hardware.
+
+The attended djay Slicer probe recorded beat-slice changes during both
+top-touch scratch and rim pitch bend; the Slicer output is not a scratch
+authorization. The offline routing model passed 22 cases, including both
+directions and rejection of rim bend, TT, and retired gestures. It is
+not wired into the bridge and does not resolve delayed MIDI feedback
+arriving after release and re-touch.
+
+Stock Traktor IPC showed a persistent table of hotcue positions loaded
+before scratching, playhead updates through the crossings, and a later
+table clear. It did not show a per-crossing tick command. The NI nudge
+setting changes the density of recurring rim detents; the JOG renderer
+selects that effect with the top plate untouched, not while scratching.
+Djay's Slicer output does not supply marker coordinates, and no bounded
+JOG-only one-shot effect was verified. A marker can remain eligible on a later
+touch if a client clear fails; the table setters also write TT renderer
+state. Replication of Traktor's hotcue path was set aside. Scratch beat
+haptics are deferred and are not a release requirement. This does not
+change the outstanding Windows acceptance work or qualify the rim-detent
+fix on hardware. Capture notes and the offline model are
+retained locally in `.omo/evidence/traktor-tt-caller-20261123/` and
+`.omo/evidence/s4-ni-decks-trial-20261123/`.

@@ -40,6 +40,18 @@ async fn deck_updates_are_safe_independent_and_preserve_screen_replies() -> Test
     );
     assert!(initial.contains(&packet(0x036a_7353, 0, 0x4205_5555)));
     assert!(initial.contains(&packet(0x036a_7353, 1, 0x4205_5555)));
+    let ticks = initial
+        .iter()
+        .filter(|p| p.starts_with(&0x036a_7378_u32.to_le_bytes()));
+    assert_eq!(
+        ticks.cloned().collect::<Vec<_>>(),
+        [
+            packet(0x036a_7378, 0, 0),
+            packet(0x036a_7378, 1, 0),
+            packet(0x036a_7378, 0, 0),
+        ],
+        "acquisition clears the NI rim detent setting on both wheels before enabling playback"
+    );
     assert_eq!(initial.last(), Some(&packet(0x036a_736d, 0, 0x7472_7565)));
     assert!(!initial.contains(&packet(0x036a_736d, 1, 0x7472_7565)));
     session.set_deck_output([playing, off]).await?;
@@ -78,6 +90,7 @@ async fn deck_updates_are_safe_independent_and_preserve_screen_replies() -> Test
     for side in 0..2 {
         assert!(shutdown.contains(&packet(0x036a_734c, side, 0)));
         assert!(shutdown.contains(&packet(0x036a_734d, side, 1)));
+        assert!(shutdown.contains(&packet(0x036a_7378, side, 0)));
     }
     session
         .set_deck_output([

@@ -25,7 +25,7 @@ const IDLE: [(u32, u32); 3] = [
     (0x036a_7353, 0x4201_1f79),
 ];
 const TT: [(u32, u32); 3] = [(TICKS, 0), (MODE, 2), (TIMELINE, TRUE)];
-const JOG: [(u32, u32); 3] = [(TICKS, 12), (MODE, 1), (TIMELINE, TRUE)];
+const JOG: [(u32, u32); 3] = [(TICKS, 0), (MODE, 1), (TIMELINE, TRUE)];
 // The NI service maps argument 1 to HID ring mode 2 (needle).
 const RING_ON: [(u32, u32); 2] = [(RING_COLOR, 46), (RING_MODE, 1)];
 const RING_OFF: [(u32, u32); 2] = [(RING_MODE, 0), (RING_COLOR, 0)];

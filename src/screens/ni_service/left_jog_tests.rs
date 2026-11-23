@@ -2,7 +2,8 @@ use super::{ACTIVE, Error, LOST, Pipe, Session, TestResult, YES, fixture, identi
 use std::time::Duration;
 use tokio::time::{Instant, timeout};
 
-// Wire values from run 032a5c32 and the retained NI ring setter analysis.
+// Wire values from run 032a5c32 and the retained NI ring setter analysis,
+// with rim detents intentionally disabled on return to JOG.
 const EXPECTED: [[u8; 12]; 15] = [
     [0x6d, 0x73, 0x6a, 3, 0, 0, 0, 0, 0, 0, 0, 0],
     [0x73, 0x73, 0x6a, 3, 0, 0, 0, 0, 0x55, 0x55, 5, 0x42],
@@ -14,7 +15,7 @@ const EXPECTED: [[u8; 12]; 15] = [
     [0x4c, 0x73, 0x6a, 3, 0, 0, 0, 0, 1, 0, 0, 0],
     [0x6d, 0x73, 0x6a, 3, 0, 0, 0, 0, 0x65, 0x75, 0x72, 0x74],
     [0x6d, 0x73, 0x6a, 3, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0x78, 0x73, 0x6a, 3, 0, 0, 0, 0, 12, 0, 0, 0],
+    [0x78, 0x73, 0x6a, 3, 0, 0, 0, 0, 0, 0, 0, 0],
     [0x4d, 0x73, 0x6a, 3, 0, 0, 0, 0, 1, 0, 0, 0],
     [0x54, 0x73, 0x6a, 3, 0, 0, 0, 0, 0x65, 0x75, 0x72, 0x74],
     [0x4c, 0x73, 0x6a, 3, 0, 0, 0, 0, 0, 0, 0, 0],
