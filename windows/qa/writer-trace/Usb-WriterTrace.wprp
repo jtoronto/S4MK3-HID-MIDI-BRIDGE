@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0" Author="S4 Bridge" Company="S4 Bridge">
+  <Profiles>
+    <SystemCollector Id="SystemCollector" Name="S4 USB System">
+      <BufferSize Value="128"/>
+      <Buffers Value="128"/>
+    </SystemCollector>
+    <EventCollector Id="UsbCollector" Name="S4 USB Events">
+      <BufferSize Value="256"/>
+      <Buffers Value="1024"/>
+    </EventCollector>
+    <SystemProvider Id="SystemProvider">
+      <Keywords>
+        <Keyword Value="ProcessThread"/>
+        <Keyword Value="Loader"/>
+      </Keywords>
+    </SystemProvider>
+    <!-- All provider keywords include USB transfer data keywords. ETW stack
+         availability and payload length remain provider/OS dependent. -->
+    <EventProvider Id="Xhci" Name="Microsoft-Windows-USB-USBXHCI" Level="5" Stack="true">
+      <Keywords><Keyword Value="0xffffffffffffffff"/></Keywords>
+    </EventProvider>
+    <EventProvider Id="Ucx" Name="Microsoft-Windows-USB-UCX" Level="5" Stack="true">
+      <Keywords><Keyword Value="0xffffffffffffffff"/></Keywords>
+    </EventProvider>
+    <EventProvider Id="Hub3" Name="Microsoft-Windows-USB-USBHUB3" Level="5" Stack="true">
+      <Keywords><Keyword Value="0xffffffffffffffff"/></Keywords>
+    </EventProvider>
+    <EventProvider Id="Port" Name="Microsoft-Windows-USB-USBPORT" Level="5" Stack="true">
+      <Keywords><Keyword Value="0xffffffffffffffff"/></Keywords>
+    </EventProvider>
+    <EventProvider Id="Hub" Name="Microsoft-Windows-USB-USBHUB" Level="5" Stack="true">
+      <Keywords><Keyword Value="0xffffffffffffffff"/></Keywords>
+    </EventProvider>
+    <Profile Id="UsbWriter.Verbose.Memory" Name="UsbWriter" Description="USB writer investigation" DetailLevel="Verbose" LoggingMode="Memory">
+      <Collectors>
+        <SystemCollectorId Value="SystemCollector"><SystemProviderId Value="SystemProvider"/></SystemCollectorId>
+        <EventCollectorId Value="UsbCollector">
+          <EventProviders>
+            <EventProviderId Value="Xhci"/><EventProviderId Value="Ucx"/>
+            <EventProviderId Value="Hub3"/><EventProviderId Value="Port"/>
+            <EventProviderId Value="Hub"/>
+          </EventProviders>
+        </EventCollectorId>
+      </Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>
