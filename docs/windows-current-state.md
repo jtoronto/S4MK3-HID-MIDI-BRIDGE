@@ -134,6 +134,23 @@ packager then runs with `--no-restore`. Build intermediates and generated SDK
 projection files live in a fresh directory under `TMPDIR`, removed when the
 build script exits.
 
+The optional per-user installer is built from the ordinary x64 portable ZIP,
+not from a second publish. Keep the ZIP and its `.sha256` alongside each other.
+With Python 3.11+ and Inno Setup 7's `ISCC.exe`:
+
+```sh
+python3 windows/build-installer.py \
+  --archive /absolute/path/to/S4-MK3-Bridge-win-x64.zip \
+  --output /absolute/path/to/existing/output-directory \
+  --iscc /absolute/path/to/ISCC.exe \
+  --version 0.3.0-beta.1
+```
+
+On macOS, use Wine and set `WINEPREFIX` to the isolated compiler prefix.
+The installer is unsigned and remains a development artifact. A Windows
+acceptance pass must verify user-level install, upgrade, Start menu launch
+and uninstall on a supported PC before publishing.
+
 The developer machine needs .NET SDK 10.0.403 and cached dependencies, including
 Windows.Devices.Midi2 0.99.92-preview.11, CsWinRT 2.2.0 and Windows SDK metadata
 10.0.26100.57. The supported API package remains Preview 11 even with Preview 13

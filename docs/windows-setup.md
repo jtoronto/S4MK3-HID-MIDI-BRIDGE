@@ -60,6 +60,27 @@ Stop and running Quit remove that app-owned connection after the actual
 worker exits and its final output has been collected. Each new Start creates
 a fresh connection with the same bridge-specific name.
 
+## Put the bridge on your PC
+
+Use either format when provided with a development build. Both contain the
+same self-contained app and use the same prerequisites above.
+
+- **Portable ZIP:** Extract the entire ZIP into a folder you choose, then
+  open `S4Bridge.exe`. Keep its files together. To remove this copy, stop
+  and quit the bridge, then delete the extracted folder.
+- **Optional installer:** Run the `…-win-x64-Setup.exe` for your current
+  Windows user. It puts the app under `%LOCALAPPDATA%\Programs\S4 MK3 Bridge`
+  and adds **S4 MK3 Bridge** to Start. It does not need administrator
+  privileges, run the bridge, or install Windows MIDI Services, NI software,
+  or djay. To update, stop and quit the bridge from its tray menu, then
+  run the newer installer. To remove it, use **Settings > Apps > Installed
+  apps > S4 MK3 Bridge > Uninstall**.
+
+Moving a ZIP copy on the same PC, or switching between ZIP and installed
+copies, keeps your bridge preferences. Both use `%LOCALAPPDATA%\S4 MK3 Bridge`.
+Removing either copy leaves preferences and djay mappings alone. The ZIP
+does not carry your settings to another PC. Run only one copy at a time.
+
 ## Development package source and notices
 
 For private builds, the engine/host inventory and the screen helper's source

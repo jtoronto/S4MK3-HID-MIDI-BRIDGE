@@ -13,6 +13,7 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NuGetAudit>false</NuGetAudit>
     <AssemblyName>S4Bridge</AssemblyName>
+    <ApplicationIcon>Assets/AppIcon.ico</ApplicationIcon>
     <Version>0.3.0-beta.1</Version>
     <AssemblyVersion>0.3.0.8</AssemblyVersion>
     <PublishTrimmed>false</PublishTrimmed>
@@ -38,6 +39,7 @@
     <Content Include="../../examples/tension-config.json" Link="Resources/default-tension-config.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../LICENSE" Link="Resources/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../macos/Assets/AppIcon.png" Link="Resources/AppIcon.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets/AppIcon.ico" Link="Resources/AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="ConfigureMacGuidOptimizer" BeforeTargets="CsWinRTInvokeGuidPatcher"
           DependsOnTargets="CsWinRTGenerateIIDOptimizerResponseFile" Condition="'$(S4ProbeDotnet)' != ''">
