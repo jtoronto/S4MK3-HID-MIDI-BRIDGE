@@ -29,6 +29,7 @@ internal static class Program
             ScreenMotorDiagnosticsTests.Register(tests);
             MotorReadinessTests.Register(tests);
             DiagnosticsTests.Register(tests);
+            BloopDependencyTests.Register(tests);
             ControlTests.Register(tests);
             PackagingTests.Register(tests);
             ProcessTests.Register(tests);

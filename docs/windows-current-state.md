@@ -1,7 +1,7 @@
 # Windows implementation: current state
 
-As of November 15, 2026, the source tree contains a Windows implementation
-and private development packages. Windows support is **not
+The source tree contains a Windows implementation and private development
+packages. Windows support is **not
 accepted or published as a ready-to-use download**. Historical test results
 below apply to the particular builds in their records, not necessarily every
 subsequent working-tree change. Some detailed records link to local
@@ -25,22 +25,23 @@ subsequent working-tree change. Some detailed records link to local
   Mapping export preserves existing destinations. The optional MIDI incident
   capture records incoming messages before filtering and outgoing attempts;
   it cannot prove delivery or identify the sender on the shared bus.
-- The engine-managed screen route uses a separate supervisor and Encdr-based
-  worker to request access through NIHardwareService. Screen failure is
-  reported separately from controller/MIDI operation. The supported Windows
-  workflow keeps the service running; automatic service stop/restore is not
-  supported. The tested provisioning route assumes Traktor is installed for
-  the NI driver and service, but Traktor need not run with Djay; standalone
-  service provisioning is unverified.
-- The screen worker pins Encdr revision `a5414658a69c4330d10b95f2359371dfc8550326`
+- The normal app saves a choice between **Direct HID**, with native motor and
+  ring output and no screens, and **NI Bridge**, with one NIHardwareService
+  session for the screens, platters and rings. The modes do not share motor
+  tuning. The tested NI provisioning route assumes Traktor is installed for
+  the driver and service, but Traktor need not run with Djay. Standalone
+  service provisioning and the new app-level mode selection have not been
+  qualified on Windows hardware. See the
+  [NI trial validation](windows-ni-decks-validation-20261123.md).
+- The separate screen/motor diagnostic route uses a supervisor and
+  Encdr-based worker. That worker pins Encdr revision `a5414658a69c4330d10b95f2359371dfc8550326`
   through Cargo. The main bridge retains its separate Encdr revision and a local
   patched Mio dependency. Offline screen builds need the pinned revision in
   Cargo's cache. Populate it with
   `cargo fetch --locked --manifest-path windows/encdr-screen-worker/Cargo.toml`
   before an offline build.
 
-See [Windows setup](windows-setup.md) and the
-[user guide](user-guide.md) for operational instructions, and
+See [Windows development setup](windows-setup.md) for operational instructions, and
 `windows/build-bridge.sh`, `windows/build-screen-worker.sh`, and
 `windows/build-app.sh` for build entry points.
 
@@ -116,8 +117,9 @@ See [Windows setup](windows-setup.md) and the
 package with the actual Windows engine and matching generated mapping, or a
 host-only handoff without them. Screen-enabled integration additionally
 requires its access declaration and both helper binaries. Djay, Windows MIDI
-Services with Preview 13 Basic Loopback transports, and the NI components are
-separate dependencies; the package does not install a driver.
+Services with Basic Loopback (provided by the Preview 14 Transports
+installer), and the NI components for NI Bridge are separate dependencies;
+the package does not install a driver.
 
 Private builds can omit the engine/host dependency inventory and the screen
 helper source/notice inventory. The packager records omissions in
@@ -153,8 +155,8 @@ and uninstall on a supported PC before publishing.
 
 The developer machine needs .NET SDK 10.0.403 and cached dependencies, including
 Windows.Devices.Midi2 0.99.92-preview.11, CsWinRT 2.2.0 and Windows SDK metadata
-10.0.26100.57. The supported API package remains Preview 11 even with Preview 13
-transports; the interim Tools DLL is not a build input. On macOS, Wine generates
+10.0.26100.57. Microsoft's Preview 14 transport notes still specify the Preview 11 API;
+the interim Tools DLL is not a build input. On macOS, Wine generates
 the projection. Set `S4_BRIDGE_WINEPREFIX` to an existing isolated Wine prefix
 and `DOTNET` to the retained SDK executable. The DJ laptop needs neither Wine
 nor these developer tools. SDK notices and metadata are bundled with the app.

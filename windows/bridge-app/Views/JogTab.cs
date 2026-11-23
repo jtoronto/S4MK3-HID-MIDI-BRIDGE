@@ -8,6 +8,7 @@ internal sealed partial class SettingsView
     private Control JogTab()
     {
         var jog = host.Store.Editor.Jog;
+        var niBridge = host.SelectedMode == BridgeMode.NiBridge;
         response = new ResponsePreview(() => jog);
         Control N(string label, string property, double min, double max, bool integer = false, bool optional = false)
         {
@@ -23,8 +24,6 @@ internal sealed partial class SettingsView
             Content = UiTheme.Stack(
                 UiTheme.SectionView("Playback and touch",
                     N("Target speed (RPM)", nameof(jog.PlatterTargetRpm), 1, 45, true),
-                    fields.Toggle("Start Normal mode with Vinyl on", jog.VinylEnabledAtStartup, v => jog.VinylEnabledAtStartup = v),
-                    fields.Toggle("Start TT mode with Vinyl on", jog.TtVinylEnabledAtStartup, v => jog.TtVinylEnabledAtStartup = v),
                     N("Switch to Scratch below (% target)", nameof(jog.TtPitchBendFloorPercent), 1, 95, true)),
                 UiTheme.SectionView("Motor response",
                     N("Maximum force", nameof(jog.PlatterMaxForce), 1, 25000, true),
@@ -46,17 +45,23 @@ internal sealed partial class SettingsView
         });
         var backspinControls = UiTheme.Stack(
             N("Detection threshold (counts/s squared)", nameof(jog.BackspinAcceleration), double.Epsilon, double.MaxValue),
-            fields.Slider("Extra scratch speed (%)", jog.BackspinSpeedIncrease, v => jog.BackspinSpeedIncrease = v, 0, 10, 0.1),
-            assistToggle,
-            assistStrength);
+            fields.Slider("Extra scratch speed (%)", jog.BackspinSpeedIncrease, v => jog.BackspinSpeedIncrease = v, 0, 10, 0.1));
+        if (!niBridge)
+        {
+            backspinControls.Children.Add(assistToggle);
+            backspinControls.Children.Add(assistStrength);
+        }
         backspinControls.IsEnabled = jog.BackspinEnabled;
         var detection = fields.Toggle("Continue detected backspin after release", jog.BackspinEnabled, v =>
         { jog.BackspinEnabled = v; backspinControls.IsEnabled = v; assistStrength.IsEnabled = v && jog.BackspinAssistEnabled; });
-        return UiTheme.BodyView(
+        var controls = new List<Control>();
+        if (niBridge)
+            controls.Add(UiTheme.SectionView("NI-managed platters",
+                UiTheme.Text("NIHardwareService manages the platters. Platter force, wheel tension and TT response cannot be tuned in this mode.", true),
+                UiTheme.Text("Turn TT off or Stop bridge before closing Djay.", true)));
+        else controls.AddRange([
             UiTheme.SectionView("Motorized platters",
-                UiTheme.Text(host.ExperimentalNiDecks
-                    ? "NIHardwareService renders platter force in this trial. The bridge's force, braking and wheel tension controls do not tune NI force. Turn TT off or Stop bridge before closing Djay."
-                    : "Experimental. Save and restart applies motor settings; no mapping export is required. Turn TT off or Stop bridge before closing Djay.", true),
+                UiTheme.Text("Save and restart applies platter settings; no mapping import is required. Turn TT off or Stop bridge before closing Djay.", true),
                 Action("Restore motorized defaults", () =>
                 { host.Store.ResetMotorized(); host.Edited(); BuildTabs(); return Task.CompletedTask; }),
                 fields.Slider("Base force (units)", jog.PlatterBaseForce, v => jog.PlatterBaseForce = (int)v, 0, 25000, 50),
@@ -74,9 +79,16 @@ internal sealed partial class SettingsView
             UiTheme.SectionView("Jog wheel feel",
                 fields.Slider("Wheel tension", host.Store.Editor.Tension.Tension,
                     v => host.Store.Editor.Tension.Tension = (int)v, -100, 100, 1),
-                UiTheme.Text("Assist (-100)       Neutral (0)       Brake (100). Shared by both physical wheels, not saved per deck.", true)),
+                UiTheme.Text("Assist (-100)       Neutral (0)       Brake (100). Shared by both physical wheels, not saved per deck.", true))
+        ]);
+        controls.AddRange([
+            UiTheme.SectionView("Vinyl at startup",
+                fields.Toggle("Start Normal mode with Vinyl on", jog.VinylEnabledAtStartup, v => jog.VinylEnabledAtStartup = v),
+                fields.Toggle("Start TT mode with Vinyl on", jog.TtVinylEnabledAtStartup, v => jog.TtVinylEnabledAtStartup = v)),
             UiTheme.SectionView("Backspin", detection, backspinControls,
-                UiTheme.Text("Normal-mode assist and TT playback assistance are separate. Threshold and added speed affect runtime gestures, not ordinary mapping sensitivity.", true)),
+                UiTheme.Text(niBridge
+                    ? "Detection and extra scratch speed affect backspin gestures, not NI platter force."
+                    : "Detection and extra scratch speed affect backspin gestures. Motor assistance is separate from TT playback.", true)),
             UiTheme.SectionView("Scratch and pitch bend mapping",
                 N("Scratch speed (%)", nameof(jog.ScratchSpeed), double.Epsilon, double.MaxValue),
                 N("Scratch reaction (%)", nameof(jog.ScratchReaction), 0, 150, true),
@@ -84,6 +96,8 @@ internal sealed partial class SettingsView
                 N("Pitch bend speed (%)", nameof(jog.PitchBendSpeed), double.Epsilon, double.MaxValue),
                 N("Pitch bend reaction (%)", nameof(jog.PitchBendReaction), 0, 150, true),
                 Action("Install Djay mapping...", () => ExportMappingAsync(true)),
-                UiTheme.Text("Unsaved editor values are exported. Install and select the new mapping in Djay; saving or restarting alone does not apply these mapping values.", true)));
+                UiTheme.Text("Mapping export includes your unsaved settings. Import and select the new mapping in Djay; saving or restarting alone does not apply mapping changes.", true))
+        ]);
+        return UiTheme.BodyView([.. controls]);
     }
 }

@@ -8,12 +8,12 @@ public sealed class ScreenCoordinator(PreferenceStore store, INIServiceControl a
 {
     private readonly object gate = new();
     private Guid? launchId;
+    private bool niBridge;
     private ulong generation;
     private TaskCompletionSource? released;
     public string State { get; private set; } = "ready";
     public string Detail { get; private set; } = "";
     public bool Busy { get; private set; }
-    public bool NeedsAttention => store.Editor.Screen.Enabled && State is "blocked" or "failed";
     public event Action? Changed;
     public ScreenAccess Access => adapter.Inspect();
     public async Task<bool?> PrepareAsync(Func<ScreenAccess, Task<ScreenConsent>> consent)
@@ -33,11 +33,12 @@ public sealed class ScreenCoordinator(PreferenceStore store, INIServiceControl a
         State = "pending";
         return true;
     }
-    public void Started(Guid id, bool screens)
+    public void Started(Guid id, bool screens, bool usesNiBridge = false)
     {
         lock (gate)
         {
             launchId = id; generation = 0; released = null;
+            niBridge = usesNiBridge;
             if (screens) State = "pending";
             else if (State != "blocked") State = "off";
         }
@@ -57,13 +58,16 @@ public sealed class ScreenCoordinator(PreferenceStore store, INIServiceControl a
             switch (fields[2])
             {
                 case "active":
-                    if (store.Editor.Screen.Enabled && Access.Available && released is null) State = "active";
+                    if (niBridge || (store.Editor.Screen.Enabled && Access.Available && released is null))
+                        State = "active";
                     break;
                 case "inactive":
-                    if (State != "blocked") State = store.Editor.Screen.Enabled ? "ready" : "off";
+                    if (State != "blocked") State = niBridge || store.Editor.Screen.Enabled ? "ready" : "off";
                     released?.TrySetResult(); break;
                 case "failed":
-                    State = "failed"; Detail = "Screens failed; MIDI and jog remain independent.";
+                    State = "failed"; Detail = niBridge
+                        ? "NI Bridge lost screen or platter control. See Diagnostics."
+                        : "Screens failed; MIDI and jog remain independent.";
                     released?.TrySetException(new IOException("Screen release failed; ownership remains uncertain.")); break;
                 case "pending":
                     if (released is null && State != "blocked") State = "pending"; break;
@@ -131,7 +135,8 @@ public sealed class ScreenCoordinator(PreferenceStore store, INIServiceControl a
             if (launchId != id) return;
             launchId = null;
             released?.TrySetResult(); released = null;
-            if (State != "blocked") State = store.Editor.Screen.Enabled ? "ready" : "off";
+            if (State != "blocked" && !(niBridge && State == "failed"))
+                State = niBridge || store.Editor.Screen.Enabled ? "ready" : "off";
         }
         Changed?.Invoke();
     }

@@ -6,15 +6,18 @@ namespace S4Bridge.Core;
 public sealed record LaunchSpec(string Executable, string[] Arguments,
     RunPreferences Run, bool Diagnostic = false, string MidiBackend = BloopEndpoint.Backend)
 {
+    public bool UsesNiBridge => !Diagnostic && Run.Mode == BridgeMode.NiBridge;
+    public bool StartsScreens => UsesNiBridge || Arguments.Contains("--screens", StringComparer.Ordinal);
+    public bool HasScreenControls => Arguments.Contains("--screen-control-stdin", StringComparer.Ordinal);
     public const string ExperimentalEnvironmentVariable = "S4_BRIDGE_EXPERIMENTAL_NI_DECKS";
     public static bool ExperimentalEnabled(string? value) => value == "1";
     public static LaunchSpec Experimental(string executable, PreferenceStore store, bool preview,
         string? midiCapturePath, string? screenMotorConfig)
     {
         if (midiCapturePath is not null || screenMotorConfig is not null)
-            throw new InvalidOperationException("NI decks mode cannot run with MIDI capture or screen/motor diagnostics.");
+            throw new InvalidOperationException("NI Bridge cannot run with MIDI capture or screen/motor diagnostics.");
         var run = (preview ? store.Editor.Run : store.Saved.Run) with
-        { Profile = "full", LimitDuration = false };
+        { Mode = BridgeMode.NiBridge, Profile = "full", LimitDuration = false };
         var args = new List<string> { "--ni-decks", "--midi", "full", "--midi-backend", BloopEndpoint.Backend,
             "--managed-stdin", "--until-stopped" };
         foreach (var config in new[] { "led", "jog" })
@@ -27,12 +30,15 @@ public sealed record LaunchSpec(string Executable, string[] Arguments,
             Environment.GetEnvironmentVariable(ScreenMotorDiagnostics.EnvironmentVariable));
     public static LaunchSpec Runtime(string executable, PreferenceStore store, bool screens, string? midiCapturePath,
         string? screenMotorConfig) =>
-        Build(executable, store, store.Saved.Run, screens, midiCapturePath, screenMotorConfig);
+        store.Saved.Run.Mode == BridgeMode.NiBridge && screenMotorConfig is null
+            ? Experimental(executable, store, false, midiCapturePath, screenMotorConfig)
+            : Build(executable, store, store.Saved.Run, screens, midiCapturePath, screenMotorConfig);
     public static LaunchSpec EditorPreview(string executable, PreferenceStore store) =>
         EditorPreview(executable, store, Environment.GetEnvironmentVariable(ScreenMotorDiagnostics.EnvironmentVariable));
     public static LaunchSpec EditorPreview(string executable, PreferenceStore store, string? screenMotorConfig) =>
-        Build(executable, store, store.Editor.Run, store.Editor.Screen.Enabled, null,
-            screenMotorConfig, preview: true);
+        store.Editor.Run.Mode == BridgeMode.NiBridge && screenMotorConfig is null
+            ? Experimental(executable, store, true, null, screenMotorConfig)
+            : Build(executable, store, store.Editor.Run, false, null, screenMotorConfig, preview: true);
     private static LaunchSpec Build(string executable, PreferenceStore store, RunPreferences preferences, bool screens,
         string? midiCapturePath = null, string? screenMotorConfig = null, bool preview = false)
     {
@@ -47,7 +53,7 @@ public sealed record LaunchSpec(string Executable, string[] Arguments,
                 if (midiCapturePath is not null) throw new InvalidOperationException("Screen/motor diagnostics cannot run with MIDI capture.");
             }
             screens = diagnosticCase != "off";
-            run = run with { RawReports = false, LogLevel = "info", LimitDuration = false };
+            run = run with { Mode = BridgeMode.DirectHid, RawReports = false, LogLevel = "info", LimitDuration = false };
             args.AddRange(["--screen-motor-diagnostic-config", screenMotorConfig,
                 "--prepare-screen-motor-diagnostics"]);
         }
@@ -60,7 +66,7 @@ public sealed record LaunchSpec(string Executable, string[] Arguments,
         if (run.Profile != "probe") args.AddRange(["--midi", run.Profile]);
         if (run.Profile == "full")
         {
-            args.Add("--screen-control-stdin");
+            if (screens || screenMotorConfig is not null) args.Add("--screen-control-stdin");
             if (screens) args.Add("--screens");
             foreach (var config in new[] { "led", "jog", "tension" })
                 args.AddRange([$"--{config}-config", Path.Combine(store.Root, $"{config}-config.json")]);

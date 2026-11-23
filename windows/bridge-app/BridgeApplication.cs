@@ -24,6 +24,8 @@ internal sealed class BridgeApplication : Application
     private readonly NativeMenuItem start = new("Start bridge");
     private readonly NativeMenuItem stop = new("Stop bridge");
     private readonly NativeMenuItem screenToggle = new("Enable S4 screens") { ToggleType = NativeMenuItemToggleType.CheckBox };
+    private NativeMenuItem? retryScreens;
+    private NativeMenuItem? reviewRecovery;
     public override void Initialize() => Styles.Add(new FluentTheme());
     public override void OnFrameworkInitializationCompleted()
     {
@@ -39,18 +41,19 @@ internal sealed class BridgeApplication : Application
             var experimental = LaunchSpec.ExperimentalEnabled(
                 Environment.GetEnvironmentVariable(LaunchSpec.ExperimentalEnvironmentVariable));
             var preferencesRoot = PreferenceStore.HostPreferencesRoot(root, experimental);
-            host = new(resources, preferencesRoot, new BloopEndpointOwner(root), experimental);
+            host = new(resources, preferencesRoot, new BloopEndpointOwner(root), experimental,
+                BloopDependencyProbe.Check);
             settings = new(host);
             desktop.MainWindow = settings;
             trayImages = new(Path.Combine(resources, "AppIcon.png"));
             tray = new TrayIcon { Icon = trayImages.Idle, ToolTipText = "S4 MK3 Bridge", IsVisible = true };
             var menu = new NativeMenu();
+            retryScreens = Menu("Retry screens",()=>host.Screens.RetryAsync(host.Supervisor),
+                ()=>host.CanUseLegacyScreenControls && host.Supervisor.State=="ready" && host.Supervisor.ActiveSpec?.HasScreenControls == true && !host.Screens.Busy);
+            reviewRecovery = Menu("Review NI recovery",()=>{host.Screens.RequireOwnedRecovery();return Task.CompletedTask;});
             foreach (var item in new NativeMenuItemBase[]
             {
-                bridgeStatus,screenStatus,new NativeMenuItemSeparator(),start,stop,screenToggle,
-                Menu("Retry screens",()=>host.Screens.RetryAsync(host.Supervisor),
-                    ()=>!host.ExperimentalNiDecks && host.Supervisor.State=="ready" && host.Supervisor.ActiveSpec?.Run.Profile=="full" && !host.Screens.Busy),
-                Menu("Review NI recovery",()=>{host.Screens.RequireOwnedRecovery();return Task.CompletedTask;}),
+                bridgeStatus,screenStatus,new NativeMenuItemSeparator(),start,stop,screenToggle,retryScreens,reviewRecovery,
                 new NativeMenuItemSeparator(),
                 Menu("Settings...",()=>{settings.ShowSettings();return Task.CompletedTask;}),
                 Menu("Install Djay mapping...",()=>{settings.ShowSettings();return settings.InstallMappingAsync();},
@@ -75,6 +78,7 @@ internal sealed class BridgeApplication : Application
             };
             desktop.Exit += (_, _) => { tray.Dispose(); instance.Dispose(); };
             UpdateTray(); settings.ShowSettings();
+            _ = settings.Guard(host.RefreshBloopAsync);
         }
         catch (Exception ex)
         {
@@ -105,14 +109,17 @@ internal sealed class BridgeApplication : Application
     {
         if (host is null || tray is null) return;
         bridgeStatus.Header = "Bridge: " + host.Supervisor.State;
-        screenStatus.Header = "Screens: " + host.Screens.State;
+        screenStatus.Header = "Screens: " + host.ScreenStatus;
         start.IsEnabled = host.CanStart; stop.IsEnabled = host.CanStop;
         screenToggle.IsChecked = host.Store.Editor.Screen.Enabled;
-        screenToggle.IsEnabled = !host.ExperimentalNiDecks && !host.Screens.Busy && host.Supervisor.State != "stopping";
+        screenToggle.IsEnabled = host.CanUseLegacyScreenControls && !host.Screens.Busy && host.Supervisor.State != "stopping";
+        screenToggle.IsVisible = host.CanUseLegacyScreenControls;
+        if (retryScreens is not null) retryScreens.IsVisible = host.CanUseLegacyScreenControls;
+        if (reviewRecovery is not null) reviewRecovery.IsVisible = host.Store.Saved.Screen.RestorePending;
         foreach (var (item, enabled) in menuGates) item.IsEnabled = enabled();
-        tray.ToolTipText = $"S4 MK3 Bridge | {host.Supervisor.State} | Screens {host.Screens.State}";
+        tray.ToolTipText = $"S4 MK3 Bridge | {host.Supervisor.State} | Screens: {host.ScreenStatus}";
         if (trayImages is not null)
-            tray.Icon = host.Screens.NeedsAttention ? trayImages.Attention :
+            tray.Icon = host.ScreenStatus is "blocked" or "failed" ? trayImages.Attention :
                 host.Supervisor.State == "ready" ? trayImages.Healthy : trayImages.Idle;
     }
     private async Task QuitAsync()

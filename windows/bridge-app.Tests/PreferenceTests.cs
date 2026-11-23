@@ -56,6 +56,16 @@ internal static class PreferenceTests
             Check.Reject(() => PreferenceCodec.Decode<ScreenPreferences>("{\"future\":true}",
                 PreferenceCodec.Encode(new ScreenPreferences())));
         });
+        Check.Add(tests, "legacy persisted run settings without a mode default to Direct HID", () =>
+        {
+            using var f = new Fixture();
+            var legacy = JsonNode.Parse(PreferenceCodec.Encode(new RunPreferences()))!.AsObject();
+            legacy.Remove("mode");
+            File.WriteAllText(f.PathFor("run-settings.json"), legacy.ToJsonString());
+            var store = new PreferenceStore(f.Resources, f.Root);
+            Check.Equal(BridgeMode.DirectHid, store.Editor.Run.Mode);
+            Check.Equal(BridgeMode.DirectHid, store.Saved.Run.Mode);
+        });
         Check.Add(tests, "save persists snapshots and invalid editor preserves every existing file", () =>
         {
             using var f = new Fixture(); var store = new PreferenceStore(f.Resources, f.Root);

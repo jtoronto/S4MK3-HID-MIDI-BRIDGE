@@ -29,6 +29,7 @@ internal sealed partial class SettingsView : Grid
     private readonly List<Control> captureLocked = [];
     private TabItem[] builtTabs = [];
     internal IReadOnlyList<TabItem> BuiltTabs => builtTabs;
+    private Control? modeControl;
     private Control? profileControl;
     private Control? ledNotice;
     private ResponsePreview? response;
@@ -56,7 +57,6 @@ internal sealed partial class SettingsView : Grid
         Children.Add(header); Grid.SetRow(tabs, 1); Children.Add(tabs);
         Grid.SetRow(footer, 2); Children.Add(footer);
         BuildTabs();
-        host.Consent = ScreenConsentAsync;
         tabs.SelectionChanged += (_, _) => SetDiagnosticsVisibility();
         Update();
     }
@@ -81,21 +81,19 @@ internal sealed partial class SettingsView : Grid
     }
     internal void StopRefresh() => refresh.Stop();
     internal Task InstallMappingAsync() => ExportMappingAsync(true);
-    internal Task ToggleScreensAsync() => host.ExperimentalNiDecks
-        ? throw new InvalidOperationException("Screen controls are unavailable in NI decks mode.")
-        : host.Screens.SetEnabledAsync(!host.Store.Editor.Screen.Enabled, host.Supervisor, ScreenConsentAsync);
+    internal Task ToggleScreensAsync() => host.CanUseLegacyScreenControls
+        ? host.Screens.SetEnabledAsync(!host.Store.Editor.Screen.Enabled, host.Supervisor, ScreenConsentAsync)
+        : throw new InvalidOperationException("Screen controls are available only in a screen diagnostic session.");
     private void BuildTabs()
     {
         var selected = tabs.SelectedIndex;
-        captureLocked.Clear(); profileControl = null;
+        captureLocked.Clear(); modeControl = null; profileControl = null; response = null;
         host.ClearFieldErrors();
         fields = new(() => { host.Edited(); Update(); }, host.SetFieldError);
         tabs.ItemsSource = builtTabs = new TabItem[]
         {
             new(){Header="Bridge",Content=BridgeTab()},
-            new(){Header="Screens",Content=host.ExperimentalNiDecks
-                ? UiTheme.BodyView(UiTheme.Text("Screen controls are unavailable in experimental NI decks mode."))
-                : ScreensTab()},
+            new(){Header="Screens",Content=ScreensTab()},
             new(){Header="Jog",Content=JogTab()},
             new(){Header="LEDs",Content=LedTab()},
             new(){Header="Palette",Content=PaletteTab()},
@@ -106,7 +104,7 @@ internal sealed partial class SettingsView : Grid
     }
     private void Update()
     {
-        status.Text = $"Bridge: {host.Supervisor.State} | Screens: {host.Screens.State}";
+        status.Text = $"Bridge: {host.Supervisor.State} | Screens: {host.ScreenStatus}";
         errorDetail = host.FormatErrorDetail(fields.Error);
         var hasError = errorDetail.Length > 0;
         error.Text = errorDetail.Length > 200 ? errorDetail[..200] + "..." : errorDetail;
@@ -121,9 +119,13 @@ internal sealed partial class SettingsView : Grid
             && host.Supervisor.State is not ("stopping" or "checking") && fields.Valid;
         reset.IsEnabled = !host.Operating && !host.Screens.Busy;
         foreach (var field in captureLocked) field.IsEnabled = !host.Diagnostics.Capturing;
+        if (modeControl is not null)
+            modeControl.IsEnabled = host.CanChangeMode && host.FieldsValid && fields.Valid;
         if (profileControl is not null)
-            profileControl.IsEnabled = !host.ExperimentalNiDecks && !host.Screens.Busy && !host.Diagnostics.Capturing;
-        if (ledNotice is not null) ledNotice.IsVisible = host.Store.Editor.Run.Profile != "full";
+            profileControl.IsEnabled = !host.Screens.Busy && !host.Diagnostics.Capturing;
+        if (ledNotice is not null)
+            ledNotice.IsVisible = host.SelectedMode == BridgeMode.DirectHid && host.Store.Editor.Run.Profile != "full";
+        UpdateBloop();
         UpdateScreens();
         UpdateDiagnosticsControls();
         response?.InvalidateVisual();
@@ -136,7 +138,7 @@ internal sealed partial class SettingsView : Grid
     private async Task ResetAsync()
     {
         if (await ConfirmAsync("Reset preferences?",
-               "Restore editor defaults? Saved files remain unchanged until Save. Pending NI recovery is preserved.",
+               "Restore editor defaults? Saved preferences remain unchanged until Save. Any pending NI recovery is preserved.",
                "Reset editor"))
         { host.Reset(); BuildTabs(); }
     }

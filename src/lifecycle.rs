@@ -137,7 +137,7 @@ impl Session {
                 if args.screens.ni_decks {
                     return full::screens::Output::ni_decks();
                 }
-                if args.managed.stdin || args.screens.control_stdin {
+                if args.screens.control_stdin || (!cfg!(windows) && args.managed.stdin) {
                     full::screens::Output::managed(args.screens.enabled)
                 } else {
                     Ok(full::screens::Output::new(args.screens.enabled))

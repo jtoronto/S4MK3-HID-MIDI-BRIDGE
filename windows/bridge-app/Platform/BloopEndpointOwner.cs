@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
 using S4Bridge.Core;
-using Windows.Devices.Midi2;
 using Windows.Devices.Midi2.ServiceConfig;
 using Windows.Devices.Midi2.Transports.BasicLoopback;
 
@@ -19,10 +18,9 @@ public sealed class BloopEndpointOwner(string root) : IBloopEndpointOwner
             FileAccess.ReadWrite, FileShare.None);
         try
         {
-            if (!MidiApi.EnsureServiceAvailable())
-                throw new InvalidOperationException("Windows MIDI Services is unavailable. Install or enable the supported Windows MIDI Services components.");
-            if (!MidiBasicLoopbackManager.IsTransportAvailable)
-                throw new InvalidOperationException("Basic Loopback transport is unavailable. Install the supported Windows MIDI Services Preview 13 transports.");
+            var dependency = BloopDependencyProbe.Check();
+            if (dependency.Status != BloopDependencyStatus.Available)
+                throw new InvalidOperationException(dependency.Detail ?? "The BLOOP dependency check failed.");
 
             if (File.Exists(receiptPath))
             {

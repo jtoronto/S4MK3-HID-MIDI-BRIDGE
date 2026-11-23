@@ -123,7 +123,14 @@ fn main() -> anyhow::Result<()> {
     }
     let jog = matches!(args.midi, Some(MidiProfile::Full))
         .then(|| full::jog::Config::load(args.jog_config.as_deref()))
-        .transpose()?;
+        .transpose()?
+        .map(|jog| {
+            if args.screens.ni_decks {
+                jog.for_ni_bridge()
+            } else {
+                jog
+            }
+        });
     if let Some(jog) = jog {
         jog.validate()?;
         println!("{}", motor_config_receipt(&jog)?);
@@ -321,6 +328,9 @@ fn bind_windows_screens(
             .and_then(full::screens::Output::control)
             .context("NI deck worker missing")?
             .bind_selected_hid(serial.context("selected S4 has no serial for NI deck output")?);
+    }
+    if !args.screens.enabled && !args.screens.control_stdin {
+        return Ok(());
     }
     // Bind the uniquely selected HID before initialized input can start NI I/O.
     // An absent/rejected serial fails only screen acquisition, preserving controls.

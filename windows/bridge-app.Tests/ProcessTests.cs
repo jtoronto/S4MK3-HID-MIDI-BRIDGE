@@ -171,28 +171,65 @@ internal static class ProcessTests
             Check.Reject(() => LaunchSpec.Experimental("engine", store, false, f.PathFor("capture"), null));
             Check.Reject(() => LaunchSpec.Experimental("engine", store, false, null, f.PathFor("config")));
         });
-        tests.Add(("NI decks launch uses supervised BLOOP lifecycle", async () =>
+        tests.Add(("persisted NI mode launches full indefinite BLOOP and accepts NI screen status", async () =>
         {
             using var f = new Fixture();
             var owner = new TestEndpointOwner(f.PathFor("receipt"));
-            var supervisor = new BridgeSupervisor();
+            var seed = new PreferenceStore(f.Resources, f.Root);
+            seed.Editor.Run.Mode = BridgeMode.NiBridge;
+            seed.Editor.Run.Profile = "minimal";
+            seed.Editor.Run.LimitDuration = true;
+            seed.Editor.Screen.Enabled = false;
+            seed.Save();
+
+            var host = new HostController(f.Resources, f.Root, owner);
+            using var diagnostics = host.Diagnostics;
+            Check.Equal(BridgeMode.NiBridge, host.SelectedMode);
+            var preview = LaunchSpec.EditorPreview(host.Executable, host.Store, null);
+            Check.True(preview.Preview.Contains("\"--ni-decks\"", StringComparison.Ordinal));
+            Check.True(preview.Preview.Contains("\"--until-stopped\"", StringComparison.Ordinal));
+            Check.True(!preview.Arguments.Contains("--screens"));
+            Check.True(!preview.Arguments.Contains("--screen-control-stdin"));
+
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            supervisor.Changed += () => { if (supervisor.State == "ready") ready.TrySetResult(); };
+            var launchId = Guid.Empty;
+            host.Supervisor.Changed += () =>
+            {
+                if (host.Supervisor.State == "ready") ready.TrySetResult();
+            };
+            host.Supervisor.Launched += id => launchId = id;
             var (exe, args) = Fixture.Child("managed", "full");
-            var spec = LaunchSpec.Experimental(exe, new PreferenceStore(f.Resources, f.Root), false, null, null);
-            await supervisor.StartAsync(spec with { Arguments = [.. args, .. spec.Arguments] }, owner);
+            var spec = LaunchSpec.Runtime(exe, host.Store, false, null, null);
+            foreach (var argument in new[] { "--ni-decks", "--midi", "full", "--midi-backend", "bloop",
+                "--until-stopped", "--managed-stdin" })
+                Check.True(spec.Arguments.Contains(argument), argument);
+            foreach (var argument in new[] { "--seconds", "--screens", "--screen-control-stdin" })
+                Check.True(!spec.Arguments.Contains(argument), argument);
+
+            var starting = host.Supervisor.StartAsync(
+                spec with { Arguments = [.. args, .. spec.Arguments] }, owner);
             try
             {
+                await starting.WaitAsync(TimeSpan.FromSeconds(10));
                 await ready.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                Check.True(launchId != Guid.Empty);
+                Check.True(host.Supervisor.ActiveSpec?.UsesNiBridge == true);
+                Check.Equal("pending", host.ScreenStatus);
                 Check.True(File.Exists(owner.Lease.ReceiptPath));
-                await supervisor.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
-                Check.True(!supervisor.HasOwnedResources);
+                host.Screens.Accept(launchId, "S4_SCREEN_STATUS 0 active");
+                Check.Equal("active", host.ScreenStatus);
+                await host.Supervisor.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                Check.True(!host.Supervisor.HasOwnedResources);
                 Check.True(!File.Exists(owner.Lease.ReceiptPath));
             }
             finally
             {
-                if (supervisor.HasChild) supervisor.CloseInput();
-                await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                if (host.Supervisor.HasChild) host.Supervisor.CloseInput();
+                try { await starting.WaitAsync(TimeSpan.FromSeconds(10)); }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or OperationCanceledException) { }
+                await host.Supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                if (host.Supervisor.HasOwnedResources)
+                    await host.Supervisor.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
             }
         }));
         foreach (var profile in new[] { "full", "minimal", "probe" })

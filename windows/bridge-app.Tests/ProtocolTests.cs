@@ -92,12 +92,17 @@ internal static class ProtocolTests
             foreach (var profile in new[] { "full", "minimal", "probe" })
             {
                 store.Editor.Run.Profile = profile; store.Save();
-                var spec = LaunchSpec.Runtime("engine.exe", store, true);
+                var spec = LaunchSpec.Runtime("engine.exe", store, false);
                 Check.True(spec.Arguments.Contains("--managed-stdin"));
-                Check.Equal(profile == "full", spec.Arguments.Contains("--screens"));
+                Check.True(!spec.Arguments.Contains("--screens"));
+                Check.True(!spec.Arguments.Contains("--screen-control-stdin"));
                 Check.Equal(profile == "full", spec.Arguments.Contains("--tension-config"));
                 Check.Equal(profile != "probe", spec.Arguments.Contains("--midi"));
             }
+            store.Editor.Run.Profile = "full"; store.Save();
+            var diagnostic = LaunchSpec.Runtime("engine.exe", store, true, null, null);
+            Check.True(diagnostic.Arguments.Contains("--screens"));
+            Check.True(diagnostic.Arguments.Contains("--screen-control-stdin"));
         });
     }
 }

@@ -47,7 +47,7 @@ internal static class ControlTests
     }
     public static void Register(List<(string, Func<Task>)> tests)
     {
-        Check.Add(tests, "experimental NI decks disables screen and capture controls", () =>
+        Check.Add(tests, "experimental NI decks locks mode and omits Direct HID diagnostics", () =>
         {
             using var f = new Fixture();
             var host = new HostController(f.Resources, f.PathFor("experimental"), experimentalNiDecks: true);
@@ -55,11 +55,14 @@ internal static class ControlTests
             var view = new SettingsView(host);
             try
             {
-                Check.True(!FindCombo(view.BuiltTabs[0], "Profile").IsEnabled);
+                Check.Equal(BridgeMode.NiBridge, host.SelectedMode);
+                Check.True(!host.CanChangeMode);
                 Check.True(!view.BuiltTabs[1].GetLogicalDescendants().OfType<Button>()
                     .Any(b => Equals(b.Content, "Retry verified access")));
-                Check.True(!FindCheck(view.BuiltTabs[5], "Capture MIDI on the next full-profile launch").IsEnabled);
-                Check.True(!FindButton(view.BuiltTabs[5], "Start motor capture").IsEnabled);
+                Check.True(!view.BuiltTabs[5].GetLogicalDescendants().OfType<CheckBox>()
+                    .Any(b => Equals(b.Content, "Capture MIDI on the next full-profile launch")));
+                Check.True(!view.BuiltTabs[5].GetLogicalDescendants().OfType<Button>()
+                    .Any(b => Equals(b.Content, "Start motor capture")));
                 Check.Reject(() => view.ToggleScreensAsync().GetAwaiter().GetResult());
             }
             finally { view.StopRefresh(); }
@@ -147,15 +150,36 @@ internal static class ControlTests
                     Check.Equal(profile != "probe", text.Contains("\"--midi\"", StringComparison.Ordinal));
                     if (profile != "probe")
                         Check.True(text.Contains($"\"--midi\" \"{profile}\"", StringComparison.Ordinal));
-                    Check.Equal(profile == "full", text.Contains("\"--screens\"", StringComparison.Ordinal));
+                    Check.True(!text.Contains("\"--screens\"", StringComparison.Ordinal));
+                    Check.True(!text.Contains("\"--screen-control-stdin\"", StringComparison.Ordinal));
                     foreach (var config in new[] { "led", "jog", "tension" })
                         Check.Equal(profile == "full", text.Contains($"\"--{config}-config\"", StringComparison.Ordinal));
                 }
                 var saved = LaunchSpec.Runtime(host.Executable, host.Store, false);
                 Check.Equal("full", saved.Run.Profile);
                 Check.True(!saved.Arguments.Contains("--screens"));
+                Check.True(!saved.Arguments.Contains("--screen-control-stdin"));
                 Check.True(!saved.Arguments.Contains("--raw"));
                 Check.True(saved.Arguments.Contains("--until-stopped"));
+                var diagnostic = LaunchSpec.Runtime(host.Executable, host.Store, true, null, null);
+                Check.True(diagnostic.Arguments.Contains("--screens"));
+                Check.True(diagnostic.Arguments.Contains("--screen-control-stdin"));
+
+                host.SelectMode(BridgeMode.NiBridge);
+                Check.Equal(BridgeMode.NiBridge, host.SelectedMode);
+                var niPreview = Preview();
+                Check.True(niPreview.Contains("\"--ni-decks\"", StringComparison.Ordinal));
+                Check.True(niPreview.Contains("\"--midi\" \"full\"", StringComparison.Ordinal));
+                Check.True(niPreview.Contains("\"--until-stopped\"", StringComparison.Ordinal));
+                Check.True(!niPreview.Contains("\"--screens\"", StringComparison.Ordinal));
+                Check.True(!niPreview.Contains("\"--screen-control-stdin\"", StringComparison.Ordinal));
+                host.Store.Save();
+                var niRuntime = LaunchSpec.Runtime(host.Executable, host.Store, false, null, null);
+                Check.True(niRuntime.Arguments.Contains("--ni-decks"));
+                Check.Equal("full", niRuntime.Run.Profile);
+                Check.True(!niRuntime.Run.LimitDuration);
+                Check.True(niRuntime.Arguments.Contains("--midi-backend"));
+                Check.True(niRuntime.Arguments.Contains("bloop"));
                 host.Store.Editor.Screen.Enabled = false;
                 host.Store.Editor.Run.LimitDuration = false;
                 host.Store.Editor.Run.RawReports = false;
@@ -164,6 +188,7 @@ internal static class ControlTests
                 Check.True(!unlimited.Contains("\"--seconds\"", StringComparison.Ordinal));
                 Check.True(!unlimited.Contains("\"--raw\"", StringComparison.Ordinal));
                 Check.True(!unlimited.Contains("\"--screens\"", StringComparison.Ordinal));
+                Check.True(!unlimited.Contains("\"--screen-control-stdin\"", StringComparison.Ordinal));
 
                 var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 host.Supervisor.Changed += () => { if (host.Supervisor.State == "ready") ready.TrySetResult(); };
@@ -180,7 +205,7 @@ internal static class ControlTests
                     host.Supervisor.CloseInput();
                     host.Supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
                 }
-                Check.True(Preview().Contains("\"--midi\" \"full\"", StringComparison.Ordinal));
+                Check.True(Preview().Contains("\"--ni-decks\"", StringComparison.Ordinal));
             }
             finally { view.StopRefresh(); }
         });
@@ -317,34 +342,27 @@ internal static class ControlTests
             Check.True(strength.IsEnabled);
             Check.Equal(37, host.Store.Editor.Jog.BackspinAssistStrength);
         });
-        Check.Add(tests, "profile picker disables during screen operations and motor capture without erasing its value", () =>
+        Check.Add(tests, "bridge mode cannot change during screen operations or motor capture", () =>
         {
             using var f = new Fixture();
             var host = RealHost(f);
             host.Store.Editor.Run.LogLevel = "debug";
-            var view = new SettingsView(host);
-            var bridge = view.BuiltTabs[0];
-            var profile = FindCombo(bridge, "Profile");
-            Check.True(profile.IsEnabled);
             var consent = new TaskCompletionSource<ScreenConsent>(TaskCreationOptions.RunContinuationsAsynchronously);
             var enabling = host.Screens.SetEnabledAsync(true, host.Supervisor, _ => consent.Task);
             Check.True(host.Screens.Busy);
-            view.RefreshState();
-            Check.True(!profile.IsEnabled);
+            Check.True(!host.CanChangeMode);
+            Check.Reject(() => host.SelectMode(BridgeMode.NiBridge));
             Check.Equal("full", host.Store.Editor.Run.Profile);
             consent.SetResult(ScreenConsent.WithoutScreens);
             Check.True(enabling.Wait(TimeSpan.FromSeconds(10)));
             Check.True(!host.Screens.Busy);
-            view.RefreshState();
-            Check.True(profile.IsEnabled);
+            Check.True(host.CanChangeMode);
             host.Diagnostics.StartCapture(f.PathFor("state"), host.Store.Editor.Run);
-            view.RefreshState();
-            Check.True(!profile.IsEnabled);
+            Check.True(!host.CanChangeMode);
+            Check.Reject(() => host.SelectMode(BridgeMode.NiBridge));
             Check.Equal("full", host.Store.Editor.Run.Profile);
-            Check.Equal("full", profile.SelectedItem);
             host.Diagnostics.StopCapture();
-            view.RefreshState();
-            Check.True(profile.IsEnabled);
+            Check.True(host.CanChangeMode);
         });
         Check.Add(tests, "startup error detail is empty when engine is packaged and preferences are valid", () =>
         {
@@ -371,11 +389,14 @@ internal static class ControlTests
             Check.Equal((bool?)true, await host.Screens.PrepareAsync(_ => Task.FromResult(ScreenConsent.Enable)));
             Check.True(!string.IsNullOrWhiteSpace(host.Screens.Detail));
             var id = Guid.NewGuid();
-            host.Screens.Started(id, true);
+            host.Store.Editor.Screen.Enabled = false;
+            host.Screens.Started(id, true, true);
             foreach (var status in new[] { "pending", "active", "inactive" })
             {
                 host.Screens.Accept(id, "S4_SCREEN_STATUS 0 " + status);
                 view.RefreshState();
+                Check.Equal(status == "pending" ? "pending" : status == "active" ? "active" : "ready",
+                    host.Screens.State);
                 Check.Equal("", host.FormatErrorDetail());
                 Check.True(!details.IsVisible && !details.IsEnabled);
             }

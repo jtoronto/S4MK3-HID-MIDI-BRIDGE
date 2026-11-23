@@ -2,8 +2,11 @@ using System.Text.Json.Serialization;
 
 namespace S4Bridge.Models;
 
+public enum BridgeMode { DirectHid, NiBridge }
+
 public sealed record RunPreferences
 {
+    public BridgeMode Mode { get; set; }
     public string Profile { get; set; } = "full";
     public bool LimitDuration { get; set; }
     public int DurationSeconds { get; set; } = 3600;

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Media;
+using S4Bridge.Models;
 
 namespace S4Bridge.Views;
 
@@ -58,12 +59,15 @@ internal sealed partial class SettingsView
             Height = UiTheme.LogHeight,
             FontFamily = new FontFamily("Cascadia Mono,Consolas,monospace")
         };
-        return UiTheme.BodyView(
+        var controls = new List<Control>
+        {
             UiTheme.SectionView("Version and log detail",
                 UiTheme.Selectable("S4 MK3 Bridge 0.3.0-beta.1 (build 8) | .NET 10 | Avalonia 11.3.8"),
                 level, fields.Toggle("Raw HID reports", run.RawReports, v => run.RawReports = v)),
             UiTheme.SectionView("Live platter diagnostics", platter,
-                UiTheme.Text("Physical RPM and outgoing MIDI CC4 counts/s, not audible Djay playback speed. Hidden/minimized Settings suspend presentation only, not ingestion or capture.", true)),
+                UiTheme.Text("Physical RPM and outgoing MIDI CC4 counts/s, not audible Djay playback speed. Diagnostics continue while Settings is hidden.", true))
+        };
+        if (host.SelectedMode == BridgeMode.DirectHid) controls.AddRange([
             UiTheme.SectionView("MIDI diagnostic capture",
                 midiCaptureEnabled,
                 UiTheme.Text("Session-only opt-in: applies once to the next bridge launch. The full profile is required; a minimal-profile launch is blocked while armed. Restart the bridge to begin; this does not change saved preferences.", true),
@@ -73,15 +77,19 @@ internal sealed partial class SettingsView
             UiTheme.SectionView("Motor diagnostic capture",
                 UiTheme.Actions(captureButton, Action("Show capture file", RevealCaptureAsync)),
                 capturePath,
-                UiTheme.Text("Full profile + Debug required in the active launch (or editor when stopped). Capture records actual per-launch motor receipts, not unsaved editor guesses. Requested force is not measured torque.", true)),
-            UiTheme.SectionView("Bounded log",
+                UiTheme.Text("Full profile and Debug logging are required. Captures record settings and motor requests from the current launch. Requested force is not measured torque.", true))
+        ]);
+        controls.AddRange([
+            UiTheme.SectionView("Log",
                 UiTheme.Actions(Action("Copy log", CopyLogAsync), Action("Show log folder", () =>
                 {
                     var folder = System.IO.Path.Combine(host.Store.Root, "Logs");
                     Directory.CreateDirectory(folder); return OpenPath(folder);
                 })),
-                log, UiTheme.Text("Most recent 60,000 UTF-16 characters. Captures are independent and continue while Settings is hidden.", true)),
-            UiTheme.SectionView("Command preview", command));
+                log, UiTheme.Text("Recent messages only. Captures continue while Settings is hidden.", true)),
+            UiTheme.SectionView("Command preview", command)
+        ]);
+        return UiTheme.BodyView([.. controls]);
     }
     private Task RevealCaptureAsync()
     {
@@ -137,10 +145,8 @@ internal sealed partial class SettingsView
         log.Apply(delta);
         logCursor = delta.Cursor;
         command.Text = host.Supervisor.HasChild ? host.Supervisor.ActiveSpec!.Preview :
-            "Next launch from editor (validation, save, and screen-access preparation precede launch): " +
-            (host.ExperimentalNiDecks
-                ? Core.LaunchSpec.Experimental(host.Executable, host.Store, true, null, null)
-                : Core.LaunchSpec.EditorPreview(host.Executable, host.Store)).Preview;
+            "Next launch from editor: " +
+            Core.LaunchSpec.EditorPreview(host.Executable, host.Store).Preview;
         UpdateDiagnosticsControls();
     }
     private void UpdateDiagnosticsControls()
@@ -148,14 +154,14 @@ internal sealed partial class SettingsView
         if (captureButton is null) return;
         var run = host.Supervisor.HasChild ? host.Supervisor.ActiveSpec!.Run : host.Store.Editor.Run;
         captureButton.Content = host.Diagnostics.Capturing ? "Stop motor capture" : "Start motor capture";
-        captureButton.IsEnabled = !host.ExperimentalNiDecks &&
+        captureButton.IsEnabled = host.SelectedMode == BridgeMode.DirectHid &&
             (host.Diagnostics.Capturing || (run.Profile == "full" && run.LogLevel == "debug"));
         if (capturePath is not null) capturePath.Text = host.Diagnostics.CapturePath ?? "No capture created.";
         var midi = host.MidiCapture;
         if (midiCaptureEnabled is not null)
         {
             midiCaptureEnabled.IsChecked = midi.EnabledForNextLaunch;
-            midiCaptureEnabled.IsEnabled = !host.ExperimentalNiDecks && !host.Operating;
+            midiCaptureEnabled.IsEnabled = host.SelectedMode == BridgeMode.DirectHid && !host.Operating;
         }
         if (midiMarkerPending && (midi.LastMarkerId != midiPreviousMarker ||
             !string.IsNullOrEmpty(midi.MarkerError) || midi.State is not ("recording" or "limited")))

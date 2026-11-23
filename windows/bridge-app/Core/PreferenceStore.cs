@@ -25,13 +25,13 @@ public sealed class PreferenceStore
     }
     public static string HostPreferencesRoot(string sharedRoot, bool experimental) =>
         experimental ? Path.Combine(sharedRoot, "Experimental NI Decks") : sharedRoot;
-    public PreferenceStore(string resources, string root)
+    public PreferenceStore(string resources, string root, BridgeMode defaultMode = BridgeMode.DirectHid)
     {
         Root = Path.GetFullPath(root);
         ledDefaults = File.ReadAllText(Path.Combine(resources, "default-led-config.json"));
         jogDefaults = File.ReadAllText(Path.Combine(resources, "default-jog-config.json"));
         tensionDefaults = File.ReadAllText(Path.Combine(resources, "default-tension-config.json"));
-        Defaults = new(new(), PreferenceCodec.Decode<LedPreferences>(ledDefaults, ledDefaults),
+        Defaults = new(new() { Mode = defaultMode }, PreferenceCodec.Decode<LedPreferences>(ledDefaults, ledDefaults),
             PreferenceCodec.Decode<JogPreferences>(jogDefaults, jogDefaults),
             PreferenceCodec.Decode<TensionPreferences>(tensionDefaults, tensionDefaults), new());
         var d = Defaults.Copy();

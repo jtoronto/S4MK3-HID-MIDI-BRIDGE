@@ -9,10 +9,10 @@ records the known software limitations.
 
 ## Native Instruments driver and background service
 
-For the full Windows setup, install Native Instruments' **S4 MK3
-driver** and **NIHardwareService**. The NI-service screen-access path
-needs that background service as well as the controller's NI driver; an audio
-driver alone is not evidence that the required service is present.
+**Direct HID** does not need **NIHardwareService**. Windows may still install
+the controller's device driver; that is separate from the NI background service.
+**NI Bridge** needs both the controller driver and **NIHardwareService**.
+An audio driver alone does not establish that the background service is installed.
 
 **Have Traktor installed first:** this is the current supported provisioning
 route and the installation present on the tested Windows laptop. **Traktor
@@ -47,12 +47,28 @@ distinct requirements.
 
 ## Windows MIDI Services and BLOOP
 
-Install Windows MIDI Services and the **Preview 13 Transports** components
-that provide **Basic Loopback (BLOOP)**. Use Microsoft's
-[Preview 13 instructions](https://github.com/microsoft/MIDI/releases/tag/inbox-preview-13)
-for the supported Windows version and component installation. The bridge
-checks service and transport availability when starting. It does not install
-drivers, restart MIDI Services or fall back to another MIDI backend.
+Both bridge modes need **Basic Loopback (BLOOP)**. If it is unavailable,
+read Microsoft's [Preview 14 installation instructions](https://github.com/microsoft/MIDI/releases/tag/inbox-preview-14)
+and use the [Preview 14 x64 Transports installer](https://github.com/microsoft/MIDI/releases/download/inbox-preview-14/Windows.MIDI.Services.Transports.1.0.52-preview.14-x64.exe).
+Microsoft requires Windows 11 25H2 or later, removal of older preview
+components as directed in the release notes, and closing all MIDI apps
+before installing the transports. Open the bridge again after setup and
+recheck Basic Loopback. The app does not install components or fall back
+to another MIDI backend.
+
+PowerShell can download the same official installer and open it without
+using a browser. Follow the prerequisites above first. This is not an
+installer-free or unattended installation:
+
+```powershell
+$url = 'https://github.com/microsoft/MIDI/releases/download/inbox-preview-14/Windows.MIDI.Services.Transports.1.0.52-preview.14-x64.exe'
+$installer = Join-Path $env:TEMP ('MIDI-Transports-preview14-' + [guid]::NewGuid() + '.exe')
+Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing -ErrorAction Stop
+if ((Get-FileHash -Path $installer -Algorithm SHA256).Hash -ne '674b753ac21bd03535dc6f0cae9542d143a353804192284d5cd194f44be07242') {
+    throw 'Installer hash does not match the Microsoft Preview 14 release.'
+}
+Start-Process -FilePath $installer -Verb RunAs -Wait -ErrorAction Stop
+```
 
 Normal app operation does not require LoopBe1 or loopMIDI, or a separately
 running endpoint-creation utility. Start creates **S4 MK3 Bridge BLOOP**.
@@ -111,15 +127,23 @@ settings; restarting the bridge alone doesn't update Djay's mapping.
 
 ## Normal startup and screens
 
-For a screenless direct-HID run, open `S4Bridge.exe` directly and keep
-**Enable S4 screens** off. This path does not use NIHardwareService; the
-separate NI-decks launcher opts into the NI-managed path. Djay PRO is
-required for the custom mapping.
+Djay PRO is required for the custom mapping. Open `S4Bridge.exe` and choose
+a **Bridge mode** while stopped. Save the choice or start the bridge to
+remember it for next time. No separate launcher is needed.
+
+| Bridge mode | Screens | Platters |
+| --- | --- | --- |
+| **Direct HID** | Not available; no NIHardwareService required | Tunable in **Jog** with the full profile |
+| **NI Bridge** | Available through NIHardwareService | Managed by NIHardwareService; motor tuning is not available |
+
+The separate [attended trial runbook](../windows/qa/ni-bridge/ATTENDED-RUN.md)
+and [validation record](windows-ni-decks-validation-20261123.md) describe
+the earlier diagnostic packages and their limited hardware coverage.
 
 1. Connect and power the S4. Close Traktor and any other bridge instance.
    If using the NI display path, leave NIHardwareService running.
-2. Open the bridge. In Settings, select **full** and, if
-   wanted, turn on **Enable S4 screens** in **Screens**.
+2. In **Bridge**, select **Direct HID** or **NI Bridge**. Use **full**
+   for normal Direct HID operation; NI Bridge always uses the full profile.
 3. Start the bridge and wait for **Bridge: ready**. In Djay, select the
    Windows mapping for **S4 MK3 Bridge BLOOP**. Djay can already be open,
    but may send its refresh before the bridge starts listening. Ready
@@ -128,23 +152,15 @@ required for the custom mapping.
    sends them. If the initial feedback is missing, save the diagnostics and
    fully quit and reopen Djay while the bridge is ready. Switching
    mappings is not an established safe refresh.
-4. Check **Screens: active** and the actual displays. The screen worker requests
-   access through NIHardwareService; registration alone isn't enough. A
-   pending, blocked or failed state isn't confirmation of working screens.
+4. In **NI Bridge**, check **Screens: active** and the actual displays.
+   Registration alone isn't enough. If the screens fail, check **Diagnostics**.
+   Stop the bridge before changing modes.
 
-Screen preferences save immediately. **Enable S4 screens** can turn screens
-off and on while a full-profile bridge is running. If access fails, read the
-reported detail; **Retry verified access** retries screens on a running
-full-profile bridge when the package declares access available. A package
-without that declaration can offer to continue without screens. Don't stop
-the NI service or replace its driver to bypass an access failure.
-
-Current source builds use a separate screen helper so its failure can be
-reported without stopping controller and MIDI handling. Turning screens off
-or stopping the bridge can leave the last image on the displays; it does not
-guarantee a blank screen. If release is reported as unconfirmed, check
-Diagnostics and do not assume that the NI service has recovered screen
-ownership. Keep NIHardwareService running.
+In NI Bridge, the screens and platters use the same NI session. There is
+no separate screen toggle for normal operation. The last display image can
+remain after stopping. If release is unconfirmed, check Diagnostics and do
+not assume that NI has recovered control. Don't stop the NI service or
+replace its driver to bypass an access failure.
 
 Use **Stop** to end the bridge or the tray's **Quit S4 MK3 Bridge** to stop it and exit the
 app. Closing Settings leaves the tray app running. Stop the bridge before
@@ -162,24 +178,27 @@ conflict. Read the error details and preserve `bloop-owner.json`; do not delete
 the record or remove unrelated MIDI ports to bypass an ownership error.
 
 If **NI recovery pending** appears, keep the saved state and use
-**Review owned recovery** to read the diagnostic. The visible
-**Restore an app-owned NI transition on stop** preference doesn't implement
-Windows service restoration. Don't clear pending state or change a service
-to bypass an error; Quit can refuse while that state remains unresolved.
+**Review NI recovery** in the tray to read the diagnostic. The bridge does
+not implement Windows service restoration. Don't clear pending state or
+change a service to bypass an error; Quit can refuse while that state remains
+unresolved.
 Keep the error details for review.
 
 ## Diagnostics command preview
 
 While the bridge is stopped, **Diagnostics > Command preview** follows your
-current editor choices, including unsaved profile, duration and Raw HID
-settings. For the full profile it also shows the requested screen setting.
-This is a draft of the next launch, not confirmation that screens are available.
-**Start bridge** validates and saves preferences, prepares screen access, then
-creates the owned BLOOP endpoint before launching. Preparation can cancel
-startup or change whether screens are included.
+current editor choices, including the selected bridge mode. Direct HID also
+uses the selected profile and duration. This is a preview, not confirmation
+that the controller or NI screens are available. **Start bridge** validates
+and saves preferences before creating the owned BLOOP endpoint for MIDI.
 
 While the app owns a running or stopping child process, the preview shows that
 process's actual launch command. Unsaved editor changes don't replace it.
+
+## Attended screen and motor diagnostics
+
+For motor or ring problems that appear only with screens enabled, use the
+separate [screen/motor diagnostic package instructions](../windows/qa/screen-motor/README.md).
 
 ## Optional temporary MIDI incident capture
 

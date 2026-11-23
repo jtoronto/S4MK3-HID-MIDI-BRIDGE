@@ -15,7 +15,8 @@ public static class PreferenceCodec
     public static readonly JsonSerializerOptions Camel = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter<BridgeMode>(JsonNamingPolicy.CamelCase, allowIntegerValues: false) }
     };
     public static readonly string[] Colors = [
         "red","carrot","orange","honey","yellow","lime","green","aqua","cyan",
@@ -47,7 +48,11 @@ public static class PreferenceCodec
             basis[entry.Key] = entry.Value?.DeepClone();
         }
         // Run files historically require every field, unlike the partial Rust configs.
-        if (run) basis = root;
+        if (run)
+        {
+            root.TryAdd("mode", basis["mode"]?.DeepClone());
+            basis = root;
+        }
         var options = run || typeof(T) == typeof(ScreenPreferences) ? Camel : Snake;
         var json = basis.ToJsonString();
         ValidateShape<T>(basis);
@@ -108,6 +113,7 @@ public static class PreferenceCodec
         switch (value)
         {
             case RunPreferences run:
+                if (!Enum.IsDefined(run.Mode)) throw new InvalidDataException("Unsupported bridge mode.");
                 Choice(run.Profile, ["full", "minimal", "probe"], "profile");
                 Choice(run.LogLevel, ["warn", "info", "debug"], "logLevel");
                 Range(run.DurationSeconds, 1, 604800, "durationSeconds"); break;

@@ -14,7 +14,7 @@ internal sealed partial class SettingsView
             return fields.Number(label, () => Convert.ToDouble(info.GetValue(led)), value =>
                 info.SetValue(led, info.PropertyType == typeof(int) ? (object)checked((int)value!) : value!), min, max, integer);
         }
-        ledNotice = UiTheme.Text("LED preferences apply only to Full controller. Minimal and Probe keep their original light behavior.", true);
+        ledNotice = UiTheme.Text("LED preferences apply only to the Full profile. Minimal and Probe keep their original light behavior.", true);
         return UiTheme.BodyView(ledNotice,
             UiTheme.SectionView("Brightness and inactive lights",
                 N("Active lamp brightness", nameof(led.ActiveBrightness), 1, 127),
@@ -23,7 +23,10 @@ internal sealed partial class SettingsView
                 N("Active palette intensity", nameof(led.PaletteActiveIntensity), 0, 3),
                 N("Inactive palette intensity", nameof(led.PaletteInactiveIntensity), 0, 3),
                 fields.Choice("Mixed quantize state", led.QuantizeMixed, ["dim", "dark"], v => led.QuantizeMixed = v)),
-            UiTheme.SectionView("Jog rings",
+            host.SelectedMode == BridgeMode.NiBridge
+                ? UiTheme.SectionView("Jog rings",
+                    UiTheme.Text("NI manages ring motion. Deck colors and active palette intensity still apply.", true))
+                : UiTheme.SectionView("Jog rings",
                 N("Playback revolution (ms)", nameof(led.ChasePeriodMs), 250, 10000),
                 fields.Toggle("Flash whole ring during loops", led.LoopEnabled, v => led.LoopEnabled = v),
                 fields.Choice("Loop color", led.LoopColor, PreferenceCodec.Colors, v => led.LoopColor = v),
@@ -57,13 +60,13 @@ internal sealed partial class SettingsView
             UiTheme.SectionView("Hotcue presentation",
                 fields.Choice("Hotcue colors", led.HotcueColors, ["djay", "fixed_slots"], v => led.HotcueColors = v),
                 fields.Choice("Djay white token", led.DjayWhite, PreferenceCodec.Colors, v => led.DjayWhite = v),
-                UiTheme.Text("Unknown tokens stay dark. Tokens 1-8 have a calibrated correspondence; white-token use and the whole palette are not physically verified.", true)),
+                UiTheme.Text("Use Djay colors to follow each hotcue's color, or choose fixed pad colors below. Unrecognized colors stay dark.", true)),
             Colors("Djay color-token correspondence", led.DjayPadColors, Enumerable.Range(1, 8).Select(i => $"Token {i}").ToArray()),
             Colors("Optional fixed hotcue slots", led.FixedHotcueColors, Enumerable.Range(1, 8).Select(i => $"Pad {i}").ToArray()),
             Colors("Stem colors", led.StemColors, ["Drums", "Bass", "Harmonic", "Vocals"]),
             UiTheme.SectionView("Stem mute display",
                 fields.Toggle("Bright means muted", led.StemMuteBright, v => led.StemMuteBright = v),
                 fields.Choice("Engaged mute color", led.MuteColor, PreferenceCodec.Colors, v => led.MuteColor = v),
-                UiTheme.Text("Mute indicates the switch, not effective audibility under another stem's solo state. Palette is saved and exported with LED preferences.", true)));
+                UiTheme.Text("Mute lights show the mute switch. Another stem's Solo setting can still affect what you hear. Palette changes save with LED preferences.", true)));
     }
 }
