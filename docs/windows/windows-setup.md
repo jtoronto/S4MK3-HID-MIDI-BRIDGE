@@ -45,6 +45,15 @@ installation on the DJ laptop. Djay, Windows MIDI Services with the supported
 Basic Loopback transport, and a separately accepted bridge package remain
 distinct requirements.
 
+## EXT inputs and DVS
+
+Install the **S4 MK3 ASIO audio driver** before enabling DVS in Djay Pro on
+Windows. In **Settings > DVS**, turn on **Enable Digital Vinyl Control**,
+assign the S4 stereo input pairs to the decks you want to use, and leave DVS
+enabled. Then press **EXT** to switch the corresponding deck to **THRU** for
+external audio. EXT switches the deck mode; it does not turn on DVS.
+See the [DVS input assignments](../user-guide.md#required-djay-dvs-setup).
+
 ## Windows MIDI Services and BLOOP
 
 Both bridge modes need **Basic Loopback (BLOOP)**. If it is unavailable,

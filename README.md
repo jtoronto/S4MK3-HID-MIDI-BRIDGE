@@ -20,28 +20,28 @@ screens without requiring MIDI or development knowledge.
 - Djay Pro with **PRO access**, which is required for custom MIDI mappings.
 - A Traktor Kontrol S4 MK3, its power adapter, and a USB connection to the Mac.
 
-Windows development builds have separate requirements and remain unaccepted.
+Windows development builds have separate requirements and aren't release-qualified.
 See [Windows setup](docs/windows/windows-setup.md); the downloads described below are
 for macOS.
+
+**Windows startup:** start the bridge and wait for **ready** before opening
+Djay. If Djay is already open, the S4 LEDs can show the wrong state and TT
+may not drive the platter. See the [Windows startup workaround](docs/windows/windows-setup.md#normal-startup-and-screens).
 
 ## Download and install
 
 1. Open [GitHub Releases](../../releases) and choose the latest published release.
-2. Download its **`S4 MK3 Bridge-<version>-arm64.dmg`**.
+2. Download **`S4.MK3.Bridge-0.3.0-beta.1-arm64.dmg`**.
 3. Open the disk image, drag **S4 MK3 Bridge** to **Applications**, then eject
    the disk image.
 4. Open **S4 MK3 Bridge** from Applications.
 
-**0.2.1-beta.1 (build 7)** adds backspin continuation and motor assistance,
-Shift + FX knob effect browsing, and clearer LED/FX feedback. See
-[what changed and how to use it](docs/releases/notes/release-0.2.1-beta.1.md).
-The next beta, **0.3.0-beta.1 (build 8)**, is being prepared as a draft:
-motorized playback, simpler Jog tuning, EXT switching and multi-deck Instant FX.
-See its [illustrated release notes](docs/releases/notes/release-0.3.0-beta.1.md).
-Until it is published, use the latest published release for downloads.
-Version 0.2.0 adds screens, updated Preview/CUE/library controls, startup channel
-synchronization, FX pickup and jump-size restoration. Use the app and mapping
-supplied together; beta.3's older mapping does not provide these additions.
+**0.3.0-beta.1 (build 8)** is published for macOS, with motorized playback,
+Jog tuning, EXT switching and multi-deck Instant FX. A ZIP is also available
+as **`S4.MK3.Bridge-arm64.zip`**. See the
+[illustrated release notes](docs/releases/notes/release-0.3.0-beta.1.md).
+Use the app and mapping supplied together, including for screens, startup
+channel synchronization and FX pickup.
 
 The app is ad-hoc signed, not Developer ID signed or notarized. macOS may block
 the first launch because it can't verify the developer. After attempting to
@@ -85,10 +85,11 @@ them to Djay's defaults.
 
 ![Crossfader assignment changed dialog with Keep and Restore buttons](docs/images/djay-crossfader-thru-warning.png)
 
-If Djay shows only a blank S4 configuration, restart Djay with the bridge
-already running. After reconnecting Djay or reselecting its mapping, use
+On macOS, if Djay shows only a blank S4 configuration, restart Djay with the
+bridge already running. After reconnecting Djay or reselecting its mapping, use
 **Stop bridge**, then **Start bridge** to refresh crossfader assignment and curve
-initialization.
+initialization. This is separate from the Windows BLOOP startup race above;
+Stop/Start isn't a verified recovery for missing Windows startup feedback.
 
 When updating, install and select the mapping from the new app. Save it under
 a new filename and keep any custom mappings under their existing names.
@@ -103,47 +104,36 @@ _Bridge controls and mapping installation._
 
 ## Controls and differences from Traktor
 
-This section and the [user guide](docs/user-guide.md) describe the current
-0.2.1-beta.1 build. Backspin continuation, Shift + FX knob browsing and the latest
-lamp/FX-warning corrections are not included in 0.2.0-beta.1.
+This section and the [user guide](docs/user-guide.md) describe the published
+macOS **0.3.0-beta.1** app and its matching mapping. Windows development
+trials have separate setup and acceptance limits.
 
-**Current-source addition:** the full profile supports mixer EXT buttons for
-per-deck THRU/Internal switching and indicators from Djay's actual THRU state.
-Install a newly generated matching mapping. This addition is not a newly
-published release. EXT lamp locations are confirmed; integrated switching
-acceptance is tracked in the [EXT validation record](docs/validation/controls/ext-input-validation.md).
+The full profile supports mixer EXT buttons for per-deck THRU/Internal
+switching, with indicators from Djay's actual THRU state. Switching and lamps
+are confirmed on all four channels; see the
+[EXT validation record](docs/validation/controls/ext-input-validation.md).
 
-**Current-source testing build:** TT independently enables motorized playback;
-JOG toggles Vinyl red/on and blue/off. Jog settings include a Vinyl startup
-default per mode: normal starts on, TT starts off. The current-source TT response
-update uses a 2.25 RPM quiet band and smooth bend onset. With TT Vinyl off,
-braking to the provisional lower floor hands off to Scratch; forward nudges
-stay on pitch bend. Holding assistance tapers to zero at target speed. Normal rings
-follow playback and Scratch and hold on pause; TT rings follow the physical
-wheel. Jog settings retain experimental tuning controls. Use a matching mapping
-with explicit Internal-mode feedback; the response update needs no new export.
-These additions are not in the
-published download; see [testing workflow and limits](docs/user-guide.md#testing-motorized-playback).
-
-Current source also allows stopped TT platter movement to scratch without
-enabling Vinyl. The app's Diagnostics tab shows live physical RPM, signed MIDI
-bend output and routing mode for tuning. These indicators are bridge-output
-diagnostics, not measured audible playback speed.
-Separate TT braking and nudge Strength/Shape controls adjust pitch bend response
-without moving the lower Scratch handoff threshold. Current defaults are
-10x / Shape 1 for braking and 3x / Shape 1.6 for nudging.
-The response update needs no mapping export. Physical response and Djay's
-audible slowdown limit remain unverified.
+**Motorized playback remains experimental.** TT enables it independently of
+Vinyl; JOG toggles Vinyl red/on and blue/off. Normal mode starts with Vinyl on,
+TT with Vinyl off. With TT Vinyl off, braking bends the track down and hands
+off to Scratch at low speed; forward nudges use pitch bend. Moving a paused
+TT platter can scratch without enabling Vinyl. Jog settings provide Base
+force and separate Braking/Nudge Strength and Shape controls.
+Diagnostics shows physical RPM, MIDI bend output and routing mode, not
+measured audible playback speed. Physical response across setups and Djay's
+audible slowdown limit remain unverified. See
+[motorized playback and tuning](docs/user-guide.md#testing-motorized-playback).
+**Turn TT off or Stop bridge before quitting Djay:** its last reported
+playing state can remain active after Djay closes.
 
 The mapping covers four-deck transport, touch scratching and pitch bending,
 mixing, EQ, headphone cue, loops, browsing, hotcues, samples, Neural Mix, and
 effects. A/C and B/D select the deck controlled by each side. Software feedback
 drives button and pad LEDs, channel meters, and jog-ring decoration.
 
-**Current-source control updates:** TT stays red, with brightness indicating
+TT stays red, with brightness indicating
 selection. Channel ON independently arms/disarms decks for mixer Instant FX,
 so one held effect can apply to several tracks together. Only A starts armed.
-These updates are not in the published download and do not require a new mapping.
 
 These are intentional custom mappings. Djay's loop, Neural Mix, and effect
 models differ from Traktor's, so the same labels don't always mean the same
@@ -154,26 +144,26 @@ thing.
 | **LOOP turn / press**              | Select loop size / toggle the loop. Loop size is independent of MOVE's jump length, unlike Traktor's shared length.                                                                                                                   |
 | **MOVE turn**                      | Jump by the selected jump length, or move the active loop by that length. Each deck keeps its own loop and jump sizes.                                                                                                                |
 | **MOVE press**                     | Toggle jump-size selection. Turn MOVE to change the size immediately; press again to exit. The selected deck's selector pulses while selecting. The mode survives deck switches, has no timeout, and clears when the bridge restarts. |
-| **Shift+MOVE turn**                | Jump one beat per step in either direction, even during size selection. Current source builds restore the last confirmed jump length afterward; install the matching mapping. |
+| **Shift+MOVE turn**                | Jump one beat per step in either direction, even during size selection, then restore the last confirmed jump length. |
 | **Shift+LOOP turn / press**        | Move the loop region / reloop the stored loop range. Manual loop in/out isn't mapped. These replace Traktor's shifted key/quantize functions.                                                                                         |
 | **REV**                            | Reverse only while held. Release ends reverse. It doesn't automatically enable Slip as Traktor enables Flux; use FLUX to control Slip independently.                                                                                  |
 | **Sync / Shift+Sync**              | Normal Sync is deck-specific. Shift+Sync on either side cycles Djay's tempo-fader range **globally for all decks**, rather than locking one deck's tempo fader as in Traktor. Djay determines the ranges and their order.             |
 | **Channel FX1 / FX2**              | Choose the deck controlled by the left / right FX strip. These are per-deck control targets, not Traktor's shared FX buses or audio-routing assignments.                                                                              |
-| **FX strips**                      | Control three manual effects on the target deck. Current-source app + mapping: Shift + parameter knob browses previous/next effects; release Shift for parameter pickup. Shift + effect button retains next-effect selection. See the bank-enable limitation below. |
-| **Channel ON and mixer FX**        | Current source: ON independently arms/disarms each deck; held mixer FX apply to all armed decks. ON is white for normal EQ, cyan for Neural Mix EQ, and brighter when armed. An active Instant FX overrides that deck's ON with its effect-button color. |
+| **FX strips**                      | Control three manual effects on the target deck. Shift + parameter knob browses previous/next effects; release Shift for parameter pickup. Shift + effect button retains next-effect selection. See the bank-enable limitation below. |
+| **Channel ON and mixer FX**        | ON independently arms/disarms each deck; held mixer FX apply to all armed decks. ON is white for normal EQ, cyan for Neural Mix EQ, and brighter when armed. An active Instant FX overrides that deck's ON with its effect-button color. |
 | **Filter, then channel ON**        | Filter flashes cyan awaiting a deck; the next ON toggles only that deck's Neural Mix EQ without changing the Instant FX target. Filter again cancels. Idle Filter is dim cyan; it no longer resets a filter. |
 | **STEMS / MUTE**                   | Both select the same Neural Mix layer: four mute pads and four solo pads; Shift with pads 1-4 provides exclusive solo. MUTE isn't a held Traktor-style modifier.                                                                      |
 | **REC**                            | Assigned to Djay's Record Sample action. Algoriddim has confirmed a bug with this action; a fix and retest are pending. It is not the set recorder. |
 | **Shift+CUE**                      | Jump to the beginning of the song, not the saved start cue. Normal CUE is unchanged. |
-| **Playlist / Star buttons**        | Playlist marks/unmarks selected songs. In current source builds, Star switches the library table (Note 11 / B-1); published beta.3 focuses the Queue. |
+| **Playlist / Star buttons**        | Playlist marks/unmarks selected songs; Star switches the library table. |
 | **Preview**                        | Hold to preview; turn BROWSER while holding to scrub, then release to stop. Without Preview or Shift, BROWSER browses tracks. If preview gets out of sync with the hold, close it with the mouse. |
-| **Shift+BROWSER turn**              | In current source builds, select the next/previous library source. Holding Preview still scrubs instead, including with Shift held. |
+| **Shift+BROWSER turn**              | Select the next/previous library source. Holding Preview still scrubs instead, including with Shift held. |
 
 HOTCUE pads trigger eight hotcues; Shift clears them. SAMPLES pads play
 samples; Shift stops them. A/C share sampler bank 1, and B/D share bank 2.
 Neural Mix availability depends on the track and Djay support.
 
-**Source builds include S4 screen support.** Enable it in the **Screens** tab
+**The macOS app includes S4 screen support.** Enable it in the **Screens** tab
 or with **Enable S4 screens** in the menu bar. HOTCUE and SAMPLES show JUMP,
 active LOOP size, KEY and tempo RANGE; STEMS/MUTE shows the reactive mute/solo
 legend. Install the mapping from the same app under a new filename, preserving
@@ -181,16 +171,14 @@ custom mappings; older mappings lack numeric screen feedback.
 The [screen-driver controls](docs/guides/screen-driver-handover.md) can temporarily
 stop NIHardwareAgent with confirmation and restore it afterward. Manual recovery
 remains available even with screen support off.
-Published downloads do not provide powered playback rotation; the
-current-source testing addition is described above. Haptic cues remain
-unsupported. Motor-assisted wheel tension is available in the full-controller
-profile as described below. Published jog-ring animation is decorative. Current
-source adds pause/Scratch continuity in normal mode and physical tracking in TT;
-neither is an absolute track playhead.
+Haptic cues remain unsupported. Motor-assisted wheel tension is available in
+the full-controller profile as described below. Normal jog rings advance with
+playback, follow Scratch and hold on pause; TT rings follow physical wheel
+rotation. Neither is an absolute track playhead.
 
 ### Startup positions and FX pickup
 
-Current source builds apply all four channel-volume faders and high/mid/low EQ
+The full profile applies all four channel-volume faders and high/mid/low EQ
 positions once Djay's mapping is ready. Gain, filter, crossfader position and
 tempo are not applied by this startup synchronization.
 
@@ -198,7 +186,7 @@ Shared FX knobs keep Djay's values until you move through their pickup positions
 A mismatched knob blinks its FX button; dry/wet uses the strip's main ON button.
 With screens enabled, `FX SYNC` identifies the affected deck, left/right strip,
 knobs 1-3 and `W` for dry/wet. A `?` means feedback is unavailable.
-These changes are not in the published beta.3 download. See
+See
 [setup and operation](docs/guides/controls-state-sync.md).
 
 ## App settings
@@ -206,7 +194,7 @@ These changes are not in the published beta.3 download. See
 ### LEDs and palette
 
 Settings includes deck, stem, and hotcue colors; lamp brightness; loop and
-tempo-center indicators; decorative jog-ring animation; and channel-meter
+tempo-center indicators; jog-ring appearance; and channel-meter
 appearance. LED settings can be imported or exported.
 Choose **Save and restart** to apply LED changes. A mapping export isn't needed.
 Saved LED preferences are preserved across app updates.
@@ -224,7 +212,7 @@ The **Jog > Jog wheel feel** section has a shared **Wheel tension** slider:
 - **Neutral (0):** no added tension.
 - **Brake (1 to 100):** resists each wheel's movement, including after release.
 
-The current-source app defaults to **-77**, toward Assist. Both wheels share
+The app defaults to **-77**, toward Assist. Both wheels share
 the saved setting but respond independently. Channel 1's
 fader remains a normal mixer control. This setting applies only to the
 full-controller profile: use **Save preferences** before starting, or
@@ -257,15 +245,15 @@ Speed and Reaction adjust Djay's response, independently of hardware tension.
 
 #### Backspins
 
-A sharp backward flick in Turntable mode can continue scratching after you
+A sharp backward flick during Scratch can continue scratching after you
 release the platter, following its remaining real movement. Catching or stopping
 the wheel ends the backspin.
 
 In **Jog > Backspin**, adjust the detection threshold, extra scratch speed
-and **Motor assist strength**. Current source defaults are **5.2%** extra scratch speed and
+and **Motor assist strength**. Defaults are **5.2%** extra scratch speed and
 motor assistance **on at 100%**. Software speed and motor help are independent
 of your normal scratch response and Jog Wheel Tension. Motor help fades out
-within one second after release; this is not playback-driven platter rotation.
+within one second after release in Normal mode. TT uses its own motor control.
 
 Use **Save and restart** to apply changes. No mapping export is needed for
 backspin options, and upgrading preserves explicit saved choices. See the
@@ -273,10 +261,10 @@ backspin options, and upgrading preserves explicit saved choices. See the
 
 ![Jog settings showing Base force, separate Braking and Nudge response controls, and Advanced settings](docs/images/jog-settings-0.3.0-beta.1.png)
 
-_Jog settings in the upcoming 0.3.0 beta, with motor strength and response
+_Jog settings in 0.3.0-beta.1, with motor strength and response
 controls visible together. See the [user guide](docs/user-guide.md#testing-motorized-playback)._
 
-The menu-bar icon turns green while the bridge is running. In source builds,
+The menu-bar icon turns green while the bridge is running;
 it turns red if requested screens are blocked or fail while the bridge keeps
 running. **Diagnostics** shows the app release and build number alongside the
 bridge log.
@@ -288,40 +276,61 @@ and remaining checks.
 
 Open bugs and unresolved behavior:
 
+- **Windows BLOOP startup race (Direct HID and NI Bridge, full profile):**
+  Djay can send its initial deck state after the MIDI endpoint appears but
+  before the bridge starts listening. The bridge can say **ready** while the
+  LEDs disagree with Djay and TT lacks the feedback it needs to drive the
+  platter. **Leave TT off and fully quit and reopen Djay while the bridge
+  stays ready.** Save the log and any existing MIDI capture if reporting
+  the issue. An earlier listener narrowed the race, but did not fix it.
+  See the [issue and evidence](docs/issues.md#open-windows-bloop-startup-feedback).
 - **Sensor-time safety exit:** reversed wheel-sensor time stops the bridge.
   Keep the exact Diagnostics error if this occurs; it is separate from the
   automatically recovering 50 ms input-gap path.
 - **FX bank enable:** the leftmost FX button duplicates slot 1. Whole-bank
   bypass that preserves individual slot states remains unresolved.
-- **REC:** recording source, destination/sample slot, and press/hold behavior
-  aren't established.
-- **MUTE/STEMS:** the current alias works as described above, but a possible
-  held modifier and final pad behavior are undecided.
-- **EXT and external inputs:** current-source full-profile EXT1-4 switch fixed
-  decks 1-4 between THRU and Internal using actual deck feedback. Missing
-  feedback means no switch and a dark lamp. Either Shift suppresses the software
-  command, preserving hardware Shift+EXT input-type selection. Enable DVS
-  manually, leave it on, and assign inputs in Djay's settings. Channel 4's
-  route is confirmed, including fader, FX and mix/cue. EXT switching and lamps
-  are confirmed on all four channels; remaining mixer-control coverage,
-  phono and four-source audio operation still need validation. See the
-  [external-audio workflow](docs/user-guide.md#external-audio-through-a-deck).
-- **Mapping reconnect/reselection:** automatic detection isn't implemented.
-  Stop and start the bridge after either event.
-- **Jog-ring position:** the decorative chase continues while a platter is held
-  and returns to 12 o'clock when playback stops. Touch/physical-rotation tracking
-  and holding the last position are deferred.
+- **REC / Record Sample:** Algoriddim confirmed a Djay bug. An upstream fix
+  and successful retest are pending; REC's mapping is established and isn't
+  the set recorder.
+- **macOS mapping reconnect/reselection:** automatic detection isn't
+  implemented. Stop and start the bridge after either event to reinitialize
+  startup state. This doesn't resolve the Windows startup race above.
+- **Rapid MOVE bursts:** Djay can coalesce zero-delay jump commands; see the
+  [reproduction](docs/validation/controls/controls-state-sync-validation.md#native-burst-limitation).
+- **Deck-selector contrast:** selected versus unselected buttons can be hard
+  to distinguish in dark venues; investigation remains pending.
+
+Validation limits:
+
+- **Windows EXT inputs require ASIO:** install the S4 MK3's ASIO audio driver
+  before enabling DVS in Djay Pro. EXT switches a deck to **THRU**; it
+  cannot enable DVS for you. See [Windows EXT setup](docs/windows/windows-setup.md#ext-inputs-and-dvs).
+- **External audio:** the broader input-mixing blocker is closed. Channel 4
+  fader, FX and mix/cue operation, all four USB input assignments, and all
+  four EXT switches and lamps are confirmed. This doesn't establish every
+  mixer control, phono gain/staging or four simultaneous sources. Enable DVS
+  and assign inputs manually; unknown feedback means no EXT switch and a dark
+  lamp. Shift+EXT retains hardware input-type selection. See the
+  [external-audio evidence](docs/validation/controls/external-input-routing-test.md#subsequent-bridge-active-confirmation)
+  and [workflow](docs/user-guide.md#external-audio-through-a-deck).
+- **Jog rings and motors:** normal playback/Scratch/pause continuity and TT
+  physical tracking are implemented. Extended testing and exhaustive fault
+  recovery remain incomplete; see the
+  [ring validation](docs/validation/feedback/tt-normal-ring-recovery-validation.md).
+  Physical input-timeout recovery also remains unverified as noted above.
 
 Independent loop/jump sizes, global Shift+Sync, per-deck FX targeting, and REV
 without automatic Slip are design choices, not outstanding fixes.
 
 ## Roadmap
 
-- Broaden backspin validation and refine jog feel, and resolve the open FX, recording,
-  pad, and external-input questions.
-- Consider jog-ring touch/rotation polish separately. Playback-driven motor
-  rotation, other haptics, additional screen pages and pad legends, and an
-  on-controller settings gesture remain deferred.
+- Resolve the Windows startup race and complete Windows release qualification.
+- Continue motorized playback, jog-ring and fault-recovery testing; investigate
+  FX bank bypass, rapid jump bursts and deck-selector contrast, and retest REC
+  after an upstream fix.
+- A distinct MUTE role, linked loop/jump sizes, new haptics, additional screen
+  pages and pad legends, and an on-controller settings gesture remain deferred.
+  MUTE continues to select the STEMS layer.
 - Explore a standalone hardware bridge longer term, along with other DJ
   applications and simpler guest setup. These aren't features of this beta.
 

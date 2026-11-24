@@ -1,6 +1,6 @@
 # S4 MK3 bridge issues
 
-Current checklist as of November 2, 2026. This is the source of truth for issue
+Current checklist as of November 24, 2026. This is the source of truth for issue
 status; [the mapping audit](reference/mapping-audit.md) retains detailed findings and
 historical snapshots.
 
@@ -8,6 +8,29 @@ Update this document as work completes. Check an item only when the agreed
 behavior is implemented and verified. For physical controller behavior,
 software checks alone are insufficient: record live confirmation as well.
 Keep completed items and add their completion date and a short evidence note.
+
+## Open: Windows BLOOP startup feedback
+
+- [ ] **Djay can send its initial deck state before the bridge is listening.**
+  This affects the full Windows profile in both **Direct HID** and **NI Bridge**.
+  The host publishes the Basic Loopback (BLOOP) MIDI endpoint before the worker
+  can attach its receiver. If Djay is already open, it can discover the endpoint
+  and send its refresh during that gap. The bridge has no verified way to
+  request or replay the missed state. **Bridge: ready** does not mean deck
+  feedback has arrived: LEDs can disagree with Djay, and TT stays unpowered
+  when the selected deck's playback, loaded or Internal state is unknown.
+
+  **Workaround:** start the bridge and wait for **ready** before opening Djay.
+  If the LEDs are already wrong, leave TT off, save the bridge log (and any
+  MIDI capture already running), and fully quit and reopen **Djay** while the
+  bridge stays ready. Verify deck feedback before enabling TT. Restarting the
+  bridge recreates the timing window; reselecting the mapping is not a verified
+  way to request a refresh.
+
+  **Why this is still open:** both modes now attach the receiver before HID
+  setup. That narrows the window but cannot cover the time before attachment.
+  Successful Djay-first starts show it can work, not that it always will.
+  See the [November 23 validation and capture evidence](windows/validation/windows-ni-decks-validation-20261123.md#remaining-djay-first-startup-race).
 
 ## Completed
 
@@ -20,9 +43,9 @@ Keep completed items and add their completion date and a short evidence note.
   [evidence and limits](validation/feedback/led-fx-state-fixes-validation.md#first-gig-tt-and-multi-deck-instant-fx-follow-up).
 - [x] **Preview encoder scrubbing** - Preview toggles playback and
   Shift+BROWSER emits directional preview seek pulses. The user confirmed
-  the current scrubber works on October 21, 2026. A proposed one-handed
-  replacement is tracked below.
-- [x] **Saved hardware wheel tension** - Jog > Hardware exposes a shared
+  the scrubber worked on October 21, 2026. The completed one-handed held
+  Preview workflow below supersedes this toggle gesture.
+- [x] **Saved hardware wheel tension (macOS)** - Jog > Jog wheel feel exposes a shared
   Assist / Neutral / Brake setting with independent per-wheel motion/touch
   response. User-confirmed assistance/braking, Djay/MIDI/LED coexistence,
   Stop/Quit neutral, saved-setting restore while stopped, and explicit restart
@@ -30,8 +53,8 @@ Keep completed items and add their completion date and a short evidence note.
   [normal-app integration](guides/jog-tension-integration.md).
 - [x] **Mixer ON / Neural Mix EQ selection** - Filter is now a one-shot
   EQ deck-selection latch, not reset-to-neutral. The next ON toggles that deck's
-  native EQ mode without retargeting Instant FX; normal ON still selects the
-  FX target. White/cyan mode, armed brightness, active-effect color, and dim
+  native EQ mode without retargeting Instant FX; normal ON now arms or disarms
+  that deck for Instant FX. White/cyan mode, armed brightness, active-effect color, and dim
   cyan idle Filter replace the former deck colors/reset indication.
   Live MIDI feedback was captured independently for A-D; the user accepted
   the physical behavior and idle refinement on October 20, 2026.
@@ -127,7 +150,7 @@ Keep completed items and add their completion date and a short evidence note.
   regressions pass; the user verified `11A -> 2A -> --` on the physical S4.
   No mapping change is needed. See [diagnosis and verification](validation/feedback/key-feedback-order-validation.md).
 
-## Current-source EXT support
+## EXT support
 
 The full profile now provides fixed EXT1-4 switching for Djay decks 1-4,
 independent of deck/FX selection, with a newly generated matching mapping.
@@ -141,26 +164,28 @@ when dim-idle lighting is enabled.
 
 The attended [EXT validation](validation/controls/ext-input-validation.md) confirms single-press
 switching and lamps on all four channels, independent mouse-driven feedback,
-and Shift suppression with no delayed toggle. This is not a new published
-release. DVS must be enabled manually and left on; input assignments remain
-GUI setup. The bridge doesn't detect global DVS enable.
+and Shift suppression with no delayed toggle. EXT support shipped in the
+[macOS 0.3.0 beta](releases/notes/release-0.3.0-beta.1.md). Enable DVS manually,
+leave it on, and assign the inputs in Djay. The bridge doesn't detect global DVS enable.
+
+**Windows setup limitation:** on the tested S4 MK3 setup, Djay Pro would not
+enable DVS until the ASIO audio driver was installed. Without DVS, EXT cannot
+route an external source through a deck in THRU mode. This is an audio setup
+prerequisite, not a fault with the EXT button or its MIDI mapping.
+See [Windows EXT setup](windows/windows-setup.md#ext-inputs-and-dvs).
 
 - [x] **EXT switching and indicators** - Confirmed on all four channels.
-  Broader external-audio validation remains separate below.
+  See the completed external-audio check below for its scope.
 
 ## Open
 
-- [ ] **TT response stability and stopped-playback scratching** - The current-source
-  update replaces bend hysteresis with a true 2.25 RPM deadband and smooth
-  onset across the next 1 RPM, removes automatic upper-speed Scratch entry,
-  and tapers hold assistance to zero at measured target. Lower-floor Scratch,
-  full stopped/reverse assistance, paused TT scratching and the 2:1 bend bias
-  remain. Saved floor/gain persist, with defaults 50% and 1x. Runtime config,
-  touch/authorization/owner/requested-force capture supplements RPM and CC4.
-  The November 2 capture had four upper entries near 66 RPM and a 90.3 RPM
-  maximum with a 1% floor; the reported 10x run was not captured. Physical
-  response and Djay's audio floor remain unverified. See the
-  [software evidence and ordered morning test](validation/jog/tt-response-stability-validation.md).
+- [ ] **TT response calibration (native motor path)** - TT playback and
+  paused scratching are implemented. The remaining question is how the
+  braking/nudge curves affect audible playback; MIDI bend rates do not
+  establish a universal slowdown limit. The macOS app now defaults to a 1%
+  Scratch handoff; 50% was the earlier test setting. See the
+  [response comparison](validation/jog/tt-response-curves-validation.md)
+  and [current defaults](validation/jog/jog-settings-cleanup-validation.md#defaults-source).
 - [ ] **Deck-selector contrast in dark venues — pending investigation** -
   Keep unselected A/C and B/D buttons backlit, but improve the selected/unselected
   distinction. The newer Traktor motor-driven and tension captures show C/D dim
@@ -188,6 +213,23 @@ GUI setup. The bridge doesn't detect global DVS enable.
   uninvestigated; this is separate from the self-recovering 50 ms input-gap
   path and was not changed by the musical-key fix. Retain the exact log if it
   occurs again. See [the captured run](validation/feedback/key-feedback-order-validation.md#evidence-and-diagnostic-boundaries).
+- [ ] **Leftmost FX button duplicates slot 1** - Verify native bank-enable
+  behavior and investigate a whole-bank bypass that preserves individual
+  slot states.
+- [ ] **REC / Record Sample: confirmed Djay bug** - The action did not record
+  a sample in the user's October 21, 2026 testing. On October 30, the user
+  reported that Algoriddim confirmed this is a bug on their end. Keep this
+  open pending an upstream fix and a successful retest; do not treat it as
+  an unresolved bridge mapping assignment or claim that it is fixed.
+  REC remains assigned to Record Sample, not the set recorder.
+
+## Completed hardware checks
+
+- [x] **Windows NI JOG rim tension** - On November 24, 2026, the operator
+  felt distinct resistance at 25, 244 and 107 while both screens continued
+  updating and the rings stayed steady. Windows NI Bridge now has a shared
+  0–255 slider on **Jog**; it is independent of Direct HID tension and does
+  not tune TT braking. See the [stock and bridge evidence](windows/research/windows-ni-jog-tension-2026-11-24.md#bridge-trial-boundary).
 - [x] **Jog feel and backspin** - User confirmed the current jog feel and
   backspin tuning are solved to their satisfaction on October 27, 2026.
   [October 6 comparison](research/jog/jog-wheel-investigation.md): Traktor's target is
@@ -214,15 +256,6 @@ GUI setup. The bridge doesn't detect global DVS enable.
   [focused physical results and limits](validation/jog/backspin-assist-validation.md).
   See [the experiment and ordered checks](validation/jog/backspin-detection-validation.md).
   Equal-force flicks are not equivalent across the two setups.
-- [ ] **Leftmost FX button duplicates slot 1** - Verify native bank-enable
-  behavior and investigate a whole-bank bypass that preserves individual
-  slot states.
-- [ ] **REC / Record Sample: confirmed Djay bug** - The action did not record
-  a sample in the user's October 21, 2026 testing. On October 30, the user
-  reported that Algoriddim confirmed this is a bug on their end. Keep this
-  open pending an upstream fix and a successful retest; do not treat it as
-  an unresolved bridge mapping assignment or claim that it is fixed.
-  REC remains assigned to Record Sample, not the set recorder.
 - [x] **Broader external-audio validation** - User confirmed external audio
   is already validated on October 27, 2026, closing this checklist item.
   The user has confirmed manually selected DVS THRU on channel 4 works with
@@ -257,7 +290,8 @@ GUI setup. The bridge doesn't detect global DVS enable.
   extended beta testing; this is not exhaustive fault/recovery acceptance.
   See [October 30 evidence](validation/feedback/tt-normal-ring-recovery-validation.md) and the
   [response-stability validation record](validation/jog/tt-response-stability-validation.md).
-  Review experimental settings for removal or hiding before release.
+  The [Jog settings cleanup](validation/jog/jog-settings-cleanup-validation.md)
+  put advanced controls behind a disclosure before the macOS release.
   Cue effects and other new haptics remain deferred.
 - [ ] **Jog-ring extended validation** - Normal playback/Scratch/pause
   continuity and TT physical tracking are implemented and software-tested.
@@ -278,8 +312,8 @@ present, signature verification reported no error, and the same app then
 launched normally without changes. The cause is unconfirmed; no code fix or
 rebuild was made for that report.
 
-On-device screens/pad legends are now authorized experimental work, tracked above.
-A controller settings-menu gesture remains deferred.
+The existing info and STEMS/MUTE screen pages are covered under Completed.
+Additional pages and a controller settings-menu gesture remain deferred.
 Automatic Slip during REV is a separate design choice, not part of
 the completed momentary-reverse fix. See the mapping audit for these ideas
 and the Encdr upgrade candidate.
