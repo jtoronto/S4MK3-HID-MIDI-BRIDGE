@@ -6,10 +6,10 @@ use plist::Value;
 use crate::{midi_layout, midi_transport::Backend};
 
 pub fn generate(jog: &super::jog::Config, backend: Backend) -> anyhow::Result<Value> {
-    let mut mapping = super::generate_with_jog(jog)?;
     let Some(port_name) = backend.port_name() else {
-        return Ok(mapping);
+        return super::generate_with_jog(jog);
     };
+    let mut mapping = super::generate_controls(jog, false)?;
     let root = mapping.as_dictionary_mut().context("mapping root")?;
     root.insert(
         "endpointName".to_owned(),

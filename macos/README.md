@@ -246,6 +246,21 @@ value is unchanged.
 Older beta.2 packages still exit on this timeout. Physical recovery testing
 remains pending.
 
+### Global Neural Mix Mute FX
+
+With the updated bridge and matching Djay mapping, either MUTE button toggles
+Djay's Mute/Solo Echo Out setting. The white-only lamps are bright when Djay
+reports on, dim when it reports off, and dark until feedback arrives. STEMS
+still selects the Neural Mix pad layer.
+
+Use **Install Djay mapping…**, save under a new name to preserve your
+existing mapping, and select it for **S4 MK3 MIDI Full** in Djay.
+If your selected mapping already supports Mute FX, a bridge-only color
+update does not require reinstalling it.
+For a live check, toggle the setting in Djay and check both LEDs, then
+toggle it from each physical MUTE button. Check that neither press changes
+the pad layer and that stem mutes/solos use the effect on more than one deck.
+
 ### Jog mapping preferences
 
 The generated mapping assigns **Shift+Sync** on either side to Djay's

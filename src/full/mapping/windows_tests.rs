@@ -130,7 +130,20 @@ fn native_mapping_and_jog_semantics_survive_windows_export() -> anyhow::Result<(
                 .cloned()
                 .context("controls")
         };
-        for (native, windows) in controls(&native)?.iter().zip(controls(&windows)?) {
+        let native_controls = controls(&native)?;
+        let windows_controls = controls(&windows)?;
+        let native_shared: Vec<_> = native_controls
+            .iter()
+            .filter(|control| {
+                control
+                    .as_dictionary()
+                    .and_then(|fields| fields.get("keyPath"))
+                    .and_then(Value::as_string)
+                    != Some("mixer.toggleUnmixerMuteFxEnabled")
+            })
+            .collect();
+        assert_eq!(native_shared.len(), windows_controls.len());
+        for (native, windows) in native_shared.into_iter().zip(windows_controls) {
             let mut expected = native.as_dictionary().context("native control")?.clone();
             let mut actual = windows.as_dictionary().context("Windows control")?.clone();
             let expected_output = expected.remove("output");

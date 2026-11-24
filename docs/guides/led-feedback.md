@@ -299,9 +299,11 @@ Available palette names: `red`, `carrot`, `orange`, `honey`, `yellow`, `lime`,
   The bridge reports `END_WARNING_UNAVAILABLE` once at startup. No wall-clock
   playback estimate substitutes for real state.
 - REC, library buttons, and Filter reset have momentary indicators where
-  persistent software-state output is unresolved. STEMS and MUTE remain aliases
-  of the same layer. Sampler loaded/empty and Neural Mix availability are not
-  inferred from silence.
+  persistent software-state output is unresolved. On macOS, both MUTE lamps
+  use one global Mute FX output (channel 7 CC 9). The white-only lamps are
+  bright when on, dim when off (even in Dark idle mode), and dark until
+  feedback arrives. Windows keeps the STEMS alias and its layer indicator.
+  Sampler loaded/empty and Neural Mix availability are not inferred from silence.
 - Track loading-success output is a candidate state signal: a false value
   invalidates cached cue colors and channel level. Replacement/load/unload
   ordering and initial snapshots still need observation.

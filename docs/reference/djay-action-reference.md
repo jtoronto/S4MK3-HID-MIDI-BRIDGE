@@ -27,6 +27,15 @@ All channel labels in this document are **MIDI channels 1-based**, as requested.
 
 ## Generated S4 mapping shape
 
+### Current-source macOS MUTE overlay
+
+Either MUTE button sends Note 4 on human channel 5 to
+`mixer.toggleUnmixerMuteFxEnabled`. One root output,
+`turntable1.unmixer.muteWithFx` on channel 7 CC 9, drives both MUTE LEDs.
+STEMS still selects the pad layer. This overlay is not in the Windows mapping.
+See the [Mute FX validation record](../validation/controls/mute-fx-macos-validation-2026-11-24.md)
+for physical observations and verification limits.
+
 ### Current-source EXT overlay
 
 The version-scoped audit counts, tables and S4 usage cells below remain

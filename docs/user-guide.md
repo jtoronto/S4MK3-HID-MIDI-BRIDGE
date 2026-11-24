@@ -376,18 +376,24 @@ These are per-deck effects, not routing into a shared effect bus.
 | --- | --- | --- |
 | HOTCUE | Trigger/set hotcues 1-8 | Clear the corresponding hotcue |
 | SAMPLES | Trigger sampler players | Stop their playback |
-| STEMS or MUTE | Pads 1-4 mute; pads 5-8 solo | Pads 1-4 exclusive solo; pads 5-8 stay ordinary solo |
+| STEMS | Pads 1-4 mute; pads 5-8 solo | Pads 1-4 exclusive solo; pads 5-8 stay ordinary solo |
 
 A/C share sampler bank 1; B/D share bank 2. Selecting another deck on the same
 physical side does not give you an independent new sample bank.
 
 The STEMS columns are **Drums, Bass, Harmonic, Vocals**, in that order. The
 lower four pads solo the same columns. Shift makes the upper row **ONLY**
-so you can select one stem exclusively. MUTE is a mode-selection alias for
-STEMS, not a held modifier and not a button that mutes the entire deck.
+so you can select one stem exclusively. On older bridge builds and Windows,
+MUTE is a mode-selection alias for STEMS, not a whole-deck mute.
 
 Neural Mix availability depends on the track and Djay support. The screen
 reports actual mute/solo state; ON in a MUTE tile means that mute is active.
+
+In macOS builds with the updated Djay mapping, **STEMS** still selects this
+pad layer, but **either MUTE button** toggles Djay's global **Mute/Solo Echo
+Out** setting without changing the pad mode. Both MUTE LEDs show bright white
+when Djay reports the setting is on, dim white when it is off, and stay dark
+until the state is known. Use a Djay mapping that supports Mute FX.
 
 **REC is not the set recorder.** It uses Djay's Record Sample action, which
 has a known bug. Use Djay's onscreen recording controls to record a mix.
@@ -595,7 +601,7 @@ without the bridge; it doesn't control Djay.
 
 ## Screens and feedback
 
-HOTCUE and SAMPLES show **JUMP / LOOP / KEY / RANGE**. STEMS and MUTE show the
+HOTCUE and SAMPLES show **JUMP / LOOP / KEY / RANGE**. STEMS shows the
 mute/solo legend. The selected A/C or B/D deck supplies the corresponding screen.
 There is no title, artwork, BPM, time or waveform display.
 
@@ -668,7 +674,8 @@ Copy relevant Diagnostics output and check it for private information.
 - REV and Slip are independent.
 - Channel FX1/FX2 choose manual control targets, not shared audio buses.
 - Filter then ON chooses an EQ-mode change; ordinary ON targets Instant FX.
-- MUTE selects the STEMS layer rather than acting as a held modifier.
+- MUTE is not a held modifier; current macOS source builds use it for the
+  global Neural Mix echo setting instead of the older STEMS alias.
 - The main FX ON and REC have the limitations described above.
 - EXT switches fixed decks between THRU and Internal. DVS enable and input
   assignments remain manual; this isn't Traktor's factory input workflow.

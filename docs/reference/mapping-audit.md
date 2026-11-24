@@ -300,9 +300,11 @@ seek command and, for toggle-based preview, reliable preview state.
 2. A/C and B/D select physical deck focus. Mixer channel strips remain fixed
    to their respective decks; changing deck focus does not move the mixer faders.
 3. HOTCUE pads set/jump to cues; Shift clears them. SAMPLES uses shared A/C
-   and B/D banks; Shift stops a sample. STEMS/MUTE select four mutes and four
-   solos; Shift on the first four pads is exclusive solo. Stem numbers are
-   native channel indices; confirm content with Djay's Neural Mix layout.
+   and B/D banks; Shift stops a sample. STEMS selects four mutes and four
+   solos; Shift on the first four pads is exclusive solo. On macOS source
+   builds, MUTE instead toggles [global Mute FX](djay-action-reference.md#current-source-macos-mute-overlay).
+   Stem numbers are native channel indices; confirm content with Djay's
+   Neural Mix layout.
 4. Channel FX1/FX2 select the left/right strip's target deck. Channel FX SELECT
    normally chooses the central instant-FX target; Filter then ON changes only
    that deck's EQ mode. These are control targets, not
@@ -320,7 +322,7 @@ For useful reports, include app/mapping name, Djay version, deck/side, pad mode,
 Shift state, press versus rotation, expected result, and actual result. That is
 more reproducible than a pitch label alone.
 
-### Current STEMS/MUTE pad legend
+### Current STEMS pad legend
 
 These names come from the installed four-channel Neural Mix action labels.
 They are not a claim that every track makes all four stems available.

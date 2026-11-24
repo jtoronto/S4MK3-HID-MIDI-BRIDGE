@@ -235,6 +235,7 @@ pub struct LocalState {
     /// Jump-size selection belongs to logical decks, not physical sides.
     pub move_selecting: [bool; 4],
     pub eq_selecting: bool,
+    pub mute_fx_buttons: bool,
     /// Parameter knobs 1-3 and dry/wet, by physical FX strip.
     pub fx_positions: [[Option<u8>; 4]; 2],
     /// Per-slot acquisition gates, by physical FX strip.
@@ -259,6 +260,7 @@ impl Default for LocalState {
             tempo: [None; 2],
             move_selecting: [false; 4],
             eq_selecting: false,
+            mute_fx_buttons: true,
             fx_positions: [[None; 4]; 2],
             fx_acquired: [[false; 6]; 2],
         }
@@ -381,13 +383,23 @@ impl ButtonRenderer<'_> {
             ([9, 32], PadMode::Hotcue, color),
             ([57, 68], PadMode::Samples, Color::Cyan),
             ([10, 33], PadMode::Stems, Color::Green),
-            ([58, 69], PadMode::Stems, Color::Green),
         ] {
             self.set(
                 offsets[side],
                 self.palette(color, self.local.pads[side] == mode),
             );
         }
+        let mute = if self.local.mute_fx_buttons {
+            // The physical MUTE lamps are white-only; the hue bits cannot make them cyan.
+            match self.feedback.mute_fx {
+                Some(true) => self.palette(Color::White, true),
+                Some(false) => Color::White.base() + self.config.palette_inactive_intensity,
+                None => 0,
+            }
+        } else {
+            self.palette(Color::Green, self.local.pads[side] == PadMode::Stems)
+        };
+        self.set([58, 69][side], mute);
         for slot in 0..2 {
             let selected = [[0, 2], [1, 3]][side][slot];
             self.set(
@@ -846,7 +858,7 @@ mod tests {
         let report = render_buttons(&config(), &feedback, &local);
         assert_eq!(report[1], Color::Red.base() + 2);
         assert_eq!(report[1 + 10], Color::Green.base() + 2);
-        assert_eq!(report[1 + 58], Color::Green.base() + 2);
+        assert_eq!(report[1 + 58], 0);
 
         let mut fixed = config();
         fixed.hotcue_colors = HotcueColors::FixedSlots;
@@ -854,6 +866,44 @@ mod tests {
         local.pads[0] = PadMode::Hotcue;
         let report = render_buttons(&fixed, &feedback, &local);
         assert_eq!(report[1], Color::Yellow.base() + 2);
+    }
+
+    #[test]
+    fn both_mute_leds_follow_global_djay_feedback_in_different_pad_modes() {
+        let config = config();
+        let dim_white = Color::White.base() + config.palette_inactive_intensity;
+        let bright_white = Color::White.base() + config.palette_active_intensity;
+        let mut feedback = FeedbackState::default();
+        let mut decoder = super::super::feedback::Decoder::default();
+        let local = LocalState {
+            decks: [2, 3],
+            pads: [PadMode::Stems, PadMode::Samples],
+            ..LocalState::default()
+        };
+        let render = |feedback: &FeedbackState, local: &LocalState| {
+            let report = render_buttons(&config, feedback, local);
+            [report[1 + 58], report[1 + 69]]
+        };
+        assert_eq!(render(&feedback, &local), [0; 2]);
+        for (bytes, expected) in [
+            ([0x94, 4, 127], 0),
+            ([0xb6, 9, 0], dim_white),
+            ([0xb6, 9, 127], bright_white),
+            ([0xb0, 9, 0], bright_white),
+            ([0xb6, 9, 0], dim_white),
+        ] {
+            decoder.feed(&bytes, |message| {
+                feedback.apply(message, std::time::Duration::ZERO);
+            });
+            assert_eq!(render(&feedback, &local), [expected; 2]);
+        }
+        let windows = LocalState {
+            mute_fx_buttons: false,
+            ..local
+        };
+        let windows_report = render_buttons(&config, &feedback, &windows);
+        assert_eq!(windows_report[1 + 58], Color::Green.base() + 2);
+        assert_eq!(windows_report[1 + 69], windows_report[1 + 33]);
     }
 
     #[test]

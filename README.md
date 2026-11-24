@@ -152,7 +152,7 @@ thing.
 | **FX strips**                      | Control three manual effects on the target deck. Shift + parameter knob browses previous/next effects; release Shift for parameter pickup. Shift + effect button retains next-effect selection. See the bank-enable limitation below. |
 | **Channel ON and mixer FX**        | ON independently arms/disarms each deck; held mixer FX apply to all armed decks. ON is white for normal EQ, cyan for Neural Mix EQ, and brighter when armed. An active Instant FX overrides that deck's ON with its effect-button color. |
 | **Filter, then channel ON**        | Filter flashes cyan awaiting a deck; the next ON toggles only that deck's Neural Mix EQ without changing the Instant FX target. Filter again cancels. Idle Filter is dim cyan; it no longer resets a filter. |
-| **STEMS / MUTE**                   | Both select the same Neural Mix layer: four mute pads and four solo pads; Shift with pads 1-4 provides exclusive solo. MUTE isn't a held Traktor-style modifier.                                                                      |
+| **STEMS / MUTE**                   | STEMS selects the Neural Mix mute/solo pads; Shift with pads 1-4 gives exclusive solo. Current macOS source builds with the matching mapping use either MUTE button to toggle global Mute/Solo Echo Out. Published older builds and Windows keep MUTE as a STEMS alias. |
 | **REC**                            | Assigned to Djay's Record Sample action. Algoriddim has confirmed a bug with this action; a fix and retest are pending. It is not the set recorder. |
 | **Shift+CUE**                      | Jump to the beginning of the song, not the saved start cue. Normal CUE is unchanged. |
 | **Playlist / Star buttons**        | Playlist marks/unmarks selected songs; Star switches the library table. |
@@ -165,7 +165,7 @@ Neural Mix availability depends on the track and Djay support.
 
 **The macOS app includes S4 screen support.** Enable it in the **Screens** tab
 or with **Enable S4 screens** in the menu bar. HOTCUE and SAMPLES show JUMP,
-active LOOP size, KEY and tempo RANGE; STEMS/MUTE shows the reactive mute/solo
+active LOOP size, KEY and tempo RANGE; STEMS shows the reactive mute/solo
 legend. Install the mapping from the same app under a new filename, preserving
 custom mappings; older mappings lack numeric screen feedback.
 The [screen-driver controls](docs/guides/screen-driver-handover.md) can temporarily
@@ -328,9 +328,8 @@ without automatic Slip are design choices, not outstanding fixes.
 - Continue motorized playback, jog-ring and fault-recovery testing; investigate
   FX bank bypass, rapid jump bursts and deck-selector contrast, and retest REC
   after an upstream fix.
-- A distinct MUTE role, linked loop/jump sizes, new haptics, additional screen
-  pages and pad legends, and an on-controller settings gesture remain deferred.
-  MUTE continues to select the STEMS layer.
+- Linked loop/jump sizes, new haptics, additional screen pages and pad
+  legends, and an on-controller settings gesture remain deferred.
 - Explore a standalone hardware bridge longer term, along with other DJ
   applications and simpler guest setup. These aren't features of this beta.
 

@@ -187,6 +187,7 @@ struct Translator {
     fx_browse_anchors: [[Option<u8>; 3]; 2],
     eq_selecting: bool,
     thru: [Option<bool>; 4],
+    mute_fx_buttons: bool,
 }
 
 impl Default for Translator {
@@ -233,6 +234,7 @@ impl Default for Translator {
             fx_browse_anchors: [[None; 3]; 2],
             eq_selecting: false,
             thru: [None; 4],
+            mute_fx_buttons: true,
         }
     }
 }
@@ -274,6 +276,7 @@ impl FullBridge {
             translator: Translator {
                 jog_config,
                 vinyl: [jog_config.vinyl_enabled_at_startup; 2],
+                mute_fx_buttons: backend == crate::midi_transport::Backend::CoreMidi,
                 ..Translator::default()
             },
             raw: raw::Parser::new()?,
@@ -688,6 +691,7 @@ impl Translator {
             tempo: self.tempos,
             move_selecting: self.move_selecting,
             eq_selecting: self.eq_selecting,
+            mute_fx_buttons: self.mute_fx_buttons,
             fx_positions: self.fx_positions,
             fx_acquired: self
                 .fx_pickup
@@ -1022,12 +1026,14 @@ impl Translator {
                 ("hotcue_mode", PadMode::Hotcue),
                 ("samples_mode", PadMode::Samples),
                 ("stems_mode", PadMode::Stems),
-                ("mute_mode", PadMode::Stems),
+                (catalog::MUTE_FX_BINDING.input, PadMode::Stems),
             ] {
-                if controls.iter().any(|input| {
-                    matches!(input, Control::Button(name, true)
+                if !(self.mute_fx_buttons && suffix == catalog::MUTE_FX_BINDING.input)
+                    && controls.iter().any(|input| {
+                        matches!(input, Control::Button(name, true)
                     if name.strip_prefix(prefix).and_then(|s| s.strip_prefix('_')) == Some(suffix))
-                }) {
+                    })
+                {
                     self.pads[side] = mode;
                 }
             }
@@ -1278,6 +1284,19 @@ impl Translator {
 
     fn press(&mut self, name: &'static str, output: &mut Vec<[u8; 3]>) -> anyhow::Result<()> {
         if self.held.contains_key(name) {
+            return Ok(());
+        }
+        if self.mute_fx_buttons
+            && side_name(name).is_some_and(|(_, suffix)| suffix == catalog::MUTE_FX_BINDING.input)
+        {
+            pulse(
+                Address {
+                    channel: catalog::MUTE_FX_INPUT_CHANNEL,
+                    number: catalog::MUTE_FX_BINDING.number,
+                },
+                output,
+            );
+            self.held.insert(name, Vec::new());
             return Ok(());
         }
         if let Some(deck) = catalog::EXT_INPUTS.iter().position(|input| *input == name) {
@@ -1706,6 +1725,49 @@ mod tests {
         let mut output = Vec::new();
         state.translate(controls, None, &mut output)?;
         Ok(output)
+    }
+
+    #[test]
+    fn mute_buttons_send_global_pulses_without_switching_pad_mode() -> anyhow::Result<()> {
+        let mut state = Translator::default();
+        run(
+            &mut state,
+            &[
+                Control::Button("left_deck_switch_c", true),
+                Control::Button("right_deck_switch_d", true),
+                Control::Button("left_shift", true),
+                Control::Button("right_samples_mode", true),
+            ],
+        )?;
+        let pulse = [[0x94, 4, 127], [0x84, 4, 0]];
+        for name in ["left_mute_mode", "right_mute_mode"] {
+            assert_eq!(run(&mut state, &[Control::Button(name, true)])?, pulse);
+            assert!(run(&mut state, &[Control::Button(name, true)])?.is_empty());
+        }
+        for name in ["left_mute_mode", "right_mute_mode"] {
+            assert!(run(&mut state, &[Control::Button(name, false)])?.is_empty());
+            assert_eq!(run(&mut state, &[Control::Button(name, true)])?, pulse);
+        }
+        assert_eq!(
+            state.local_led_state().pads,
+            [PadMode::Hotcue, PadMode::Samples]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn windows_mute_buttons_still_select_the_stems_layer() -> anyhow::Result<()> {
+        let mut state = Translator {
+            mute_fx_buttons: false,
+            ..Translator::default()
+        };
+        let output = run(&mut state, &[Control::Button("right_mute_mode", true)])?;
+        assert!(output.is_empty());
+        assert_eq!(
+            state.local_led_state().pads,
+            [PadMode::Hotcue, PadMode::Stems]
+        );
+        Ok(())
     }
 
     #[test]

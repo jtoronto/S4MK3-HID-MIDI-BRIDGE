@@ -45,9 +45,10 @@ the captured ordering and physical check.
 Titles, artwork, time, BPM, waveforms and hotcue/sample pad grids are not shown.
 The font is embedded; nothing needs installing on the DJ laptop.
 
-## STEMS and MUTE page
+## STEMS page
 
-STEMS and MUTE select the same Neural Mix layer. The screen has four columns:
+STEMS selects the Neural Mix layer. Windows retains MUTE as an alias; the
+updated macOS MUTE buttons do not change the screen. The screen has four columns:
 DRUM, BASS, HARM and VOX. Pads 1-4 control mute; pads 5-8 control solo in the
 same order. With Shift held, the upper row becomes ONLY (exclusive solo);
 the lower row remains ordinary SOLO.

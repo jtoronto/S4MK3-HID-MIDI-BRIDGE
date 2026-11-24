@@ -42,6 +42,7 @@ pub struct FeedbackState {
     pub internal: [Option<bool>; 4],
     /// Canonical FX parameters 1-3, then independent slot wet/dry values.
     pub fx_values: [[Option<u8>; 6]; 4],
+    pub mute_fx: Option<bool>,
     instant_fx_order: [[Option<usize>; 4]; 4],
     /// A playback output arrived from the mapping during this bridge session.
     pub playback_received: bool,
@@ -60,6 +61,7 @@ impl Default for FeedbackState {
             thru: [None; 4],
             internal: [None; 4],
             fx_values: [[None; 6]; 4],
+            mute_fx: None,
             instant_fx_order: [[None; 4]; 4],
             playback_received: false,
         }
@@ -77,6 +79,14 @@ impl FeedbackState {
             return None;
         }
         let deck = usize::from(message.status & 0x0f);
+        if deck == usize::from(super::catalog::MUTE_FX_FEEDBACK_CHANNEL)
+            && message.number == super::catalog::MUTE_FX_FEEDBACK_CC
+        {
+            let enabled = message.value != 0;
+            let changed = self.mute_fx != Some(enabled);
+            self.mute_fx = Some(enabled);
+            return Some(changed);
+        }
         if deck < 4 && message.number == EXT_THRU_CC {
             let thru = message.value != 0;
             let changed = self.thru[deck] != Some(thru);

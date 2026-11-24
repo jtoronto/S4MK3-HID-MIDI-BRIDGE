@@ -87,6 +87,7 @@ record; they are not evidence of broader physical acceptance.
 - [ext input validation](validation/controls/ext-input-validation.md)
 - [external input routing test](validation/controls/external-input-routing-test.md)
 - [fx knob browsing validation](validation/controls/fx-knob-browsing-validation.md)
+- [macOS Mute FX validation](validation/controls/mute-fx-macos-validation-2026-11-24.md)
 - [neural mix eq check](validation/controls/neural-mix-eq-check.md)
 - [shift sync validation](validation/controls/shift-sync-validation.md)
 

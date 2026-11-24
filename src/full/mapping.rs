@@ -10,7 +10,8 @@ use plist::{Dictionary, Value};
 
 use super::catalog::{
     Binding, DECK_BINDINGS, EQ_MODE_NOTE, EXT_BINDINGS, EXT_THRU_CC, FX_LEFT_BINDINGS,
-    FX_RIGHT_BINDINGS, INTERNAL_MODE_CC, Kind, MIXER_BINDINGS, PadMode, QUICK_BINDINGS,
+    FX_RIGHT_BINDINGS, INTERNAL_MODE_CC, Kind, MIXER_BINDINGS, MUTE_FX_BINDING,
+    MUTE_FX_FEEDBACK_CC, MUTE_FX_FEEDBACK_CHANNEL, MUTE_FX_INPUT_CHANNEL, PadMode, QUICK_BINDINGS,
     pad_binding,
 };
 use super::feedback::{PAD_COLOR_TOKENS, PAD_WHITE_TOKEN};
@@ -64,6 +65,10 @@ pub fn generate() -> Result<Value> {
 }
 
 pub fn generate_with_jog(jog: &jog::Config) -> Result<Value> {
+    generate_controls(jog, true)
+}
+
+fn generate_controls(jog: &jog::Config, mute_fx_buttons: bool) -> Result<Value> {
     jog.validate()?;
     let mut controls = Vec::new();
     let mut addresses = BTreeSet::new();
@@ -111,6 +116,14 @@ pub fn generate_with_jog(jog: &jog::Config) -> Result<Value> {
         }
     }
     push_info_outputs(&mut outputs, &mut output_addresses)?;
+    if mute_fx_buttons {
+        push_mute_fx(
+            &mut controls,
+            &mut addresses,
+            &mut outputs,
+            &mut output_addresses,
+        )?;
+    }
     for deck in 1_u8..=4 {
         let selected = super::catalog::deck_selection_binding(deck)
             .ok_or_else(|| anyhow::anyhow!("deck selector missing"))?;
@@ -216,6 +229,32 @@ fn push_jump_restores(
         push_deck_bindings(std::slice::from_ref(&binding), controls, addresses)?;
     }
     Ok(())
+}
+
+fn push_mute_fx(
+    controls: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+    outputs: &mut Vec<Value>,
+    output_addresses: &mut BTreeSet<(u8, u8, u8)>,
+) -> Result<()> {
+    push_control(
+        controls,
+        addresses,
+        MUTE_FX_BINDING,
+        MUTE_FX_BINDING.target,
+        MUTE_FX_INPUT_CHANNEL,
+    )?;
+    push_output(
+        outputs,
+        output_addresses,
+        OutputSpec {
+            key_path: "turntable1.unmixer.muteWithFx",
+            channel: MUTE_FX_FEEDBACK_CHANNEL,
+            data: MUTE_FX_FEEDBACK_CC,
+            message_type: 3,
+            meter: false,
+        },
+    )
 }
 
 fn push_ext_outputs(
@@ -1160,6 +1199,37 @@ mod tests {
                 == Some("sampler.turntable2.player1.playingConsideringHoldSetting")
                 && field(control, "midiData").and_then(Value::as_unsigned_integer) == Some(48)
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn macos_mute_fx_has_one_global_action_and_feedback_address() -> anyhow::Result<()> {
+        for (entries, key, channel, family, data) in [
+            (
+                generated_controls()?,
+                "mixer.toggleUnmixerMuteFxEnabled",
+                4,
+                1,
+                4,
+            ),
+            (
+                generated_outputs()?,
+                "turntable1.unmixer.muteWithFx",
+                6,
+                3,
+                9,
+            ),
+        ] {
+            let addresses: Vec<_> = entries
+                .iter()
+                .filter(|entry| field(entry, "keyPath").and_then(Value::as_string) == Some(key))
+                .map(|entry| {
+                    ["midiChannel", "midiMessageType", "midiData"]
+                        .map(|name| field(entry, name).and_then(Value::as_unsigned_integer))
+                })
+                .collect();
+            assert_eq!(addresses, [[Some(channel), Some(family), Some(data)]]);
+        }
         Ok(())
     }
 
