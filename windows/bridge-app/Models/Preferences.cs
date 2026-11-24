@@ -27,6 +27,11 @@ public sealed record TensionPreferences
     public int Tension { get; set; }
 }
 
+public sealed record NiTensionPreferences
+{
+    public int Value { get; set; } = 107;
+}
+
 // Values are initialized exclusively by decoding the packaged examples.
 public sealed record JogPreferences
 {

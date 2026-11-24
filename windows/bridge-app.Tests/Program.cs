@@ -23,6 +23,8 @@ internal static class Program
         else
         {
             RenderedLogTests.Register(tests);
+            NiTensionViewTests.Register(tests);
+            NiTensionTests.Register(tests);
             PreferenceTests.Register(tests);
             ProtocolTests.Register(tests);
             MidiCaptureTests.Register(tests);

@@ -27,6 +27,7 @@ internal sealed partial class SettingsView : Grid
     private bool ownerVisible;
     private bool ownerMinimized;
     private readonly List<Control> captureLocked = [];
+    private readonly List<NiTensionControl> niTensionControls = [];
     private TabItem[] builtTabs = [];
     internal IReadOnlyList<TabItem> BuiltTabs => builtTabs;
     private Control? modeControl;
@@ -87,7 +88,7 @@ internal sealed partial class SettingsView : Grid
     private void BuildTabs()
     {
         var selected = tabs.SelectedIndex;
-        captureLocked.Clear(); modeControl = null; profileControl = null; response = null;
+        captureLocked.Clear(); niTensionControls.Clear(); modeControl = null; profileControl = null; response = null;
         host.ClearFieldErrors();
         fields = new(() => { host.Edited(); Update(); }, host.SetFieldError);
         tabs.ItemsSource = builtTabs = new TabItem[]
@@ -126,6 +127,7 @@ internal sealed partial class SettingsView : Grid
         if (ledNotice is not null)
             ledNotice.IsVisible = host.SelectedMode == BridgeMode.DirectHid && host.Store.Editor.Run.Profile != "full";
         UpdateBloop();
+        foreach (var control in niTensionControls) control.Refresh();
         UpdateScreens();
         UpdateDiagnosticsControls();
         response?.InvalidateVisual();

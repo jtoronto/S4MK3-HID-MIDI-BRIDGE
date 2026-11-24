@@ -119,6 +119,8 @@ public static class PreferenceCodec
                 Range(run.DurationSeconds, 1, 604800, "durationSeconds"); break;
             case TensionPreferences tension:
                 Range(tension.Tension, -100, 100, "tension"); break;
+            case NiTensionPreferences tension:
+                Range(tension.Value, 0, 255, "NI jog tension"); break;
             case ScreenPreferences: break;
             case LedPreferences led: ValidateLed(led); break;
             case JogPreferences jog: ValidateJog(jog); break;

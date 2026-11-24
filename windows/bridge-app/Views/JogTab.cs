@@ -57,7 +57,8 @@ internal sealed partial class SettingsView
         var controls = new List<Control>();
         if (niBridge)
             controls.Add(UiTheme.SectionView("NI-managed platters",
-                UiTheme.Text("NIHardwareService manages the platters. Platter force, wheel tension and TT response cannot be tuned in this mode.", true),
+                UiTheme.Text("NIHardwareService manages the platters. Jog wheel tension can be adjusted live; platter force and TT response cannot be tuned in this mode.", true),
+                NiTension(),
                 UiTheme.Text("Turn TT off or Stop bridge before closing Djay.", true)));
         else controls.AddRange([
             UiTheme.SectionView("Motorized platters",

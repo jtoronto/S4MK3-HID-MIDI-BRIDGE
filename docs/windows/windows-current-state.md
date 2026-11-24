@@ -28,7 +28,12 @@ for provenance; those paths are not required to build or use the app.
 - The normal app saves a choice between **Direct HID**, with native motor and
   ring output and no screens, and **NI Bridge**, with one NIHardwareService
   session for the screens, platters and rings. The modes do not share motor
-  tuning. The tested NI provisioning route assumes Traktor is installed for
+  tuning. The NI-mode JOG tension slider sends one global unsigned value on
+  the existing screen session; it does not enable native motor/ring writes.
+  The [attended preset comparison](research/windows-ni-jog-tension-2026-11-24.md)
+  verified the difference in feel and both screens on KENSUKE. That was the
+  trial build, not a physical run of the integrated slider.
+  The tested NI provisioning route assumes Traktor is installed for
   the driver and service, but Traktor need not run with Djay. Standalone
   service provisioning and the new app-level mode selection have not been
   qualified on Windows hardware. See the

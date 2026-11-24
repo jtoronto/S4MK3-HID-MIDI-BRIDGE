@@ -22,7 +22,7 @@ internal sealed partial class SettingsView
         {
             modeControl,
             UiTheme.Text("Direct HID: no screens. Does not need NIHardwareService. Platter force and wheel tension are customizable.", true),
-            UiTheme.Text("NI Bridge: supports screens and needs NIHardwareService. Platters are managed by NI and cannot be tuned in this app.", true),
+            UiTheme.Text("NI Bridge: supports screens and needs NIHardwareService. Adjust jog wheel tension in the Jog tab.", true),
             UiTheme.Text("Stop the bridge before changing mode. Closing Settings leaves the tray app running.", true)
         };
         if (host.SelectedMode == BridgeMode.DirectHid)
@@ -36,7 +36,10 @@ internal sealed partial class SettingsView
                     v => run.DurationSeconds = (int)v!, 1, 604800, true)
             ]);
         }
-        else operation.Add(UiTheme.Text("NI Bridge uses all controls and runs until Stop or Quit.", true));
+        else
+        {
+            operation.Add(UiTheme.Text("NI Bridge uses all controls and runs until Stop or Quit.", true));
+        }
         bloopState = UiTheme.Text("");
         bloopDetail = UiTheme.Text("", true);
         bloopCheck = Action("Check again", host.RefreshBloopAsync);

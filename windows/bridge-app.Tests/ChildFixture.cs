@@ -12,6 +12,36 @@ internal static class ChildFixture
         if (args.Contains("--generate-mapping")) return Generate(args);
         if (args[0] == "motor-readiness") return await MotorReadinessFixture.Run();
         var profile = args.ElementAtOrDefault(1) ?? "full";
+        if (args[0] == "ni-tension")
+        {
+            Console.WriteLine(ProtocolTests.Status(profile, "starting"));
+            Console.WriteLine("S4_SCREEN_STATUS 0 active");
+            Console.WriteLine("FIXTURE_EARLY_SCREEN");
+            var latest = "";
+            while (await Console.In.ReadLineAsync() is { } command)
+            {
+                if (command == "S4_SCREEN_CONTROL 1 ON")
+                    Console.WriteLine(ProtocolTests.Status(profile));
+                else if (command == "S4_SCREEN_CONTROL 2 ON")
+                {
+                    if (latest != "") Console.WriteLine("S4_NI_JOG_TENSION submitted " + latest);
+                    Console.WriteLine("FIXTURE_BARRIER");
+                }
+                else if (command.StartsWith("ni_jog_tension ", StringComparison.Ordinal))
+                {
+                    latest = command["ni_jog_tension ".Length..];
+                    Console.WriteLine("FIXTURE_TENSION " + latest);
+                }
+                else if (command.StartsWith("S4_BRIDGE_CONTROL ", StringComparison.Ordinal) &&
+                    command.EndsWith(" STOP", StringComparison.Ordinal))
+                {
+                    var fields = command.Split(' ');
+                    Console.WriteLine(ProtocolTests.Status(profile, "stopping", fields[1]));
+                    return 0;
+                }
+            }
+            return 0;
+        }
         if (args[0].StartsWith("screen-diag", StringComparison.Ordinal))
         {
             if (!args.Contains("--prepare-screen-motor-diagnostics"))

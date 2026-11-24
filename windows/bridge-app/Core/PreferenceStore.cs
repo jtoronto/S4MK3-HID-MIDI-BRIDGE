@@ -9,12 +9,15 @@ public sealed class PreferenceStore
     public Preferences Defaults { get; }
     public Preferences Editor { get; private set; }
     public Preferences Saved { get; private set; }
+    public NiTensionPreferences NiTension { get; private set; }
+    public bool HasSavedNiTension { get; private set; }
     public HashSet<string> InvalidFiles { get; } = [];
     public string LoadError { get; private set; } = "";
     public bool RequiresReset => InvalidFiles.Count > 0;
     private readonly string ledDefaults;
     private readonly string jogDefaults;
     private readonly string tensionDefaults;
+    private bool resetNiTension;
 
     public static string LocalRoot()
     {
@@ -52,6 +55,17 @@ public sealed class PreferenceStore
             { LoadError += "Recovery intent could not be fully read: " + ex.Message + "\n"; }
         }
         Saved = Editor.Copy();
+        NiTension = Load("ni-tension.json", new NiTensionPreferences());
+        HasSavedNiTension = File.Exists(Path.Combine(Root, "ni-tension.json")) &&
+                            !InvalidFiles.Contains("ni-tension.json");
+    }
+    public void SaveNiTension(int value)
+    {
+        if (RequiresReset) throw new InvalidDataException("Invalid saved files preserved. Reset before saving.");
+        var next = new NiTensionPreferences { Value = value };
+        AtomicWrite(Path.Combine(Root, "ni-tension.json"), PreferenceCodec.Encode(next));
+        NiTension = next;
+        HasSavedNiTension = true;
     }
     private T Load<T>(string name, T defaults) where T : class
     {
@@ -100,6 +114,11 @@ public sealed class PreferenceStore
                 _ => throw new InvalidOperationException("Unknown internal preference file.")
             };
         }
+        if (resetNiTension)
+        {
+            SaveNiTension(NiTension.Value);
+            resetNiTension = false;
+        }
     }
     public void SaveScreen(ScreenPreferences screen)
     {
@@ -111,6 +130,12 @@ public sealed class PreferenceStore
     }
     public void Reset()
     {
+        if (InvalidFiles.Contains("ni-tension.json"))
+        {
+            NiTension = new();
+            HasSavedNiTension = false;
+            resetNiTension = true;
+        }
         var pending = Editor.Screen.RestorePending || Saved.Screen.RestorePending;
         Editor = Defaults.Copy();
         Editor.Screen.RestorePending = pending;

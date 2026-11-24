@@ -14,6 +14,18 @@ public sealed class HostController
     public MappingExporter Exporter { get; }
     public string Executable { get; }
     private readonly bool trialLauncher;
+    private readonly NiTensionCoordinator niTension;
+    private readonly NiTensionEdits niTensionEdits;
+    private volatile bool niTensionStopping;
+    public int NiTension => niTensionEdits.Value;
+    public int NiTensionValue => NiTension;
+    public string NiTensionStatus => niTensionEdits.Pending ? "Saving latest value" : niTension.Status;
+    public bool CanSetNiTension => !trialLauncher && SelectedMode == BridgeMode.NiBridge && !Operating &&
+        (!niTensionStopping || !Supervisor.HasOwnedResources) &&
+        Environment.GetEnvironmentVariable("S4_BRIDGE_NI_JOGT_TRIAL_FILE") is null &&
+        !Store.RequiresReset && Supervisor.State is not ("stopping" or "failed" or "checking") &&
+        (!Supervisor.HasOwnedResources || (Supervisor.Launch?.IsReady == true && niTension.Ready));
+    public bool NiTensionEnabled => CanSetNiTension;
     public BridgeMode SelectedMode => trialLauncher ? BridgeMode.NiBridge :
         CanUseLegacyScreenControls ? BridgeMode.DirectHid : Store.Editor.Run.Mode;
     public bool CanChangeMode => !trialLauncher && !CanUseLegacyScreenControls && !Operating &&
@@ -56,6 +68,11 @@ public sealed class HostController
         this.checkBloop = checkBloop;
         trialLauncher = experimentalNiDecks;
         Store = new(resources, root, trialLauncher ? BridgeMode.NiBridge : BridgeMode.DirectHid);
+        niTension = new(Supervisor.SendNiTensionAsync);
+        niTension.Changed += () => Changed?.Invoke();
+        niTensionEdits = new(Store.NiTension.Value, ApplyNiTensionAsync, persist: Store.SaveNiTension);
+        niTensionEdits.Changed += () => { InitializeNiTension(); Changed?.Invoke(); };
+        Supervisor.BeforeStopAsync = FlushNiTensionForStopAsync;
         Executable = Path.Combine(resources, "s4mk3-hid-midi-bridge.exe");
         Screens = new(Store, new NIServiceControl(resources));
         Exporter = new(Executable, Path.Combine(root, "Temp"));
@@ -64,6 +81,8 @@ public sealed class HostController
             Error += "The bridge engine is missing. Start, controller check and mapping export are unavailable.";
         Supervisor.Launched += id =>
         {
+            niTensionStopping = false;
+            niTension.Started(id);
             Diagnostics.BeginLaunch(id);
             MidiCapture.Launched(id);
             var spec = Supervisor.ActiveSpec;
@@ -71,13 +90,53 @@ public sealed class HostController
                 Screens.Started(id, spec.StartsScreens, spec.UsesNiBridge);
         };
         Supervisor.Output += (_, line) => Diagnostics.Log.Append(line);
-        Supervisor.Protocol += (id, line) => { Diagnostics.Accept(id, line); Screens.Accept(id, line); MidiCapture.Accept(id, line); };
+        Supervisor.Protocol += (id, line) =>
+        {
+            Diagnostics.Accept(id, line); Screens.Accept(id, line); MidiCapture.Accept(id, line);
+            niTension.Accept(id, line);
+            InitializeNiTension();
+        };
         Supervisor.StderrLine += (id, line) => Diagnostics.AcceptStderr(id, line);
-        Supervisor.Exited += (id, _) => { Screens.Exited(id); MidiCapture.Exited(id); };
-        Supervisor.Changed += () => Changed?.Invoke();
+        Supervisor.Exited += (id, _) => { Screens.Exited(id); MidiCapture.Exited(id); niTension.Exited(id); };
+        Supervisor.Changed += () =>
+        {
+            InitializeNiTension();
+            Changed?.Invoke();
+        };
         Screens.Changed += () => Changed?.Invoke();
         MidiCapture.Changed += () => Changed?.Invoke();
         Exporter.Output += line => Diagnostics.Log.Append(line);
+    }
+    private void InitializeNiTension()
+    {
+        if (!niTensionStopping && !trialLauncher && Supervisor.ActiveSpec?.UsesNiBridge == true && Supervisor.Launch is { IsReady: true } launch &&
+            niTension.Ready && !niTensionEdits.Pending &&
+            Environment.GetEnvironmentVariable("S4_BRIDGE_NI_JOGT_TRIAL_FILE") is null)
+            _ = niTension.InitializeAsync(launch.Id, Store.NiTension.Value);
+    }
+    public async Task SetNiTensionAsync(int value)
+    {
+        if (value is < 0 or > 255) throw new ArgumentOutOfRangeException(nameof(value));
+        if (!CanSetNiTension) throw new InvalidOperationException("NI tension is unavailable.");
+        niTension.Edited();
+        try { await niTensionEdits.SetAsync(value); }
+        catch (Exception error) { niTension.Failed(error); throw; }
+    }
+    private async Task FlushNiTensionForStopAsync()
+    {
+        niTensionStopping = true;
+        try { await niTensionEdits.FlushAsync(); }
+        catch (Exception error) { niTension.Failed(error); throw; }
+    }
+    private async Task ApplyNiTensionAsync(int value, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        Store.SaveNiTension(value);
+        if (!niTensionStopping && !trialLauncher && Environment.GetEnvironmentVariable("S4_BRIDGE_NI_JOGT_TRIAL_FILE") is null &&
+            Supervisor.Launch is { IsReady: true } launch && Supervisor.ActiveSpec?.UsesNiBridge == true && niTension.Ready)
+            await niTension.SubmitAsync(launch.Id, value, cancellation);
+        else
+            niTension.Saved();
     }
     public async Task RefreshBloopAsync()
     {
@@ -98,6 +157,8 @@ public sealed class HostController
         if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
         if (mode == SelectedMode) return;
         if (!CanChangeMode) throw new InvalidOperationException("Stop the bridge before changing mode.");
+        try { niTensionEdits.FlushAsync().GetAwaiter().GetResult(); }
+        catch (Exception error) { niTension.Failed(error); throw; }
         Store.Editor.Run.Mode = mode;
         if (mode == BridgeMode.NiBridge) MidiCapture.EnabledForNextLaunch = false;
         Edited();

@@ -16,10 +16,12 @@ public sealed partial class BridgeSupervisor
     private Task workerExited = Task.CompletedTask;
     private Task completion = Task.CompletedTask;
     private Task? stopping;
+    private Task? requestedStop;
     private CancellationTokenSource? preparationStop;
     private TaskCompletionSource? prepared;
     private TaskCompletionSource? startupEndpointBarrier;
     private ulong request;
+    public Func<Task>? BeforeStopAsync { get; set; }
     public event Action? Changed;
     public event Action<Guid>? Launched;
     public event Action<Guid, string>? Output;
@@ -107,15 +109,42 @@ public sealed partial class BridgeSupervisor
     }
     public Task StopAsync()
     {
+        TaskCompletionSource completion;
         lock (gate)
         {
-            if (starting is { IsCompleted: false })
-            {
-                preparationStop?.Cancel();
-                return stopping ??= StopAfterStart(starting, preparationStop is not null);
-            }
-            return StopResources();
+            if (requestedStop is { IsCompleted: false }) return requestedStop;
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            requestedStop = completion.Task;
         }
+        _ = StopWithFlushAsync(completion);
+        return completion.Task;
+    }
+    private async Task StopWithFlushAsync(TaskCompletionSource completion)
+    {
+        try
+        {
+            try
+            {
+                if (BeforeStopAsync is { } beforeStop) await beforeStop().ConfigureAwait(false);
+            }
+            finally
+            {
+                Task stop;
+                lock (gate)
+                {
+                    if (starting is { IsCompleted: false })
+                    {
+                        preparationStop?.Cancel();
+                        stop = stopping ??= StopAfterStart(starting, preparationStop is not null);
+                    }
+                    else stop = StopResources();
+                }
+                await stop.ConfigureAwait(false);
+            }
+            completion.TrySetResult();
+        }
+        catch (OperationCanceledException error) { completion.TrySetCanceled(error.CancellationToken); }
+        catch (Exception error) { completion.TrySetException(error); }
     }
     private async Task StopAfterStart(Task pending, bool diagnosticPreparation)
     {
@@ -238,6 +267,18 @@ public sealed partial class BridgeSupervisor
             launchId = launch!.Id;
         }
         await WriteInputAsync(child, launchId, $"S4_MIDI_CAPTURE_MARK {id} issue", false, CancellationToken.None);
+    }
+    public async Task SendNiTensionAsync(Guid id, int value)
+    {
+        if (value is < 0 or > 255) throw new ArgumentOutOfRangeException(nameof(value));
+        Process child;
+        lock (gate)
+        {
+            if (process is null || launch?.Id != id || ActiveSpec?.UsesNiBridge != true || State != "ready")
+                throw new InvalidOperationException("Start a ready NI Bridge first.");
+            child = process;
+        }
+        await WriteInputAsync(child, id, $"ni_jog_tension {value}", false, CancellationToken.None);
     }
     private async Task WriteInputAsync(Process child, Guid id, string line, bool stoppingCommand, CancellationToken cancellation)
     {

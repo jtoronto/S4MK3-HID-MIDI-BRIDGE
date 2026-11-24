@@ -134,7 +134,7 @@ remember it for next time. No separate launcher is needed.
 | Bridge mode | Screens | Platters |
 | --- | --- | --- |
 | **Direct HID** | Not available; no NIHardwareService required | Tunable in **Jog** with the full profile |
-| **NI Bridge** | Available through NIHardwareService | Managed by NIHardwareService; motor tuning is not available |
+| **NI Bridge** | Available through NIHardwareService | JOG rim tension adjusts live for both wheels; TT drive and braking remain managed by NI |
 
 The separate [attended trial runbook](../../windows/qa/ni-bridge/ATTENDED-RUN.md)
 and [validation record](validation/windows-ni-decks-validation-20261123.md) describe
@@ -161,6 +161,15 @@ no separate screen toggle for normal operation. The last display image can
 remain after stopping. If release is unconfirmed, check Diagnostics and do
 not assume that NI has recovered control. Don't stop the NI service or
 replace its driver to bypass an access failure.
+
+**JOG tension in NI Bridge mode:** in **Jog**, use the
+**NI jog wheel tension** slider for lighter
+or heavier resistance when turning either rim in JOG. Its range is **0–255**;
+higher means more resistance. The app remembers the setting and sends it to
+the running NI session without restarting the bridge or reimporting a mapping.
+Check the status beside the slider, not the Diagnostics log. A submitted value
+means the bridge sent it; it is not force measured at the wheel. This control
+does not change rim ticks, TT braking or the separate Direct HID tension setting.
 
 Use **Stop** to end the bridge or the tray's **Quit S4 MK3 Bridge** to stop it and exit the
 app. Closing Settings leaves the tray app running. Stop the bridge before
