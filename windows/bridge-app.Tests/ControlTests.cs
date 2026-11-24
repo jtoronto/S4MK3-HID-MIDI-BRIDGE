@@ -47,6 +47,21 @@ internal static class ControlTests
     }
     public static void Register(List<(string, Func<Task>)> tests)
     {
+        Check.Add(tests, "header separates Stop from immediate application Quit", () =>
+        {
+            using var f = new Fixture();
+            var host = RealHost(f);
+            using var diagnostics = host.Diagnostics;
+            var requests = 0;
+            var view = new SettingsView(host, requestQuit: () => { requests++; return Task.CompletedTask; });
+            var quit = FindButton(view, "Quit");
+            var row = (WrapPanel)quit.Parent!;
+            Check.True(row.Children.OfType<Button>().Select(b => b.Content as string)
+                .SequenceEqual(["Start Bridge", "Stop", "Quit"]));
+            Check.True(quit.Classes.Contains("accent") && !FindButton(view, "Stop").Classes.Contains("accent"));
+            quit.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Check.Equal(1, requests);
+        });
         Check.Add(tests, "experimental NI decks locks mode and omits Direct HID diagnostics", () =>
         {
             using var f = new Fixture();
@@ -282,7 +297,7 @@ internal static class ControlTests
             var view = new SettingsView(host);
             var bridge = view.BuiltTabs[0];
             var duration = FindTextBox(bridge, "Run duration (seconds)");
-            var startButton = FindButton(view, "Start bridge");
+            var startButton = FindButton(view, "Start Bridge");
             var saveButton = FindButton(view, "Save preferences");
             var previous = host.Store.Editor.Run.DurationSeconds;
             Check.True(host.FieldsValid);

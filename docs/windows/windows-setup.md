@@ -171,8 +171,10 @@ Check the status beside the slider, not the Diagnostics log. A submitted value
 means the bridge sent it; it is not force measured at the wheel. This control
 does not change rim ticks, TT braking or the separate Direct HID tension setting.
 
-Use **Stop** to end the bridge or the tray's **Quit S4 MK3 Bridge** to stop it and exit the
-app. Closing Settings leaves the tray app running. Stop the bridge before
+Use **Stop** to end the bridge and keep the app open. **Quit**, to its right,
+stops the bridge and exits the app without a confirmation prompt, just like
+the tray's **Quit S4 MK3 Bridge**. Closing Settings with **X** still leaves
+the tray app running. Stop the bridge before
 returning to Traktor or another controller application.
 
 If Stop is unconfirmed, the app keeps the worker and endpoint owned; it does

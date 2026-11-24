@@ -13,10 +13,10 @@ internal sealed class SettingsWindow : Window
     private readonly HostController host;
     private bool quitting;
     public SettingsView View { get; }
-    public SettingsWindow(HostController controller)
+    public SettingsWindow(HostController controller, Func<Task> requestQuit)
     {
         host = controller;
-        View = new SettingsView(controller, this);
+        View = new SettingsView(controller, this, requestQuit);
         Title = "Bridge settings"; Width = UiTheme.Width; Height = UiTheme.Height;
         MinWidth = UiTheme.MinWidth; MinHeight = UiTheme.MinHeight;
         FontSize = UiTheme.Body;

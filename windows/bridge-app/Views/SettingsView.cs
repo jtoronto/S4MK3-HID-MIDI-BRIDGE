@@ -35,7 +35,7 @@ internal sealed partial class SettingsView : Grid
     private Control? ledNotice;
     private ResponsePreview? response;
     private string errorDetail = "";
-    public SettingsView(HostController controller, SettingsWindow? window = null)
+    public SettingsView(HostController controller, SettingsWindow? window = null, Func<Task>? requestQuit = null)
     {
         host = controller;
         owner = window;
@@ -43,13 +43,20 @@ internal sealed partial class SettingsView : Grid
         fields = new(() => { host.Edited(); Update(); }, host.SetFieldError);
         refresh = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         refresh.Tick += (_, _) => RefreshDiagnostics();
-        start = Action("Start bridge", () => host.StartAsync());
+        start = Action("Start Bridge", () => host.StartAsync());
         stop = Action("Stop", () => host.Supervisor.StopAsync());
+        var quit = Action("Quit", requestQuit ?? (() => throw new InvalidOperationException("No application quit handler.")));
+        quit.Classes.Add("accent");
+        quit.Resources["AccentButtonBackground"] = new SolidColorBrush(Color.Parse("#005A9E"));
+        quit.Resources["AccentButtonBackgroundPointerOver"] = new SolidColorBrush(Color.Parse("#004C87"));
+        quit.Resources["AccentButtonBackgroundPressed"] = new SolidColorBrush(Color.Parse("#003D6B"));
+        foreach (var key in new[] { "AccentButtonForeground", "AccentButtonForegroundPointerOver", "AccentButtonForegroundPressed" })
+            quit.Resources[key] = Brushes.White;
         details = Action("Error details...",
             () => string.IsNullOrWhiteSpace(errorDetail) ? Task.CompletedTask : NoticeAsync("Bridge details", errorDetail));
         save = Action("Save preferences", SaveAsync); save.Classes.Add("accent");
         reset = Action("Reset preferences...", ResetAsync);
-        var header = UiTheme.Stack(status, UiTheme.Actions(start, stop), error, details);
+        var header = UiTheme.Stack(status, UiTheme.Actions(start, stop, quit), error, details);
         header.Margin = new Thickness(UiTheme.Section);
         error.Bind(SelectableTextBlock.ForegroundProperty, error.GetResourceObservable(UiTheme.Error));
         var footer = UiTheme.Stack(message, UiTheme.Actions(reset, save));

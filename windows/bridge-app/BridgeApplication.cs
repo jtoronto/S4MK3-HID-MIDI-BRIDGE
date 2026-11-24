@@ -18,6 +18,7 @@ internal sealed class BridgeApplication : Application
     private HostController? host;
     private IClassicDesktopStyleApplicationLifetime? desktop;
     private bool exiting;
+    private bool quitInProgress;
     private readonly List<(NativeMenuItem Item, Func<bool> Enabled)> menuGates = [];
     private readonly NativeMenuItem bridgeStatus = new() { IsEnabled = false };
     private readonly NativeMenuItem screenStatus = new() { IsEnabled = false };
@@ -43,7 +44,7 @@ internal sealed class BridgeApplication : Application
             var preferencesRoot = PreferenceStore.HostPreferencesRoot(root, experimental);
             host = new(resources, preferencesRoot, new BloopEndpointOwner(root), experimental,
                 BloopDependencyProbe.Check);
-            settings = new(host);
+            settings = new(host, QuitAsync);
             desktop.MainWindow = settings;
             trayImages = new(Path.Combine(resources, "AppIcon.png"));
             tray = new TrayIcon { Icon = trayImages.Idle, ToolTipText = "S4 MK3 Bridge", IsVisible = true };
@@ -124,7 +125,12 @@ internal sealed class BridgeApplication : Application
     }
     private async Task QuitAsync()
     {
-        if (exiting || settings is null || desktop is null) return;
-        if (await settings.QuitAsync()) { exiting = true; desktop.Shutdown(); }
+        if (exiting || quitInProgress || settings is null || desktop is null) return;
+        quitInProgress = true;
+        try
+        {
+            if (await settings.QuitAsync()) { exiting = true; desktop.Shutdown(); }
+        }
+        finally { quitInProgress = false; }
     }
 }
