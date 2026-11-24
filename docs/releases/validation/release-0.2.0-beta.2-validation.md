@@ -1,7 +1,7 @@
 # Release preparation: 0.2.0-beta.2
 
 October 26, 2026. Internal validation record. End-user release notes are in
-[release-0.2.0-beta.2.md](release-0.2.0-beta.2.md).
+[release-0.2.0-beta.2.md](../notes/release-0.2.0-beta.2.md).
 
 ## Scope and baseline
 

@@ -214,4 +214,4 @@ checks were not repeated. No project commits or pushes were made.
 - [LoopBe1 product and licensing](https://www.nerds.de/en/loopbe1.html).
 - [Official downloads](https://www.nerds.de/en/download.html).
 - [Earlier full Microsoft loopback trial](windows-loopback-probe-validation-20261103.md).
-- [Earlier app-owned virtual-device shutdown diagnosis](windows-midi-shutdown-investigation-20261103.md).
+- [Earlier app-owned virtual-device shutdown diagnosis](../research/windows-midi-shutdown-investigation-20261103.md).

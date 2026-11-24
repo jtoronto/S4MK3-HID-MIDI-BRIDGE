@@ -1,11 +1,11 @@
 # Jog feel and backspin investigation
 
 October 6, 2026. Initial capture and subsequent calibration. The
-[jog issue](issues.md) remains open for broader slow/fast calibration.
+[jog issue](../../issues.md) remains open for broader slow/fast calibration.
 Saved hardware tension was subsequently implemented and accepted.
 The current-source detection experiment, October 25 attended input capture,
 and passing live continuation/catch checks on both wheels are recorded in
-[backspin validation](backspin-detection-validation.md).
+[backspin validation](../../validation/jog/backspin-detection-validation.md).
 The comparison and calibration below retain their historical scope.
 
 ## Calibrated settings and configurable defaults

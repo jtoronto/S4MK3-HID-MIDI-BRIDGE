@@ -79,5 +79,5 @@ An available endpoint or a successful self-test does not prove that Djay
 selected a mapping or returned feedback. The probe logs those observations
 separately. It does not install or overwrite Djay mappings.
 
-See [the validation record](../../docs/windows-midi-probe-validation.md) for
+See [the validation record](../../docs/windows/validation/windows-midi-probe-validation.md) for
 the tested system, results and remaining limits.

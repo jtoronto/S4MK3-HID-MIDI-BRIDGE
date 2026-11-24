@@ -61,7 +61,7 @@ MIDI capture, and fully quit and reopen Djay with the bridge ready.
 Do not infer deck state from a successful MIDI open. For a repeatable
 comparison, use two loaded Internal decks with opposite Play states,
 keep screens and TT off in direct mode, and record two starts without
-touching any controls. See the [direct-HID runbook](../windows/qa/ni-bridge/ASUKA-STARTUP-TEST.md).
+touching any controls. See the [direct-HID runbook](../../../windows/qa/ni-bridge/ASUKA-STARTUP-TEST.md).
 
 ## Verification and next boundary
 
@@ -78,7 +78,7 @@ are not source artifacts.
 
 NI renders platter force in the opt-in trial. The bridge's native wheel
 tension and motor-force settings do not tune NI's force. The separate
-[NI service investigation](windows-ni-motor-service-investigation-20261123.md)
+[NI service investigation](../research/windows-ni-motor-service-investigation-20261123.md)
 found no verified TT brake-strength setting.
 
 The r5 trial sent a nudge-tick value of 12 in JOG and 0 in TT. The

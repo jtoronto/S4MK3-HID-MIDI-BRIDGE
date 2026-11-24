@@ -21,7 +21,7 @@ This is complete relative to the installed metadata and the scanned shipped pres
 
 ## How to read keys and MIDI addresses
 
-A row in the action catalog names a Djay mapping input key. The metadata `type` describes the kind of operation (for example `button-hold`, `button-toggle`, or `control`); `modelState` and `modelValue` name state/value references. `modelEnabled` is a gate, not a separate output key. Preset `controls[].output` is an embedded feedback declaration that inherits the input MIDI address unless fields are overridden. The current S4 generator uses that inherited address. A separate embedded output channel was demonstrated in the [Windows LoopBe1 proof](windows-djay-loopbe1-proof-20261104.md), with `controlType=control` for continuous crossfader feedback. A root-level `outputs[]` entry is a separate output assignment with its own key path and MIDI address.
+A row in the action catalog names a Djay mapping input key. The metadata `type` describes the kind of operation (for example `button-hold`, `button-toggle`, or `control`); `modelState` and `modelValue` name state/value references. `modelEnabled` is a gate, not a separate output key. Preset `controls[].output` is an embedded feedback declaration that inherits the input MIDI address unless fields are overridden. The current S4 generator uses that inherited address. A separate embedded output channel was demonstrated in the [Windows LoopBe1 proof](../windows/validation/windows-djay-loopbe1-proof-20261104.md), with `controlType=control` for continuous crossfader feedback. A root-level `outputs[]` entry is a separate output assignment with its own key path and MIDI address.
 
 All channel labels in this document are **MIDI channels 1-based**, as requested. In the plist they are 0-based. MIDI message type `1` is Note and `3` is Control Change (CC). The generated S4 mapping uses `rotary-64` for relative controls.
 
@@ -52,8 +52,8 @@ Install a newly generated matching mapping. DVS enable remains manual and must
 stay on; this feedback isn't a global DVS-enabled signal. Input assignments
 remain in Djay's GUI. This is current-source support, not a newly published
 release. LED byte locations and integrated switching/indicator behavior
-are confirmed in [EXT validation](ext-input-validation.md). See the
-[input setup and validation limits](user-guide.md#external-audio-through-a-deck).
+are confirmed in [EXT validation](../validation/controls/ext-input-validation.md). See the
+[input setup and validation limits](../user-guide.md#external-audio-through-a-deck).
 
 ### Earlier current-source overlays and audited shape
 
@@ -64,7 +64,7 @@ and is not used. Jump-size selection inputs use notes 64-73 on channels 1-4.
 Shift+MOVE selects one beat, uses native relative CC 2, then restores the last
 confirmed size; the old fixed-jump notes 5/14 are unused runtime aliases.
 Shift+BROWSER source-next/previous uses notes 25/26 on channels 9-12; held Preview
-keeps the existing scrub route. See [current control-state setup](controls-state-sync.md).
+keeps the existing scrub route. See [current control-state setup](../guides/controls-state-sync.md).
 
 The October 21 screen-data follow-up found live root outputs beyond the preset
 audit: global `userDefaults.DJTempoSliderRange`, selected
@@ -75,7 +75,7 @@ that union. The October 22 source mapping now adds selected-jump flags on
 deck-channel CC80-89, active-loop flags on CC90-111, current key on CC112, and
 global tempo range on human channel 7 CC8, all from Djay to the bridge.
 The key codec uses 24 live-calibrated label/wire pairs.
-See [tested values and remaining limits](screen-feedback-investigation.md).
+See [tested values and remaining limits](../research/screens/screen-feedback-investigation.md).
 
 The Mixer ON / Neural Mix EQ overlay replaces resetFilter on Note 20,
 channels 1-4, with turntableN.toggleUnmixerEQMode and embedded mode feedback.
@@ -84,7 +84,7 @@ button is now a bridge-local selection latch; choosing a deck with ON emits
 the toggle pulse without changing the Instant FX target. Historical tables and
 counts below predate this overlay. MIDI-only capture on October 20, 2026 verified
 initial state and independent mouse-driven positive/zero transitions on all
-four decks. Physical behavior remains subject to the [focused check](neural-mix-eq-check.md).
+four decks. Physical behavior remains subject to the [focused check](../validation/controls/neural-mix-eq-check.md).
 
 The counts and S4 usage cells below are the historical audit snapshot, not
 the rebuilt encoder mapping. Current encoder assignments supersede that
@@ -180,10 +180,10 @@ Deck C here means `turntable3` (MIDI CH3 in this bridge). If “C2” means the 
 | Preview state and scrubbing | `musicLibrary.togglePreview` is labeled “Preview Selected Track” and occurs in shipped presets and the S4 mapping. The metadata declares `turntable.scrubbing` as a `control` whose value is `turntable.display.songProgress` (deck track progress). No distinct preview-player state or preview-position key is declared in the inspected metadata. | Preview toggle is Note CH3 data 13. Do not treat `turntable.scrubbing` as proof of preview-track scrubbing. No dedicated preview scrub assignment is present in the generated S4 mapping. |
 | Sample recording | `turntable.recordSample` is localized as “Record Sample” and appears in shipped presets; it is preset-observed but absent from the metadata dictionary. | Bound for deck C as Note CH3 data 22. |
 | FX active | `turntable.fxActive` is `button-toggle` with state `turntable.fxActive`. | Left FX strip: Note CH3 data 32 with embedded feedback. Right FX strip: Note CH3 data 36, without embedded feedback in the generated mapping. The separately named `fx1Enabled` style controls are individual slot controls, not the overall `fxActive` state. |
-| Jog and tempo-fader handling | Manual jog bend/scratch/seek use relative CC controls. Motorized playback removes nominal rotation and sends filtered deviations through Pitch Bend CC4; the TT diagnostic switches to held Scratch Note 7 and raw CC5 below a configurable speed floor. The tempo fader is pickup-enabled and flipped, with a shifted `speedRelative` target. | Bend/scratch/seek use CC 4/5/6 on deck channels 1-4. The abandoned absolute CC8 binding and its sensitivity preference are removed. See the [current workflow](user-guide.md#testing-motorized-playback) and [calibration runbook](tt-speed-scratch-diagnostic.md). |
+| Jog and tempo-fader handling | Manual jog bend/scratch/seek use relative CC controls. Motorized playback removes nominal rotation and sends filtered deviations through Pitch Bend CC4; the TT diagnostic switches to held Scratch Note 7 and raw CC5 below a configurable speed floor. The tempo fader is pickup-enabled and flipped, with a shifted `speedRelative` target. | Bend/scratch/seek use CC 4/5/6 on deck channels 1-4. The abandoned absolute CC8 binding and its sensitivity preference are removed. See the [current workflow](../user-guide.md#testing-motorized-playback) and [calibration runbook](../validation/jog/tt-speed-scratch-diagnostic.md). |
 | Front-panel startup | Startup state uses default `switches=[None; 5]`; the front-panel translator emits the first snapshot once, then emits only changes and advances its cache even if Djay has not attached. | Physical switch positions are not entirely ignored. Whether a listener-readiness replay is needed remains unproven at runtime. |
 
-The [retired absolute-position Scratch experiment](absolute-position-scratch-experiment.md)
+The [retired absolute-position Scratch experiment](../research/jog/absolute-position-scratch-experiment.md)
 records the earlier CC8 encoding and Scratch-gating investigation.
 Current speed-driven Scratch entry uses only the lower floor or a qualified
 abrupt stop; forward nudges stay on pitch bend.

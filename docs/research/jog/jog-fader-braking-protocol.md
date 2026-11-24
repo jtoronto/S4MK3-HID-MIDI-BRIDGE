@@ -2,7 +2,7 @@
 
 October 19, 2026. **Cold recovery PASSED. Current phase: RIGHT ONLY FIRST.**
 Use the compact setup and single right-only launch in
-`docs/jog-tension-diagnostic.md`, packaged as the suite's README. Stop the
+`docs/research/jog/jog-tension-diagnostic.md`, packaged as the suite's README. Stop the
 bridge and old diagnostic, quit Traktor and Mixxx, and explicitly `cd` into
 the newly extracted suite folder; an old Terminal working directory may be
 stale. The same powered, initialized controller is fine. No further cold

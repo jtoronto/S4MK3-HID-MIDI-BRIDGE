@@ -9,7 +9,7 @@ The interrupt read still uses its existing 2 ms timeout, and the separate
 reader retains its existing minimum admission interval and queue policy.
 This is one analog GET per batch, with no catch-up loop or new timer.
 
-The offline [capture analysis](windows-input-screen-latency-analysis-20261115.md)
+The offline [capture analysis](../../windows/research/windows-input-screen-latency-analysis-20261115.md)
 found a raw crossfader jump after 268 ms while other input reports continued.
 That identified the notification-dependent analog path as a correction target.
 The correction removes that dependency; it does not establish why the

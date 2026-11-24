@@ -300,5 +300,5 @@ started. No HID, screen USB, motor or audio service was opened during this work.
 Actual NI stop/restore and Traktor screen hand-back need an attended S4 check.
 Likewise, live screen toggling during audio playback and saved tension operation
 are not established by a fake transport, a fake driver, or native UI captures.
-Use the [ordered user guide](screen-driver-handover.md); keep automatic stopping
+Use the [ordered user guide](../../guides/screen-driver-handover.md); keep automatic stopping
 off for the first attended handover until that behavior has been checked.

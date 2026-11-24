@@ -10,8 +10,8 @@ tracking remains only for the jog-ring indicator.
 
 The historical implementation was in `src/full/platter_position.rs`, called by
 `Translator::log_platter_position`. Current ring-only tracking is in
-[`ring_position.rs`](../src/full/ring_position.rs).
-The scale is defined in [`tension/playback.rs`](../src/tension/playback.rs):
+[`ring_position.rs`](../../../src/full/ring_position.rs).
+The scale is defined in [`tension/playback.rs`](../../../src/tension/playback.rs):
 2,880 encoder counts per physical revolution.
 
 To reproduce the conversion independently:
@@ -74,9 +74,9 @@ isn't Note 8, and Note 7 isn't CC 7. CC 8 has no shifted duplicate.
 The existing shifted Note 7 on user channels 9 through 12 instead maps to
 `jogSeekMode`; it isn't the motor experiment's Scratch gate.
 
-[`catalog.rs`](../src/full/catalog.rs) retains
+[`catalog.rs`](../../../src/full/catalog.rs) retains
 `PLATTER_POSITION_BINDING` and `SCRATCHING_MODE_NOTE`.
-[`mapping.rs`](../src/full/mapping.rs) emits four CC 8 entries with
+[`mapping.rs`](../../../src/full/mapping.rs) emits four CC 8 entries with
 `controlType=rotary-absolute`, `rotarySensitivity` from
 `platter_position_sensitivity`, and `rotaryAcceleration` from
 `scratch_reaction`. It doesn't flip CC 8. The configurable manual Scratch
@@ -154,7 +154,7 @@ and didn't implement Djay's private T7/RANE integration.
 ## Why the Djay trial was abandoned
 
 The supported observations are recorded in
-[`motorized-playback-integration-validation.md`](motorized-playback-integration-validation.md),
+[`motorized-playback-integration-validation.md`](../../validation/jog/motorized-playback-integration-validation.md),
 especially "Absolute Scratch CC experiment", "Adjustable Scratch tuning",
 "Scratch-mode gate follow-up", "Adjustable sensitivity and touch-direction
 build", and "CC 8 wrap-seam phase-offset experiment (completed)".

@@ -3,7 +3,7 @@
 **Status: deferred, November 3, 2026.** Transport verification passed, but
 installed-Serato jog acceptance was blocked at the MIDI setup gate, not
 rejected by a demonstrated jog test. See the
-[investigation results](serato-investigation-results-20261103.md).
+[investigation results](../../research/serato/serato-investigation-results-20261103.md).
 The sequence below is retained for a future attempt, not active work.
 
 This is a disposable, synthetic MIDI experiment, not the proposed Serato mode.

@@ -6,8 +6,8 @@ The preceding motor-unchanged experiment is recorded in
 
 The trial's default-off setting below is historical. For beta.2, the user
 subsequently selected motor assistance on at 100% and a 5.6% scratch speed
-increase. See the [release verification](release-0.2.0-beta.2-validation.md)
-and [current controls](user-guide.md#backspin-detection).
+increase. See the [release verification](../../releases/validation/release-0.2.0-beta.2-validation.md)
+and [current controls](../../user-guide.md#backspin-detection).
 
 ## Approved trial
 

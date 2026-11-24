@@ -31,7 +31,7 @@ was implemented.
 
 The earlier service version-string correction remains applicable: fixed
 product version is 10.0.26100.9444, despite the executable's older 7705 string.
-See [native shutdown investigation](windows-midi-shutdown-investigation-20261103.md).
+See [native shutdown investigation](../research/windows-midi-shutdown-investigation-20261103.md).
 
 ## Pair configuration and lifetime
 

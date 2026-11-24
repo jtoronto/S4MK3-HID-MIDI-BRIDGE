@@ -1,12 +1,12 @@
 # Backspin detection experiment
 
 October 25, 2026. Internal development and acceptance record.
-Normal operation is described in the [user guide](user-guide.md#backspin-detection).
+Normal operation is described in the [user guide](../../user-guide.md#backspin-detection).
 
 The zero-increase, motor-unchanged defaults below describe the original
 experiment. Beta.2 uses a 5.6% scratch speed increase with motor assistance
 enabled at 100%, as subsequently requested by the user. See
-[release verification](release-0.2.0-beta.2-validation.md).
+[release verification](../../releases/validation/release-0.2.0-beta.2-validation.md).
 
 ## Agreed first experiment
 

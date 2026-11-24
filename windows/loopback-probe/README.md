@@ -8,7 +8,7 @@ handles until receipt is acknowledged.
 The measured result is incomplete: connection shutdown returns normally and
 A-to-B traffic arrives, but the tested B-to-A return does not. Do not treat this
 as a working Windows bridge backend. Detailed cases are recorded in
-`docs/windows-loopback-probe-validation-20261103.md`.
+`docs/windows/validation/windows-loopback-probe-validation-20261103.md`.
 
 The pair is configured separately from application connections. Closing a test
 connection must leave both endpoints present. The API calls it a transient

@@ -268,7 +268,7 @@ These are approved software rules in uncalibrated diagnostic units.
 F's qualitative physical result is recorded above; these rules don't establish
 definite assistance strength or guarantee delivery to a blocked or disconnected
 device. The former scripted F trial is historical reference in
-`docs/jog-fader-braking-protocol.md`, not a next action.
+`docs/research/jog/jog-fader-braking-protocol.md`, not a next action.
 
 ## Historical E control reference, braking only
 
@@ -343,6 +343,6 @@ initialization. E remains braking only and F
 remains assistance only; neither baseline mode is changed by `fader-play`.
 
 Protocol history, packet layout, and the earlier offline oracle remain in
-`docs/jog-fader-braking-protocol.md`. The suite packages this guide as its
+`docs/research/jog/jog-fader-braking-protocol.md`. The suite packages this guide as its
 `README.md`; use the new executable for `fader-play`, not an older extracted
 copy. The only active procedure is the compact free-play setup above.

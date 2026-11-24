@@ -5,7 +5,7 @@ Prepared October 5, 2026 against bridge commit `fc19dc0`, Encdr revision
 `5d7a689ca5789161b3efd1b2049d7e54504fe881`, and installed Djay Pro 5.6.9.
 This document records the approved design; runtime and physical evidence are
 required before claiming its implementation complete.
-See [led-feedback.md](led-feedback.md) for the current implementation, editable
+See [led-feedback.md](../../guides/led-feedback.md) for the current implementation, editable
 configuration, acceptance evidence, and unresolved live checks. The remaining
 text is the approved design, not a claim that every proposed field is available.
 
@@ -132,7 +132,7 @@ The original fixed-color Play/Reverse/Flux/Shift proposal used raw brightness
 Current source instead converts the 0-127 preferences into valid NI
 white-base/intensity bytes, retaining the lamps' fixed physical colors.
 The descriptor's `single` label is not a guarantee of raw grayscale encoding.
-See [current behavior and brightness steps](led-feedback.md#change-preferences-afterward);
+See [current behavior and brightness steps](../../guides/led-feedback.md#change-preferences-afterward);
 the user accepted the REV/FLX idle refinement on October 26, 2026.
 
 ### Changeable presentation settings
@@ -233,7 +233,7 @@ screen or ring-initialization commands.
 Current-source rendering uses those four bytes for actual per-deck
 `controlModeIsThru` feedback. Known THRU uses the configured active fixed-color
 brightness; known non-THRU and unknown state are dark, regardless of dim-idle
-preferences. See [EXT implementation validation](ext-input-validation.md).
+preferences. See [EXT implementation validation](../../validation/controls/ext-input-validation.md).
 
 This accounts for all 94 payload positions: 83 named descriptor items,
 two reference tempo indicators, five reference mixer FX lights, and four
@@ -470,5 +470,5 @@ No fake state or guessed address should substitute for a failed verification.
   11/34, mixer FX outputs 50-54, segmented meters, and ring initialization.
   Physical verification takes precedence over this moving upstream reference.
 - Project `src/full/catalog.rs`, `src/full/mod.rs`, and
-  [full-midi-test.md](full-midi-test.md): existing addresses, local routing,
+  [full-midi-test.md](../../reference/full-midi-test.md): existing addresses, local routing,
   pad semantics, and the verified low-latency jog transport.

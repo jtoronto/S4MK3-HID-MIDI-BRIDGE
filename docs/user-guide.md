@@ -8,7 +8,7 @@ development-build features prepared for the **0.3.0-beta.1 draft**.
 EXT switching, motorized TT playback and its
 tuning controls, red TT indicators, and multi-deck Instant FX are not in the
 published 0.2.1-beta.1 download. See the
-[0.3.0 beta release notes](release-0.3.0-beta.1.md) and
+[0.3.0 beta release notes](releases/notes/release-0.3.0-beta.1.md) and
 [download notes](../README.md#download-and-install)
 for your package's features. Always use the app and its matching mapping
 together, importing updates under a new name to preserve custom mappings.
@@ -16,7 +16,7 @@ together, importing updates under a new name to preserve custom mappings.
 The DJ laptop needs the standalone app, not Rust, Cargo or this repository.
 
 **Windows:** There is no published Windows build. See the separate
-[Windows development setup](windows-setup.md) for unreleased builds.
+[Windows development setup](windows/windows-setup.md) for unreleased builds.
 
 ## Contents
 
@@ -76,7 +76,7 @@ screens later, choose **Enable screens - stop NI driver** in the menu or
 Screens tab. A red status icon can mean screens are blocked while controls
 continue working. Use these recovery controls rather than stopping the driver
 manually.
-See the [screen-driver guide](screen-driver-handover.md).
+See the [screen-driver guide](guides/screen-driver-handover.md).
 
 ## Start and finish a set
 
@@ -97,7 +97,7 @@ See the [screen-driver guide](screen-driver-handover.md).
 
 Later mouse edits stay in place until you move the corresponding control.
 Shared FX knobs use pickup instead of jumping to their physical positions.
-See [startup and pickup details](controls-state-sync.md).
+See [startup and pickup details](guides/controls-state-sync.md).
 
 ### When finished
 
@@ -223,7 +223,7 @@ Current source builds refresh faders and knobs on every full-controller input
 cycle, including when the controller sends no analog-change notification.
 This requires a rebuilt bridge, with no mapping or preference change. Physical
 response on Windows still needs verification; see the
-[analog input validation record](analog-snapshot-validation-20261115.md).
+[analog input validation record](validation/controls/analog-snapshot-validation-20261115.md).
 
 Crossfader assignment switches choose a side or **THRU**. THRU means the channel
 bypasses the crossfader, not that it is muted. Djay may show **Crossfader
@@ -524,7 +524,7 @@ in the editor. It leaves wheel tension, backspin and mapping settings alone.
 Save while stopped for the next Start, or use **Save and restart** while
 running. These controls aren't live and don't need a new mapping.
 Detailed motor tuning and limits are in the
-[bridge function reference](bridge-function-reference.md#current-source-motorized-playback-testing).
+[bridge function reference](reference/bridge-function-reference.md#current-source-motorized-playback-testing).
 
 #### See what braking is doing
 
@@ -589,8 +589,8 @@ log; the separate capture file isn't subject to that limit. Use **Normal** log
 detail for everyday use and **Debug** for a requested capture.
 
 For an ordered, hands-free speed comparison, follow the
-[RPM baseline procedure](tt-rpm-baseline.md). The separate
-[attended platter diagnostic](platter-diagnostic.md) is a developer tool, run
+[RPM baseline procedure](validation/jog/tt-rpm-baseline.md). The separate
+[attended platter diagnostic](research/jog/platter-diagnostic.md) is a developer tool, run
 without the bridge; it doesn't control Djay.
 
 ## Screens and feedback
@@ -615,7 +615,7 @@ a scratch. Set its speed with **LEDs > Jog rings > Chase revolution**; it
 doesn't show the track's actual position. TT rings follow physical wheel
 rotation. Whole-ring loop flashing takes priority until the loop ends.
 
-See the [screen reference](screens.md) and [LED reference](led-feedback.md)
+See the [screen reference](guides/screens.md) and [LED reference](guides/led-feedback.md)
 for more detail.
 
 ## Settings: what needs saving or a new mapping?
@@ -675,7 +675,7 @@ Copy relevant Diagnostics output and check it for private information.
 - Djay may combine very rapid separate jump commands.
 
 For every binding and lower-level detail, use the
-[bridge function reference](bridge-function-reference.md). The
-[Traktor comparison](traktor-djay-comparison.md) explains the factory
+[bridge function reference](reference/bridge-function-reference.md). The
+[Traktor comparison](research/djay/traktor-djay-comparison.md) explains the factory
 differences.
 The [issue checklist](issues.md) tracks remaining work.

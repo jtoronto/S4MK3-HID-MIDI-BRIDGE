@@ -28,7 +28,7 @@ USD 50 limit. Whether this is board-only or the complete assembly remains open.
 Listed prices below exclude tax and shipping. Storage, cables, power, host
 adapters, cooling where needed, and an enclosure must be costed separately.
 
-The earlier output-only scope in [design.md](design.md#5-audio-and-usb-topology)
+The earlier output-only scope in [design.md](../design/design.md#5-audio-and-usb-topology)
 does not describe the corrected hardware requirement.
 
 ## USB topology and audio channels
@@ -142,7 +142,7 @@ implicit-feedback audio endpoints to pace playback and has limits on UAC2 clock
 arrangements. Rust integration with a C stack is possible, but no complete Rust
 S4 audio bridge was established.
 
-The current [input path](../src/input.rs) requests fresh HID input reports 1 and
+The current [input path](../../../src/input.rs) requests fresh HID input reports 1 and
 3, processes touch/buttons before jog movement, and rejects stale interrupt
 copies. Hardware translation must preserve those semantics and held-control
 ownership; an interrupt-only example is not equivalent to the current bridge.

@@ -21,7 +21,7 @@ solution or a committed product direction.
 1. Investigated generic Serato XML and drafted a separate-backend plan:
    [investigation and archived plan](serato-mode-investigation-and-plan.md).
 2. Prepared a minimal synthetic Play/touch/jog probe and legacy XML:
-   [jog diagnostic and runbook](serato-jog-test.md).
+   [jog diagnostic and runbook](../../validation/serato/serato-jog-test.md).
    Real CoreMIDI loopback delivered the expected 260 messages. Installed-Serato
    jog acceptance was not established: MIDI assignment was unavailable in the
    tested configuration without supported primary hardware. This is a setup

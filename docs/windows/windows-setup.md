@@ -136,8 +136,8 @@ remember it for next time. No separate launcher is needed.
 | **Direct HID** | Not available; no NIHardwareService required | Tunable in **Jog** with the full profile |
 | **NI Bridge** | Available through NIHardwareService | Managed by NIHardwareService; motor tuning is not available |
 
-The separate [attended trial runbook](../windows/qa/ni-bridge/ATTENDED-RUN.md)
-and [validation record](windows-ni-decks-validation-20261123.md) describe
+The separate [attended trial runbook](../../windows/qa/ni-bridge/ATTENDED-RUN.md)
+and [validation record](validation/windows-ni-decks-validation-20261123.md) describe
 the earlier diagnostic packages and their limited hardware coverage.
 
 1. Connect and power the S4. Close Traktor and any other bridge instance.
@@ -198,7 +198,7 @@ process's actual launch command. Unsaved editor changes don't replace it.
 ## Attended screen and motor diagnostics
 
 For motor or ring problems that appear only with screens enabled, use the
-separate [screen/motor diagnostic package instructions](../windows/qa/screen-motor/README.md).
+separate [screen/motor diagnostic package instructions](../../windows/qa/screen-motor/README.md).
 
 ## Optional temporary MIDI incident capture
 

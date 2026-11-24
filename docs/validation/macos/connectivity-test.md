@@ -14,11 +14,11 @@ feedback, with false/unknown dark regardless of dim-idle settings.
 
 This requires a newly generated matching mapping and manual DVS enable left on;
 input assignments stay in Djay's GUI. It is current-source work, not a newly
-published release. Separate [EXT validation](ext-input-validation.md)
+published release. Separate [EXT validation](../controls/ext-input-validation.md)
 confirms the LED addresses and integrated switching/indicator behavior.
 The historical input-bit capture below doesn't itself establish LED
 addresses or audio behavior. See the
-[current external-audio workflow](user-guide.md#external-audio-through-a-deck).
+[current external-audio workflow](../../user-guide.md#external-audio-through-a-deck).
 
 ## Dependency and access boundaries
 

@@ -299,7 +299,7 @@ were not independently captured by the agent.
 The running Djay version was not independently captured during this test.
 The old 5.6.9 action audit is not a test-version record; later read-only bundle
 inspection found 5.6.10, build 67091. See the
-[software comparison and unsent support draft](external-input-software-comparison.md)
+[software comparison and unsent support draft](../../research/djay/external-input-software-comparison.md)
 for the cross-application findings, version limits and proposed isolated-main
 follow-up.
 
@@ -322,7 +322,7 @@ The exact global mic state, every gain/EQ control, other input pairs,
 phono-stage behavior and four simultaneous external sources were not separately
 reported. No physical EXT mapping or DVS mode feedback was implemented.
 
-The [user guide](user-guide.md#external-audio-through-a-deck) now describes the
+The [user guide](../../user-guide.md#external-audio-through-a-deck) now describes the
 manual route. No support report alleging a channel-fader defect is warranted
 by the superseded observation.
 
@@ -349,7 +349,7 @@ DVS was disabled. After the user manually re-enabled DVS, the deck showed
 THRU again. The cause of that remembered-mode behavior was not isolated.
 The same run confirmed real THRU/Internal mode feedback over MIDI.
 
-See [DVS MIDI validation](dvs-midi-validation.md) for the exact sequence,
+See [DVS MIDI validation](../midi/dvs-midi-validation.md) for the exact sequence,
 captured messages, restoration and limits. This did not implement EXT.
 
 ## References

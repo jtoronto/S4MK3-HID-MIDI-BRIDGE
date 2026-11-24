@@ -9,8 +9,8 @@ HID-to-MIDI bridge, generated Djay mapping, and LED preferences. The DJ
 laptop must not require Rust or Cargo.
 
 A standalone hardware bridge remains a longer-term goal. Current source
-includes optional screens and motor-assisted jog tension. Additional screen
-pages, playback-driven platter rotation and new haptics remain deferred unless
+includes optional screens, motor-assisted jog tension, and motorized playback.
+Additional screen pages, motor features, and new haptics remain deferred unless
 explicitly requested.
 
 ## Architecture
@@ -34,12 +34,12 @@ explicitly requested.
 ## Read before changing behavior
 
 - `docs/user-guide.md`
-- `docs/mapping-audit.md`
-- `docs/encoder-capture.md`
-- `docs/djay-action-reference.md`
-- `docs/bridge-function-reference.md`
-- `docs/traktor-djay-comparison.md`
-- `docs/led-feedback.md`
+- `docs/reference/mapping-audit.md`
+- `docs/reference/encoder-capture.md`
+- `docs/reference/djay-action-reference.md`
+- `docs/reference/bridge-function-reference.md`
+- `docs/research/djay/traktor-djay-comparison.md`
+- `docs/guides/led-feedback.md`
 - `macos/README.md`
 
 Historical validation records describe their tested revisions. Do not assume
@@ -47,6 +47,28 @@ the packaged app or older test counts describe the current working tree.
 
 ## Documentation audiences
 
+- `docs/README.md` is the documentation index. Update it when adding, moving,
+  or retiring a major documentation entry.
+- Organize documentation by its primary purpose: `docs/guides/` for current
+  focused instructions, `docs/reference/` for technical references,
+  `docs/research/` for investigations and proposals, and `docs/validation/`
+  for historical test and acceptance evidence. Put Windows-specific setup,
+  contracts, runbooks, research, and validation under `docs/windows/`.
+  Put user-facing release notes under `docs/releases/notes/` and release
+  preparation and evidence under `docs/releases/validation/`. Keep shared
+  documentation assets in `docs/images/`, `docs/mockups/`, and
+  `docs/fixtures/`.
+- Keep `docs/user-guide.md` and `docs/issues.md` at the documentation root.
+  Choose a document's home by its primary audience and purpose rather than
+  duplicating content. Label historical proposals and results clearly, and
+  preserve their provenance and verification limits.
+- Date research, investigation, and validation records when the relevant
+  date is established; use `YYYY-MM-DD` for new dated filenames. Do not
+  invent dates for older records or rename stable links just to add one.
+  Living guides and references do not require dates in their filenames.
+- When moving or renaming documents, update affected repository links and
+  path references, check that links resolve, and preserve prominent published
+  entry points with forwarding pages where appropriate.
 - `docs/user-guide.md` is the canonical, workflow-oriented user guide. Keep it
   understandable without MIDI/development knowledge. When user-visible
   controls, mappings, feedback, setup or preferences change, update the
@@ -61,8 +83,8 @@ the packaged app or older test counts describe the current working tree.
   approval history, and user-acceptance quotes out of them.
 - Put internal build, investigation, and acceptance history in clearly named
   validation records under `docs/`, such as
-  `docs/app-screen-integration-validation.md` and
-  `docs/screen-driver-handover-validation.md`.
+  `docs/validation/screens/app-screen-integration-validation.md` and
+  `docs/validation/screens/screen-driver-handover-validation.md`.
 - A successful set is general usage evidence, not proof that every individual
   control or fault/recovery path was exercised. Preserve focused verification
   limits in the corresponding validation records.

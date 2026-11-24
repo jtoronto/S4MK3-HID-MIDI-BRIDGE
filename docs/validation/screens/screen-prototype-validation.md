@@ -1,7 +1,7 @@
 > Historical prototype and integration record, not current app setup.
 > Terms such as "current prototype" below refer to the revisions tested at the
-> time. Use the [user guide](user-guide.md#screens-and-feedback) and
-> [screen-driver guide](screen-driver-handover.md) for the maintained workflow;
+> time. Use the [user guide](../../user-guide.md#screens-and-feedback) and
+> [screen-driver guide](../../guides/screen-driver-handover.md) for the maintained workflow;
 > the old manual driver-shutdown procedure is not the normal app procedure.
 
 # Experimental S4 screen support
@@ -10,12 +10,12 @@ October 22, 2026. The updated menu-bar app enables screens with its normal
 full-controller Start action when **Enable S4 screens** is on, alongside saved
 LED and tension preferences. Its new Screens tab and shared menu toggle manage
 live screen support, consented NI driver handover and manual recovery; see the
-[screen-driver guide](screen-driver-handover.md).
+[screen-driver guide](../../guides/screen-driver-handover.md).
 The standalone CLI remains opt-in with `--midi full --screens`. Older published
 apps do not enable screens. The info page requires a mapping containing numeric
 feedback; the prototype's Info Screen mapping already has it. Existing custom
 mappings and saved preferences are not overwritten.
-Use the [screen-driver guide](screen-driver-handover.md) for app setup and
+Use the [screen-driver guide](../../guides/screen-driver-handover.md) for app setup and
 recovery. The [integration validation record](app-screen-integration-validation.md)
 preserves internal build and acceptance history.
 
@@ -25,7 +25,7 @@ Current source builds add an optional `FX SYNC` header to both Info and STEMS.
 It identifies the affected logical deck, left/right FX strip, parameter knobs
 and dry/wet (`W`). Unknown values carry `?`. The underlying page reflows below
 the header; it returns to its original layout when the warning clears.
-See [pickup setup and behavior](controls-state-sync.md).
+See [pickup setup and behavior](../../guides/controls-state-sync.md).
 
 - Independent 320 x 240 left/right RGB565 rasters and bulk output on USB
   interface 4, endpoint 0x03. No audio or HID interface is claimed by this
@@ -74,8 +74,8 @@ calibration; the decoder does not interpolate unknown bytes. Selected loop
 length while inactive remains unavailable through the tested routes and is
 not displayed. Titles, artwork, time, BPM, and waveforms are not shown.
 Tempo range is not a counter of Shift+Sync presses. See the
-[data investigation](screen-feedback-investigation.md) and
-[native-pixel layout rules](../src/screens/DESIGN.md). This pass does not add
+[data investigation](../../research/screens/screen-feedback-investigation.md) and
+[native-pixel layout rules](../../../src/screens/DESIGN.md). This pass does not add
 new control layers, a settings-menu gesture, or powered platter rotation.
 
 ### Feedback addresses
@@ -295,7 +295,7 @@ at the same time.
    and wait for both firmware logos. October 23 testing showed that SIGTERM can
    leave the panels dark even after later valid frame transfers; resetting after
    NI has stopped clears that state. The packaged app instead uses the
-   [guarded screen-preserving handover](screen-driver-handover.md), so its normal
+   [guarded screen-preserving handover](../../guides/screen-driver-handover.md), so its normal
    workflow does not require this manual reset.
 
 3. Send the isolated test patterns:

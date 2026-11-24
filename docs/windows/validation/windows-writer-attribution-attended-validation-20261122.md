@@ -179,8 +179,8 @@ change or further hardware run was performed in this attended task.
 
 ## References
 
-- `docs/windows-usb-output-ownership-investigation-20261122.md`
-- `docs/windows-writer-trace-preparation-validation-20261122.md`
+- `docs/windows/research/windows-usb-output-ownership-investigation-20261122.md`
+- `docs/windows/validation/windows-writer-trace-preparation-validation-20261122.md`
 - `windows/qa/writer-trace/README.md`
 - `https://learn.microsoft.com/windows-server/administration/windows-commands/tracerpt`
 - `https://learn.microsoft.com/windows-hardware/drivers/ddi/wdm/nf-wdm-zwwritefile`

@@ -41,7 +41,7 @@ stop/reversal, cancellation or stale input ends the override, and normal tension
 behavior resumes. MIDI scratching may continue through the remaining natural coast.
 Change on/off or strength, use **Save and restart**, and repeat the same gesture
 to make your own comparisons. The normal tension and software boost stay separate.
-See [the separate trial and verification limits](backspin-assist-validation.md).
+See [the separate trial and verification limits](../validation/jog/backspin-assist-validation.md).
 
 While the bridge is running, **Save and restart** applies an edited value. Wait
 for the bridge to be **Running** again before evaluating the new setting.

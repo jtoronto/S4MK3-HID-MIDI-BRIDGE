@@ -1,8 +1,8 @@
 # Fixed-color lamps and FX pickup warning corrections
 
 October 26, 2026. Internal verification record. Normal operation is covered by
-the [user guide](user-guide.md), [LED reference](led-feedback.md) and
-[pickup reference](controls-state-sync.md).
+the [user guide](../../user-guide.md), [LED reference](../../guides/led-feedback.md) and
+[pickup reference](../../guides/controls-state-sync.md).
 
 ## Reports and mechanisms
 
@@ -169,7 +169,7 @@ without claiming exhaustive per-control or fault-path coverage.
 November 1, 2026. The user reported their first gig went well, then requested
 red TT indicators, better deck-selector contrast and multi-deck Instant FX.
 Linked LOOP/MOVE sizing was explicitly deferred and is in
-[the issue backlog](issues.md#deferred-ideas).
+[the issue backlog](../../issues.md#deferred-ideas).
 
 Current source fixes TT to red without changing its enabled/disabled intensity
 or JOG's Vinyl colors. Channel ON independently toggles arming on A-D, with only

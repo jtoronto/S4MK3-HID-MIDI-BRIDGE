@@ -3,7 +3,7 @@
 The full profile uses a separate `S4 MK3 MIDI Full` virtual source. The verified
 nine-control profile remains available with `--midi` and its original source
 name. This profile does not overwrite that saved Djay configuration.
-For normal app use, start with the [user guide](user-guide.md). This page
+For normal app use, start with the [user guide](../user-guide.md). This page
 contains the current mapping reference and focused developer/live checks;
 the dated records at the end describe earlier revisions.
 
@@ -141,15 +141,15 @@ need real testing rather than inference from successful message delivery.
 - EXT uses Djay's DVS deck mode, not bridge-owned audio forwarding. Enable DVS
   manually and leave it on; global DVS enable isn't detected. Assign inputs in
   Djay's GUI: A 1-2 PHONO/LINE, B 3-4 PHONO/LINE, C 5-6 LINE/MIC C,
-  D 7-8 LINE/MIC D. [EXT validation](ext-input-validation.md) confirms the
+  D 7-8 LINE/MIC D. [EXT validation](../validation/controls/ext-input-validation.md) confirms the
   indicator locations and integrated switching. Broader mixer-control,
   phono and four-simultaneous-source audio checks remain separate. See the
-  [external-audio workflow](user-guide.md#external-audio-through-a-deck).
+  [external-audio workflow](../user-guide.md#external-audio-through-a-deck).
 - The input mapping does not implement controller emulation, audio forwarding,
   or playback-driven motor rotation. The full runtime separately supports
-  optional [screens](screens.md) and saved [jog tension](jog-tension-integration.md).
+  optional [screens](../guides/screens.md) and saved [jog tension](../guides/jog-tension-integration.md).
 - Regenerated full mappings include software-state LED feedback and configurable
-  presentation. See [led-feedback.md](led-feedback.md) for setup and verification
+  presentation. See [led-feedback.md](../guides/led-feedback.md) for setup and verification
   limits. Older input-only mappings do not emit those states. Minimal/probe Play
   mirroring remains separate and is not a playback-state indicator.
 
@@ -214,7 +214,7 @@ are references for file/action syntax, not controller emulation.
 
 This focused physical matrix is not replaced by a general successful set.
 Native MIDI/GUI jump/restoration and production LED-report evidence is in
-[control validation](controls-state-sync-validation.md). The user also
+[control validation](../validation/controls/controls-state-sync-validation.md). The user also
 verified with the mouse that beat jump moves an active loop.
 
 1. Install and select the new mapping, then monitor MIDI while using both

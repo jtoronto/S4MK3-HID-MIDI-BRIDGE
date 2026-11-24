@@ -162,7 +162,7 @@ service/controller actions remain outside the initial capture.
 ### Run order and operator steps
 
 The implementation supplies `windows/qa/screen-motor/Prepare.ps1` and
-numbered case launchers. Follow their [ordered runbook](../windows/qa/screen-motor/README.md)
+numbered case launchers. Follow their [ordered runbook](../../../windows/qa/screen-motor/README.md)
 when the operator is available. Preparation leaves the app stopped.
 
 For each case, the delivered runbook must list its exact command, expected
@@ -296,4 +296,4 @@ During the original planning pass, LSP symbol queries failed with a tool
 error; the flow above was verified by reading these sources. That planning
 pass ran no new tests, builds or live diagnostics. Implementation evidence
 is recorded separately in
-[the diagnostic build validation](windows-screen-motor-diagnostic-validation-20261116.md).
+[the diagnostic build validation](../validation/windows-screen-motor-diagnostic-validation-20261116.md).

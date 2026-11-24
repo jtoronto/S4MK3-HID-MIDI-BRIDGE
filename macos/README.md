@@ -81,7 +81,7 @@ mappings. A runtime-only musical-key fix does not require replacing a mapping
 that already supplies the current numeric feedback.
 Quit Traktor/Mixxx before using the screens. If NIHardwareAgent owns the display,
 use the app's handover controls rather than manually quitting it. See the
-[ordered screen-driver instructions](../docs/screen-driver-handover.md#start-with-screens).
+[ordered screen-driver instructions](../docs/guides/screen-driver-handover.md#start-with-screens).
 The app can stop NIHardwareAgent with confirmation or explicit automatic-stop
 consent, and restore an agent it stopped. Screen handover force-closes only the
 verified background driver: its normal shutdown blanks the S4 panels, while the
@@ -89,7 +89,7 @@ guarded forced stop preserves them. Active Traktor, Maschine or Komplete Kontrol
 blocks the operation; the app never closes those applications.
 Manual **Restart Native Instruments screen driver** works even with screen
 support off and no previous app ownership. See the
-[ordered handover and recovery guide](../docs/screen-driver-handover.md).
+[ordered handover and recovery guide](../docs/guides/screen-driver-handover.md).
 Screen failures turn the running status icon red while MIDI/LEDs/tension continue.
 The app's Stop/Quit path also stops screen service.
 
@@ -158,7 +158,7 @@ without flashing inactive buttons. Mode exit restores normal lighting.
 The full profile enables S4 screens when the Screens setting is on. Hardware jog tension is configured
 separately below.
 
-The [encoder live check](../docs/full-midi-test.md#encoder-layout-live-check)
+The [encoder live check](../docs/reference/full-midi-test.md#encoder-layout-live-check)
 covers A/C/B/D independence, duplicate press/release, Shift while selecting,
 active-loop movement, independent LOOP size, pulse restoration, and restart.
 
@@ -176,13 +176,13 @@ preserve software values until pickup. Mismatched parameter knobs blink their
 FX buttons; dry/wet blinks the strip's main ON button. Optional `FX SYNC` screen
 headers identify the affected deck and strip without replacing Info/STEMS.
 Install the same build's new mapping and restart the bridge after changing it.
-See [setup and operation](../docs/controls-state-sync.md). These additions are
+See [setup and operation](../docs/guides/controls-state-sync.md). These additions are
 not in the published beta.3 download.
 
 The current runtime also preserves musical-key feedback across track-loading
 notifications. Actual no-key feedback clears KEY to `--` on eject; unavailable
 feedback remains `?`. This key fix changes no MIDI addresses. See the
-[screen reference](../docs/screens.md#info-page-hotcue-and-samples).
+[screen reference](../docs/guides/screens.md#info-page-hotcue-and-samples).
 
 ### Mixer ON and Neural Mix EQ
 
@@ -197,7 +197,7 @@ that deck's EQ mode without changing the FX target. Press Filter again to
 cancel; outside selection ON retains its normal target-selection behavior.
 Filter no longer resets the selected filter. Install the new mapping under a
 new filename and preserve any custom mappings. The
-[live check](../docs/neural-mix-eq-check.md) covers feedback and transitions
+[live check](../docs/validation/controls/neural-mix-eq-check.md) covers feedback and transitions
 for all four decks.
 
 ### Hardware jog tension
@@ -228,7 +228,7 @@ booleans), out-of-range values, and unknown fields are rejected. Invalid
 saved files are preserved until explicit reset and save; invalid editor
 values remain in the editor without replacing saved preferences.
 
-The [live integration check](../docs/jog-tension-integration.md) covers
+The [live integration check](../docs/guides/jog-tension-integration.md) covers
 assistance/braking with Djay controls and LEDs, Stop/Quit clearing force,
 saved-setting restore while stopped, and explicit restart after USB reconnect.
 
@@ -236,7 +236,7 @@ The menu-bar symbol is green while the bridge is running and returns to the
 normal system appearance in other states. Diagnostics shows the app's bundled
 release version and build number.
 
-The beta.3 [timeout recovery fix](../docs/tension-timeout-recovery.md)
+The beta.3 [timeout recovery fix](../docs/validation/jog/tension-timeout-recovery.md)
 clears force after a 50 ms input gap without closing the bridge. Diagnostics
 logs `TENSION_SUSPENDED`; control/feedback processing continues while tension
 history is reset. Fresh input establishes a new baseline and logs
@@ -338,18 +338,18 @@ Raw/debug logging is intended for troubleshooting rather than normal DJ use.
 Continuous mode permits an idle controller and stops cleanly without requiring
 input activity. A fixed-duration run retains the CLI probe's activity checks.
 
-See [configurable-controls.md](../docs/configurable-controls.md) for the
+See [configurable-controls.md](../docs/guides/configurable-controls.md) for the
 distinction between existing preferences, useful future input-sensitivity
 settings, and hardware/protocol constants that should remain fixed.
 The verified build/UI evidence and remaining limits are recorded in
-[macos-app-qa.md](../docs/macos-app-qa.md).
+[macos-app-qa.md](../docs/validation/macos/macos-app-qa.md).
 
 ## Developer checks
 
 The app's full-controller launch includes `--screens` when enabled, and a live
 screen-control pipe. The standalone CLI
 still requires an explicit `--midi full --screens`. See
-[screen setup and physical checks](../docs/screens.md), including the
+[screen setup and physical checks](../docs/guides/screens.md), including the
 NIHardwareAgent interface-ownership conflict. Beta.3 and older published
 mapping-only builds do not contain this integration.
 

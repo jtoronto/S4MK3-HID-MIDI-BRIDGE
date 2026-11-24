@@ -4,7 +4,7 @@ November 3, 2026.
 
 ## Conclusion
 
-The [native shutdown follow-up](windows-midi-shutdown-investigation-20261103.md)
+The [native shutdown follow-up](../research/windows-midi-shutdown-investigation-20261103.md)
 now identifies a self-deadlock inside Windows MIDI Service during virtual-device
 removal. It also corrects the service-version interpretation: the 7705 string
 version differs from the installed binary's numeric fixed version 26100.9444.
@@ -326,7 +326,7 @@ to be the same defect. The transport file version alone does not establish
 whether a particular servicing fix is installed.
 
 That statement describes the initial probe's evidence boundary. The subsequent
-[native investigation](windows-midi-shutdown-investigation-20261103.md)
+[native investigation](../research/windows-midi-shutdown-investigation-20261103.md)
 establishes the concrete service lock re-entry and matches it to Microsoft's
 servicing correction, without claiming that the correction has been tested on
 this PC.

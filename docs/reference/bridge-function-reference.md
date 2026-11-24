@@ -1,7 +1,7 @@
 # Bridge-owned functionality
 
 Reference for the current full-controller source build, not a promise of
-factory Traktor compatibility. Start with the [user guide](user-guide.md)
+factory Traktor compatibility. Start with the [user guide](../user-guide.md)
 for everyday workflows. Current sections below supersede the October 6 base
 snapshot retained later in this document.
 
@@ -28,8 +28,8 @@ selected force, native output and screen transactions in bounded memory.
 It exports after managed Stop and teardown. Temporary cases isolate no
 screen session, acquisition without frames, one static pair, bounded updates
 and the normal production route. They do not change motor laws or MIDI
-addresses. See the [operator procedure](../windows/qa/screen-motor/README.md)
-and [event schema](windows-screen-motor-diagnostic-schema.md).
+addresses. See the [operator procedure](../../windows/qa/screen-motor/README.md)
+and [event schema](../windows/windows-screen-motor-diagnostic-schema.md).
 
 ### Current-source motorized playback testing
 
@@ -41,7 +41,7 @@ Deliberate Shift-then-top-touch movement still emits jog seek CC 6 on the owning
 deck's channel; releasing the top suppresses subsequent coasting seek output.
 Normal-mode Shift+jog and held gesture/deck ownership are unchanged. GRID retains
 its separate route. This does not change the motor's existing Shift gate.
-See [Shift seek regression and validation limits](tt-shift-seek-validation.md).
+See [Shift seek regression and validation limits](../validation/jog/tt-shift-seek-validation.md).
 Current source also enables Scratch movement for a confirmed paused, loaded
 Internal deck in TT mode, independently of Vinyl and capacitive touch. This does
 not authorize motor force while paused. Physical touch retains its original
@@ -85,7 +85,7 @@ continuation rather than unbounded power extrapolation. Qualification, sign
 change/neutral residual clearing, report timing and speed measurement are
 unchanged. The native graph evaluates this rate in signed CC4 counts/second;
 it does not predict Djay's audible tempo.
-See [curve implementation and verification limits](tt-response-curves-validation.md).
+See [curve implementation and verification limits](../validation/jog/tt-response-curves-validation.md).
 Full-profile `S4_PLATTER_STATUS` lines provide a 10 Hz Diagnostics snapshot with
 physical RPM, the successful outgoing CC4 count rate and current routing mode.
 This is MIDI output evidence, not audio-speed feedback.
@@ -98,7 +98,7 @@ Normal/Info logging emits TT-state initialization and boolean-state transitions
 only. Debug additionally emits periodic TT-state force samples at the bounded
 100 ms cadence. The native app keeps log and live-platter observation separate
 from preference observation, and only mounts the Diagnostics tab while selected.
-See [idle logging and Settings performance validation](idle-ui-performance-validation.md)
+See [idle logging and Settings performance validation](../validation/performance/idle-ui-performance-validation.md)
 for evidence and measurement limits.
 The RPM diagnostic adds Debug-only `MOTOR_REGULATOR data={...}` JSON samples
 at most every 20 ms per side, plus regulator-mode edges. Side 0 is left and
@@ -113,13 +113,13 @@ input report or proof of a successful motor write. Sensor ticks are 100 per
 microsecond; the motor window is at least 20 ms. `S4_PLATTER_STATUS` now includes
 `host_us` in the same bridge-start clock domain, supplying the separate 100 ms
 RPM estimate and sent bend rate at 10 Hz. See the
-[hands-free baseline](tt-rpm-baseline.md).
+[hands-free baseline](../validation/jog/tt-rpm-baseline.md).
 JOG toggles Vinyl red/on or blue/off. Normal-mode `vinyl_enabled_at_startup`
 defaults true; `tt_vinyl_enabled_at_startup` defaults false. Each mode remembers
 its own Vinyl choice during the session.
 The testing `platter_*` preferences use the existing saved Jog configuration.
 Their provisional feel defaults and application steps are in the
-[user guide](user-guide.md#testing-motorized-playback).
+[user guide](../user-guide.md#testing-motorized-playback).
 
 The motorized-playback mapping supplies Djay-to-bridge CC22 on deck channels 1-4
 (one-based) for `turntableN.controlModeIsInternal`. Loaded and raw playing
@@ -131,7 +131,7 @@ Active wheel output uses the existing CC4/CC5/Note7 routes. The abandoned CC8
 absolute-position mapping and its preference are removed. Existing saved
 `platter_position_sensitivity` keys are ignored on load and omitted on save;
 other unknown keys are still rejected. See the
-[archived method](absolute-position-scratch-experiment.md).
+[archived method](../research/jog/absolute-position-scratch-experiment.md).
 
 The production motor owner arbitrates rotation, tension and owned gestures;
 nominal powered motion is removed before jog MIDI translation. The TT diagnostic
@@ -153,7 +153,7 @@ confirmed. Releasing below exit speed waits for recovery. Playback/mode/deck
 cancellation and stale-input release still take precedence over touch.
 Forward nudges do not trigger automatic upper Scratch. Explicit Vinyl-on touch
 still owns Scratch.
-See [touch retention and abrupt-stop verification](tt-touch-stop-validation.md).
+See [touch retention and abrupt-stop verification](../validation/jog/tt-touch-stop-validation.md).
 In `src/tension/playback.rs`, hold assistance uses
 `F0 = min(max_force, base_force + force_per_rpm * target_rpm)`, default 10630,
 scaled by `clamp((target_rpm - measured_rpm) / min(2, target_rpm), 0, 1)`.
@@ -177,12 +177,12 @@ from `motor_rpm`. This reduces false admission in the recorded hands-free
 fixture; it is not proof that all physical ripple or recovery chatter is fixed.
 Saved floor/gain values persist; the response changes require no mapping export.
 The floor still needs actual CC4/audio calibration;
-see the [diagnostic runbook](tt-speed-scratch-diagnostic.md).
+see the [diagnostic runbook](../validation/jog/tt-speed-scratch-diagnostic.md).
 Implementation, package evidence and physical-test limits are
-tracked separately in the [validation record](tt-response-stability-validation.md).
+tracked separately in the [validation record](../validation/jog/tt-response-stability-validation.md).
 Cached real playback authorization survives feedback silence in this testing
 build: use TT-off or Stop bridge before quitting Djay.
-See [integration evidence](motorized-playback-integration-validation.md).
+See [integration evidence](../validation/jog/motorized-playback-integration-validation.md).
 
 Ordinary jog Speed/Reaction are mapping-generation preferences, not count scaling in
 the translator. Calibrated defaults are scratch 2.7% / 150% and pitch bend
@@ -203,7 +203,7 @@ residuals confined to the event. Normal-mode bend, seek and grid actions cannot
 start it.
 Both screen pages show the original owning deck, independently of current deck
 selection. Physical touch data remains unchanged.
-See [backspin evidence and live checks](backspin-detection-validation.md).
+See [backspin evidence and live checks](../validation/jog/backspin-detection-validation.md).
 TT floor Scratch shares `jog_steps` scaling with physical jog movement, so the
 same saved additive speed increase applies before and after top release.
 Retouch clears detection without chattering its Scratch note. The TT speed-floor
@@ -222,7 +222,7 @@ cancellation, Stop or the 50 ms freshness cutoff cancels it. One real touch gest
 can produce only one pulse. The normal-tension histories continue independently,
 and the saved tension selection is never rewritten. The ordinary recovery path
 cannot resume an old pulse after freshness loss. See
-[assist implementation and attended checks](backspin-assist-validation.md).
+[assist implementation and attended checks](../validation/jog/backspin-assist-validation.md).
 Existing bounded assist event logs include selected strength, requested release
 torque and the latest decoded sample/age at a motion-stop cancellation. Requested
 torque and accepted native writes do not establish physical force or feel.
@@ -252,7 +252,7 @@ These are USB audio pairs, not MIDI channels.
 Install a newly generated matching mapping. This is current-source support,
 not a newly published release. Physical EXT LED payload offsets 80/84/88/92
 are confirmed for A-D; integrated acceptance is tracked in the
-[EXT validation record](ext-input-validation.md). Broader audio validation is separate.
+[EXT validation record](../validation/controls/ext-input-validation.md). Broader audio validation is separate.
 This overlay supersedes the historical base snapshot's EXT-unassigned claim.
 
 ### Current encoder overlay
@@ -301,7 +301,7 @@ the separate saved-tension increment below adds motor output.
 
 The user mouse-verified beat jump moving an active loop. Native MIDI/GUI,
 multi-detent jump restoration, and production LED-report checks are recorded in
-[control validation](controls-state-sync-validation.md). Those checks are not
+[control validation](../validation/controls/controls-state-sync-validation.md). Those checks are not
 a complete physical A/C/B/D gesture matrix. When changing mappings, install
 under a new filename and preserve custom maps. See
 [focused live checks](full-midi-test.md#encoder-layout-live-check).
@@ -314,7 +314,7 @@ the existing mapping-ready gate, sixteen channel-volume/EQ CCs apply their lates
 physical positions once. The full profile now requests a fresh analog report 2
 on every input batch, even without an analog interrupt. Queued analog values
 cannot overwrite the current snapshot. Minimal is unchanged. This is
-current-source behavior; see the [verification limits](analog-snapshot-validation-20261115.md).
+current-source behavior; see the [verification limits](../validation/controls/analog-snapshot-validation-20261115.md).
 
 FX uses six actual values per deck from explicit root control outputs on CC 32-37:
 three parameters and three wet/dry values. Shared physical knobs are not replayed
@@ -331,8 +331,8 @@ target changes reset the travel origin; the first unknown position seeds only.
 Browsing suppresses parameter output and re-arms that knob's pickup. Dry/wet,
 effect-button held ownership and the existing Shift + button next-effect
 shortcuts are unchanged. A newly generated mapping is required.
-See [operation](controls-state-sync.md) and
-[verification boundaries](controls-state-sync-validation.md).
+See [operation](../guides/controls-state-sync.md) and
+[verification boundaries](../validation/controls/controls-state-sync-validation.md).
 
 ### Musical-key feedback
 
@@ -341,7 +341,7 @@ song-owned `loadingSuccess`. Djay can send a new key before loading-false;
 that notification must not erase it. Genuine eject reports key 0, displayed
 as `--`. Missing or unrecognized key feedback remains `?`, without guessing.
 The captured ordering regression and physical replacement/eject acceptance are
-recorded in [key feedback validation](key-feedback-order-validation.md).
+recorded in [key feedback validation](../validation/feedback/key-feedback-order-validation.md).
 
 ### Saved hardware tension
 
@@ -381,7 +381,7 @@ white/cyan EQ mode and dim/bright FX arming; active Instant FX color overrides
 both. Unknown mode stays dark. MIDI-only capture verified initial states and
 independent mouse-driven mode transitions for A-D on October 20, 2026. The user
 subsequently accepted the physical workflow and dim-cyan idle Filter;
-exhaustive edge cases remain unverified. See [the focused check](neural-mix-eq-check.md).
+exhaustive edge cases remain unverified. See [the focused check](../validation/controls/neural-mix-eq-check.md).
 
 The table below retains the earlier snapshot and source line references.
 The encoder and selector-mode overlay above supplements it; it doesn't
@@ -446,7 +446,7 @@ unresolved.
 
 App-managed screens, Info/STEMS legends, held-Preview encoder scrubbing, and
 global Shift+Sync tempo-range cycling are implemented in current source.
-See the [screen reference](screens.md) and [user guide](user-guide.md).
+See the [screen reference](../guides/screens.md) and [user guide](../user-guide.md).
 Startup channel-volume/EQ and crossfader assignment/curve initialization wait
 for actual mapping feedback; gain, filter, crossfader position and tempo are
 not included in the channel-volume/EQ push.

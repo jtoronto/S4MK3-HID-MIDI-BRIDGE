@@ -4,7 +4,7 @@ October 6, 2026. The portable app worked on the user's DJ laptop. This audit
 addresses the subsequent control notes; it does not change the executable or
 installed mappings.
 
-The [issues checklist](issues.md) is the current status record. It includes
+The [issues checklist](../issues.md) is the current status record. It includes
 the user's live-test confirmations and is updated as issues are completed.
 Pending notes and proposals below may describe older revisions.
 
@@ -14,13 +14,13 @@ Pending notes and proposals below may describe older revisions.
   version-scoped software action/state catalog, including unused entries.
 - [Bridge-owned functions](bridge-function-reference.md): local modes, routing,
   message conversion, and LED rendering, separated from hardware-local audio.
-- [Factory Traktor comparison](traktor-djay-comparison.md): the supplied
+- [Factory Traktor comparison](../research/djay/traktor-djay-comparison.md): the supplied
   S4 MK3 manual, page references, and compatibility gaps.
 - [Verified encoder capture](encoder-capture.md): all MOVE/LOOP fields, press
   masks, directions, and Shift verification. Rotation names are reversed on
   both sides; press names are reversed only on the left.
-- [LED settings and limits](led-feedback.md) and
-  [macOS installation](../macos/README.md).
+- [LED settings and limits](../guides/led-feedback.md) and
+  [macOS installation](../../macos/README.md).
 
 Software input means a command sent **to Djay**. Software output means state
 sent **from Djay** to the bridge. Neither means an audio input/output.
@@ -47,9 +47,9 @@ enable. Assign inputs in the GUI: A 1-2 PHONO/LINE, B 3-4 PHONO/LINE,
 C 5-6 LINE/MIC C, D 7-8 LINE/MIC D. Install a newly generated matching
 mapping under a new filename. This is current-source work, not a new release.
 All four EXT indicator addresses and integrated switching are confirmed in
-[EXT validation](ext-input-validation.md); remaining mixer-control, phono
+[EXT validation](../validation/controls/ext-input-validation.md); remaining mixer-control, phono
 and four-source audio checks are separate.
-See the [current workflow](user-guide.md#external-audio-through-a-deck).
+See the [current workflow](../user-guide.md#external-audio-through-a-deck).
 
 ### Global Shift+Sync tempo range
 
@@ -80,11 +80,11 @@ change runtime behavior only: no new MIDI addresses or mapping parameters.
 Zero strength bypasses the override. Its released pulse has an independent
 one-second cutoff and does not prolong the MIDI hold beyond measured motion.
 Physical acceptance remains separate from the captured-input replay and
-regressions. See [backspin validation](backspin-detection-validation.md).
+regressions. See [backspin validation](../validation/jog/backspin-detection-validation.md).
 Saved hardware tension is
-implemented separately; see [normal-app integration](jog-tension-integration.md).
-See [configurable controls](configurable-controls.md) and
-[the measured jog comparison](jog-wheel-investigation.md).
+implemented separately; see [normal-app integration](../guides/jog-tension-integration.md).
+See [configurable controls](../guides/configurable-controls.md) and
+[the measured jog comparison](../research/jog/jog-wheel-investigation.md).
 
 ### Implemented LOOP/MOVE layout
 
@@ -93,7 +93,7 @@ BROWSER to scrub; release Preview to stop. Shift+BROWSER without Preview
 changes source, while Preview takes precedence when both are held. These
 routes supersede the October 8 Shift-only scrubber and the earlier
 preview-dependent/LOOP proposal retained below. See the
-[user workflow](user-guide.md#browse-preview-and-load).
+[user workflow](../user-guide.md#browse-preview-and-load).
 
 The subsequent REV/Browse increment maps REV to native `reverseHold`,
 preserving press ownership through deck/Shift changes and shutdown. No
@@ -133,7 +133,7 @@ Current source Shift+MOVE selects one beat, sends relative CC 2 with the full
 signed detent count, then restores the last confirmed size through normal-channel
 notes 64-73. Native fixed actions changed the selected size and coalesced rapid
 pulse batches; notes 5/14 remain unused runtime aliases. Missing/conflicting size
-feedback is not guessed. See [current operation](controls-state-sync.md).
+feedback is not guessed. See [current operation](../guides/controls-state-sync.md).
 
 A/B/C/D retain independent native Djay loop and jump values, not bridge
 counters or shared-size resets. Only the selection-mode flags belong to the
@@ -160,7 +160,7 @@ embedded feedback from enableUnmixerEQ. Confirmed mode determines white/cyan ON
 color; brightness denotes Instant FX arming. Active Instant FX color overrides
 mode, including on a previously armed deck. No mode is inferred from presses.
 Unknown mode stays dark. The historical resetFilter row below is superseded.
-See the [focused feedback and physical check](neural-mix-eq-check.md); live
+See the [focused feedback and physical check](../validation/controls/neural-mix-eq-check.md); live
 feedback and hardware behavior remain distinct from software regressions.
 
 ### Encdr v0.7.2: jog-ring upgrade candidate
@@ -311,7 +311,7 @@ seek command and, for toggle-based preview, reliable preview state.
    Backspin, REV hold, THRU startup, and Browse direction remain beta issues
    in the historical findings table. Current-source EXT support is described
    in the overlay above, with live acceptance recorded separately. For current screen
-   support, see the [user guide](user-guide.md#screens-and-feedback).
+   support, see the [user guide](../user-guide.md#screens-and-feedback).
 6. Change LED appearance in Settings, Save, then restart the bridge. Ring chase
    is decorative; green flash indicates a returned loop state. Local mode
    lamps do not prove the software changed its visible pad panel.

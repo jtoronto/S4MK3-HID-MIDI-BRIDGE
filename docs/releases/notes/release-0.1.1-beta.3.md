@@ -34,7 +34,7 @@ ad-hoc signed, not notarized; the README covers first-launch approval.
 The recovery source passed 254 Rust and 18 Swift tests before this release
 version increment. Tests cover repeated gaps, stale queued readings, new
 movement before force returns, independent touch gates, and fatal I/O errors.
-See [timeout recovery](tension-timeout-recovery.md) for the evidence and limits.
+See [timeout recovery](../../validation/jog/tension-timeout-recovery.md) for the evidence and limits.
 
 After the version increment, all 254 Rust and 18 Swift tests passed again,
 along with formatting, strict all-target/all-feature Clippy, the locked

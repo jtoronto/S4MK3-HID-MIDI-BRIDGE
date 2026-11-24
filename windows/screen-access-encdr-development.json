@@ -2,5 +2,5 @@
   "version": 1,
   "route": "engine_managed_ni_session",
   "accepted": true,
-  "evidence": "docs/windows-encdr-pattern-validation-20261107.md"
+  "evidence": "docs/windows/validation/windows-encdr-pattern-validation-20261107.md"
 }

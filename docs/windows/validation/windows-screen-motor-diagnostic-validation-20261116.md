@@ -101,7 +101,7 @@ native output acceptance does not measure torque. Observer overhead and the
 physical screen/motor boundary remain for the user's later attended run.
 The cause of the reported problem remains unproven.
 
-The [operator runbook](../windows/qa/screen-motor/README.md) gives exact
+The [operator runbook](../../../windows/qa/screen-motor/README.md) gives exact
 commands, readiness checks, physical actions and Stop/export steps in order.
 No full attended reproduction recheck is required before those diagnostics.
 

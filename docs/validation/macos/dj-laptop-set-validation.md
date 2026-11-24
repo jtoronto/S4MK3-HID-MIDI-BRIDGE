@@ -12,7 +12,7 @@ reported in that follow-up.
 This followed the rebuilt musical-key fix and its focused physical check:
 Jacker `11A`, direct replacement with Drop Ha `2A`, then eject `--`.
 Build and package evidence for that increment is in
-[key feedback validation](key-feedback-order-validation.md).
+[key feedback validation](../feedback/key-feedback-order-validation.md).
 
 ## October 25 acceptance clarification
 
@@ -45,7 +45,7 @@ triggered, explained or fixed.
 ## Documentation follow-up
 
 The user requested a maintained, accessible guide explaining workflows and
-the chosen mappings/functions. [user-guide.md](user-guide.md) is the canonical
+the chosen mappings/functions. [user-guide.md](../../user-guide.md) is the canonical
 user-facing guide. Dated acceptance reports, test counts, local artifacts and
 investigation history stay in validation records rather than that guide or
 the public README.

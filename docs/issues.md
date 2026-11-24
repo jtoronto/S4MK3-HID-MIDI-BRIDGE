@@ -1,7 +1,7 @@
 # S4 MK3 bridge issues
 
 Current checklist as of November 2, 2026. This is the source of truth for issue
-status; [the mapping audit](mapping-audit.md) retains detailed findings and
+status; [the mapping audit](reference/mapping-audit.md) retains detailed findings and
 historical snapshots.
 
 Update this document as work completes. Check an item only when the agreed
@@ -17,7 +17,7 @@ Keep completed items and add their completion date and a short evidence note.
   Stop. The user accepted the current test build on November 1, 2026. Software
   regressions and package checks passed; this is general build acceptance, not
   an exhaustive per-control or fault-path test. See the
-  [evidence and limits](led-fx-state-fixes-validation.md#first-gig-tt-and-multi-deck-instant-fx-follow-up).
+  [evidence and limits](validation/feedback/led-fx-state-fixes-validation.md#first-gig-tt-and-multi-deck-instant-fx-follow-up).
 - [x] **Preview encoder scrubbing** - Preview toggles playback and
   Shift+BROWSER emits directional preview seek pulses. The user confirmed
   the current scrubber works on October 21, 2026. A proposed one-handed
@@ -27,7 +27,7 @@ Keep completed items and add their completion date and a short evidence note.
   response. User-confirmed assistance/braking, Djay/MIDI/LED coexistence,
   Stop/Quit neutral, saved-setting restore while stopped, and explicit restart
   after USB reconnect, October 20, 2026. See
-  [normal-app integration](jog-tension-integration.md).
+  [normal-app integration](guides/jog-tension-integration.md).
 - [x] **Mixer ON / Neural Mix EQ selection** - Filter is now a one-shot
   EQ deck-selection latch, not reset-to-neutral. The next ON toggles that deck's
   native EQ mode without retargeting Instant FX; normal ON still selects the
@@ -37,7 +37,7 @@ Keep completed items and add their completion date and a short evidence note.
   the physical behavior and idle refinement on October 20, 2026.
   The user confirmed working LED/FX behavior in their test set on October 25,
   2026, with no LED/FX fault reported. The exhaustive
-  [edge-case check](neural-mix-eq-check.md) is optional regression coverage,
+  [edge-case check](validation/controls/neural-mix-eq-check.md) is optional regression coverage,
   not a known defect or an outstanding acceptance requirement.
 
 - [x] **Default Djay color-token correspondence** - All eight selectable
@@ -45,7 +45,7 @@ Keep completed items and add their completion date and a short evidence note.
   October 6, 2026. Rust and bundled JSON defaults now match it; saved
   preferences are preserved. White is not an option in Djay's hotcue picker:
   token 9 retains its existing unverified white fallback.
-  See [palette evidence](led-feedback.md#verified-hotcue-palette).
+  See [palette evidence](guides/led-feedback.md#verified-hotcue-palette).
 
 - [x] **LOOP/MOVE layout and beat jump** - Correct physical encoder pairing;
   independent per-deck loop/jump sizes; MOVE press toggles jump-size selection
@@ -67,7 +67,7 @@ Keep completed items and add their completion date and a short evidence note.
   tempo-fader range for all decks via `application.tempoSliderRangeNext`;
   normal Sync remains deck-specific. Djay owns the choices and cycling order.
   Software routing/export checks passed and the user confirmed "Works,"
-  October 6, 2026. See [validation](shift-sync-validation.md).
+  October 6, 2026. See [validation](validation/controls/shift-sync-validation.md).
 
 - [x] **Experimental screen pages** - Implementation authorized October 21,
   2026. Raw dual-screen transfers succeeded after temporarily quitting the
@@ -87,7 +87,7 @@ Keep completed items and add their completion date and a short evidence note.
   reported "Tested and it seems good!" on October 22. On October 25, the user
   explicitly confirmed screen states across decks worked in the test set.
   This closes normal-use acceptance; it is not inferred from USB completion.
-  See [screen implementation and ordered checks](screens.md).
+  See [screen implementation and ordered checks](guides/screens.md).
 - [x] **Numeric screen content** - Implemented October 22, 2026: non-STEMS
   modes show JUMP / LOOP / KEY / RANGE in four quadrants. Active LOOP uses
   green fill and black text; inactive says OFF. MOVE size selection has steady
@@ -98,7 +98,7 @@ Keep completed items and add their completion date and a short evidence note.
   the test set on October 25, 2026, completing physical acceptance.
   Inactive selected loop length remains unexposed by tested
   routes and is deliberately not shown. A fresh generated mapping is required. See
-  [evidence and probe boundaries](screen-feedback-investigation.md).
+  [evidence and probe boundaries](research/screens/screen-feedback-investigation.md).
 - [x] **Shift+CUE: jump to beginning** - Implemented October 21, 2026:
   `turntableN.gotoZero` on Note 1, channels 9-12. Normal CUE is unchanged.
   Generated mapping and ownership regressions cover it. The user confirmed
@@ -125,7 +125,7 @@ Keep completed items and add their completion date and a short evidence note.
   notification. The deck-owned key now follows its own feedback,
   including the explicit no-key value on eject. Replacement and eject
   regressions pass; the user verified `11A -> 2A -> --` on the physical S4.
-  No mapping change is needed. See [diagnosis and verification](key-feedback-order-validation.md).
+  No mapping change is needed. See [diagnosis and verification](validation/feedback/key-feedback-order-validation.md).
 
 ## Current-source EXT support
 
@@ -139,7 +139,7 @@ hardware Shift+EXT input-type selection by suppressing software commands.
 Indicators use only actual per-deck THRU state, with false/unknown dark even
 when dim-idle lighting is enabled.
 
-The attended [EXT validation](ext-input-validation.md) confirms single-press
+The attended [EXT validation](validation/controls/ext-input-validation.md) confirms single-press
 switching and lamps on all four channels, independent mouse-driven feedback,
 and Shift suppression with no delayed toggle. This is not a new published
 release. DVS must be enabled manually and left on; input assignments remain
@@ -160,7 +160,7 @@ GUI setup. The bridge doesn't detect global DVS enable.
   The November 2 capture had four upper entries near 66 RPM and a 90.3 RPM
   maximum with a 1% floor; the reported 10x run was not captured. Physical
   response and Djay's audio floor remain unverified. See the
-  [software evidence and ordered morning test](tt-response-stability-validation.md).
+  [software evidence and ordered morning test](validation/jog/tt-response-stability-validation.md).
 - [ ] **Deck-selector contrast in dark venues — pending investigation** -
   Keep unselected A/C and B/D buttons backlit, but improve the selected/unselected
   distinction. The newer Traktor motor-driven and tension captures show C/D dim
@@ -175,22 +175,22 @@ GUI setup. The bridge doesn't detect global DVS enable.
   size. All ten CCs were emitted, but the native waveform ended two beats behind
   the starting point. The unchanged normal-MOVE path reproduces this independently
   of Shift-size restoration. Separate four-detent commands work in both directions.
-  See [reproduction and evidence](controls-state-sync-validation.md#native-burst-limitation).
+  See [reproduction and evidence](validation/controls/controls-state-sync-validation.md#native-burst-limitation).
 - [ ] **Practice-session freshness exit** - A 50 ms motor-input timeout
   stopped the entire full-profile bridge during practice on October 20, 2026.
   The beta.3 fix clears force, discards old movement, and automatically
   resumes tension after a fresh baseline and newly qualified motion while
   keeping control/feedback service running. The underlying input delay
   is unconfirmed and physical recovery testing remains pending.
-  See [timeout recovery](tension-timeout-recovery.md).
+  See [timeout recovery](validation/jog/tension-timeout-recovery.md).
 - [ ] **Wheel sensor-time reversal** - A diagnostic run exited with
   `wheel 0 sensor time reversed` on October 24, 2026. The cause remains
   uninvestigated; this is separate from the self-recovering 50 ms input-gap
   path and was not changed by the musical-key fix. Retain the exact log if it
-  occurs again. See [the captured run](key-feedback-order-validation.md#evidence-and-diagnostic-boundaries).
+  occurs again. See [the captured run](validation/feedback/key-feedback-order-validation.md#evidence-and-diagnostic-boundaries).
 - [x] **Jog feel and backspin** - User confirmed the current jog feel and
   backspin tuning are solved to their satisfaction on October 27, 2026.
-  [October 6 comparison](jog-wheel-investigation.md): Traktor's target is
+  [October 6 comparison](research/jog/jog-wheel-investigation.md): Traktor's target is
   2.5 beats per revolution at either speed, including released backspin,
   with no reversal after the platter stops. The user calibrated scratch
   Speed/Reaction to 2.7% / 150% and pitch bend to 2.7% / 17%; these are now
@@ -211,8 +211,8 @@ GUI setup. The bridge doesn't detect global DVS enable.
   both-wheel operation, catching and wheel isolation, then requested default-on
   assistance at 100% with a 5.6% software boost for beta.2. Earlier short motion-stop
   cancellations remain unexplained, not a claimed fix; see the
-  [focused physical results and limits](backspin-assist-validation.md).
-  See [the experiment and ordered checks](backspin-detection-validation.md).
+  [focused physical results and limits](validation/jog/backspin-assist-validation.md).
+  See [the experiment and ordered checks](validation/jog/backspin-detection-validation.md).
   Equal-force flicks are not equivalent across the two setups.
 - [ ] **Leftmost FX button duplicates slot 1** - Verify native bank-enable
   behavior and investigate a whole-bank bypass that preserves individual
@@ -231,9 +231,9 @@ GUI setup. The bridge doesn't detect global DVS enable.
   A 1-2, B 3-4, C 5-6, D 7-8, with PHONO/LINE on A/B and LINE/MIC on C/D.
   The earlier stopped-bridge headphone result
   remains unexplained, not a current fault. See the
-  [test record](external-input-routing-test.md),
+  [test record](validation/controls/external-input-routing-test.md),
   [manual workflow](user-guide.md#external-audio-through-a-deck) and
-  [software comparison](external-input-software-comparison.md).
+  [software comparison](research/djay/external-input-software-comparison.md).
 
 ## Deferred ideas
 
@@ -245,7 +245,7 @@ GUI setup. The bridge doesn't detect global DVS enable.
   trade-off is not accepted. Investigate reliable inactive-size setting/feedback
   before settling a design; keep the current independent sizes and MOVE
   selection mode for now. See the
-  [previous probe limits](screen-feedback-investigation.md#loop-and-jump-lengths).
+  [previous probe limits](research/screens/screen-feedback-investigation.md#loop-and-jump-lengths).
 - [ ] **MUTE button role** - Deferred by the user on October 21, 2026.
   No distinct assignment chosen; revisit after screen support is understood,
   when layered controls may provide a useful role. This defers the design
@@ -255,8 +255,8 @@ GUI setup. The bridge doesn't detect global DVS enable.
   Scratch handoff and tapers holding assistance near target.
   On October 30 the user reported the corrected build much better and began
   extended beta testing; this is not exhaustive fault/recovery acceptance.
-  See [October 30 evidence](tt-normal-ring-recovery-validation.md) and the
-  [response-stability validation record](tt-response-stability-validation.md).
+  See [October 30 evidence](validation/feedback/tt-normal-ring-recovery-validation.md) and the
+  [response-stability validation record](validation/jog/tt-response-stability-validation.md).
   Review experimental settings for removal or hiding before release.
   Cue effects and other new haptics remain deferred.
 - [ ] **Jog-ring extended validation** - Normal playback/Scratch/pause
@@ -269,7 +269,7 @@ GUI setup. The bridge doesn't detect global DVS enable.
 The October 24 hour-long set passed on the actual DJ laptop. On October 25,
 the user explicitly confirmed held Preview, Shift+CUE, library controls,
 cross-deck screens and working LED/FX behavior from that set. See the
-[set validation](dj-laptop-set-validation.md) for scope and remaining known
+[set validation](validation/macos/dj-laptop-set-validation.md) for scope and remaining known
 faults. Optional exhaustive scenarios are not additional reported bugs.
 
 On October 20, 2026, an initial launch reported that

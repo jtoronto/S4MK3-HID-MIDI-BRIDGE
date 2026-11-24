@@ -16,14 +16,14 @@ under `dist/previous-jog-build-20261103/` before rebuilding at the usual paths.
 
 ## Notes and screenshots
 
-`docs/release-0.3.0-beta.1.md` is the end-user release body. It covers changes
+`docs/releases/notes/release-0.3.0-beta.1.md` is the end-user release body. It covers changes
 since the published `v0.2.1-beta.1`: motorized playback and Vinyl operation,
 Jog tuning, EXT switching and DVS setup, multi-deck Instant FX,
 Diagnostics and native-app CPU improvements, and update instructions.
 
 The Jog image at `docs/images/jog-settings-0.3.0-beta.1.png` is a genuine
 native source-built UI capture, promoted from the isolated preview evidence
-described in `docs/jog-settings-cleanup-validation.md`. No settings view code
+described in `docs/validation/jog/jog-settings-cleanup-validation.md`. No settings view code
 changed between that capture and this release. The existing DVS screenshot
 shows the required global enable and all four input assignments. Both images
 were inspected against their captions and instructions.

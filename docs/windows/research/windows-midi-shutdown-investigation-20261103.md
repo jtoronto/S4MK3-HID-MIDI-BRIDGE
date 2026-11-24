@@ -1,7 +1,7 @@
 # Windows virtual MIDI shutdown: native investigation
 
 November 3, 2026. Follow-up to
-[the feasibility probe](windows-midi-probe-validation.md).
+[the feasibility probe](../validation/windows-midi-probe-validation.md).
 
 ## Result
 

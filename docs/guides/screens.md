@@ -1,9 +1,9 @@
 # S4 screen reference
 
 This page describes screen support in the full-controller 0.2.0-beta.1 build.
-For normal operation, start with the [user guide](user-guide.md#screens-and-feedback).
+For normal operation, start with the [user guide](../user-guide.md#screens-and-feedback).
 Screen support is not included in 0.1.1-beta.3 or older downloads; see
-[build availability](../README.md#download-and-install).
+[build availability](../../README.md#download-and-install).
 
 ## Start and stop screens
 
@@ -39,7 +39,7 @@ selector, and STEMS does not flash for a hidden selection latch.
 
 The key follows its own feedback, not track-loading notifications. This prevents
 new keys and the explicit no-key value from being erased during replacement
-or eject. The [key validation record](key-feedback-order-validation.md) contains
+or eject. The [key validation record](../validation/feedback/key-feedback-order-validation.md) contains
 the captured ordering and physical check.
 
 Titles, artwork, time, BPM, waveforms and hotcue/sample pad grids are not shown.
@@ -113,7 +113,7 @@ BRIDGE STOPPED.
 
 For CLI users, screens remain opt-in with **--midi full --screens**. Do not run
 a separate CLI bridge alongside the menu-bar app. Historical manual ownership
-probes are in the [prototype validation record](screen-prototype-validation.md#local-investigation-commands),
+probes are in the [prototype validation record](../validation/screens/screen-prototype-validation.md#local-investigation-commands),
 not the normal setup procedure.
 
 ## Offline previews
@@ -132,12 +132,12 @@ by the encoder. These export commands open neither USB nor MIDI.
 
 ## Validation history
 
-- [Prototype, layout, font and early ownership records](screen-prototype-validation.md)
-- [Initial app integration](app-screen-integration-validation.md)
-- [Guarded NI handover and restoration](screen-driver-handover-validation.md)
-- [Numeric-feedback investigation](screen-feedback-investigation.md)
-- [Musical-key load-order fix](key-feedback-order-validation.md)
-- [Native rendering rules](../src/screens/DESIGN.md)
+- [Prototype, layout, font and early ownership records](../validation/screens/screen-prototype-validation.md)
+- [Initial app integration](../validation/screens/app-screen-integration-validation.md)
+- [Guarded NI handover and restoration](../validation/screens/screen-driver-handover-validation.md)
+- [Numeric-feedback investigation](../research/screens/screen-feedback-investigation.md)
+- [Musical-key load-order fix](../validation/feedback/key-feedback-order-validation.md)
+- [Native rendering rules](../../src/screens/DESIGN.md)
 
 ## Protocol references
 

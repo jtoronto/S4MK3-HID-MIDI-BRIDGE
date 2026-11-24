@@ -5,4 +5,4 @@ This release was renamed to
 controller behavior. Use that release for downloads and update instructions.
 
 The original build's verification remains in
-[its historical validation record](release-0.2.0-beta.2-validation.md).
+[its historical validation record](../validation/release-0.2.0-beta.2-validation.md).

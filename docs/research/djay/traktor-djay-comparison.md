@@ -8,14 +8,14 @@ test. Printed page numbers below refer to the page number in the manual footer;
 the supplied PDF has three preceding cover/front-matter pages.
 
 For the current workflow rather than the historical comparison table, use the
-[user guide](user-guide.md). Current overlays below supersede the older rows.
+[user guide](../../user-guide.md). Current overlays below supersede the older rows.
 
 ## Evidence and naming
 
 The manual is the source for factory Traktor behavior. The bridge's `input`
 suffixes and Djay `target` strings are software identifiers in
 `src/full/catalog.rs`; they do not prove which physical control produced an
-event. Subsequent [physical capture](encoder-capture.md) verified all four
+event. Subsequent [physical capture](../../reference/encoder-capture.md) verified all four
 rotation fields and all four presses, both with and without Shift. All rotation
 names are reversed; left press names are reversed, but right press names are
 correct. These findings supersede the earlier provisional correspondence.
@@ -60,7 +60,7 @@ description of the corrected full-profile physical naming.
 | **Reverse hold, Slip, and jog / haptics** | JOG, TT, and GRID are the three Haptic Drive modes (§3.2, p. 5). JOG supports rim nudge/tempo bend, top-plate scratch, seek and, with Flux, backspin-and-release return to the virtual playhead (§7.2.2, pp. 41–44; §7.11, pp. 63–64). TT rotates during playback and supports scratch (§3.2, p. 5; §7.2.3, pp. 45–47). GRID is for beatgrid correction (Overview, p. 22; §7.19, pp. 80–81). Preferences expose nudge ticks, wheel tension, haptic hotcues, and TT speed (§8, p. 83). REV reverses only while held and automatically enables Flux for the hold (§7.11, pp. 63–64). | Jog touch routes to Djay scratch or jog-seek behavior; untouched motion bends/nudges, Shift seeks, and GRID+jog emits beatgrid-shift actions. JOG/TT buttons choose the bridge's local wheel behavior. `reverse` maps to `turntable{deck}.reverse`; `flux` separately maps to `deckSlipToggle` (`src/full/catalog.rs`, `src/full/mod.rs`). | Djay actions can approximate scratch, seek, bend, beatgrid movement, reverse, and Slip. The catalog has no haptic motor/tension/tick or haptic-cue output, and the full profile deliberately sends no motor command. REV's Traktor hold-and-Flux behavior is not guaranteed by the current separate Reverse and Flux bindings; verify Djay's button mode and reverse/slip behavior in the actual mapping. Jog feel is a live-test question, not inferred from MIDI delivery. |
 | **EXT: live input and MIC/LINE selection** | EXT inserts the channel's external signal as Live Input. Shift+EXT changes the input type/preamplifier: MIC C/D, PHONO, or LINE as applicable (§9.1–9.3, pp. 84–86). In standalone mode, EXT enables a mixer channel and Shift+EXT cycles its input type (§9.5, p. 88). | `EXT` is explicitly listed as unsupported in `src/full/catalog.rs`: no verified Djay live-input-selector action. | Djay's current public docs expose Microphone and Recording Input settings and a Microphone MIDI target, but do not establish the S4 channel's four-way MIC/LINE/PHONO preamp selection or a deck Live Input replacement. Audio-device routing is not the same action as selecting an S4 channel's external input. Keep the equivalence unresolved pending a version-specific live-input test. |
 | **Preview button and encoder scrubbing** | Hold Preview to load/play the selected browser track into the Preview Player; while still holding Preview, turn Browse to seek; release Preview to stop/unload (§7.15, p. 68). | `library_play` maps to `musicLibrary.togglePreview`; `browse_encoder` maps to `musicLibrary.libraryRotary` (Shift: `sectionRotary`) (`src/full/catalog.rs`). There is no held-preview-dependent encoder route in the catalog. | Djay publicly documents browser preview through pre-cue/headphones and custom MIDI targets for Music Library, but those pages do not establish encoder seeking within a playing preview or the Traktor hold-to-stop interaction. Preview start is a plausible equivalent; scrub/hold semantics remain unverified and are not implemented as a conditional route here. |
-| **MUTE, STEMS, and REC pads** | MUTE is a modifier used with a pad to mute/unmute a Remix sample or STEM part; STEMS selects STEM controls on a STEM Deck. STEM pads expose part volume/filter functions (§5.1.2, p. 24; §§7.17–7.18, pp. 71–78). REC enables the Remix Deck Pattern Recorder; pad taps record a quantized repeating sequence (§5.1.2, p. 24; §7.17.1, p. 74). | STEMS and MUTE both select the bridge's Stems pad layer. Four pads map to Neural Mix mute, four to solo, with Shift+STEMS pads 1–4 mapped to exclusive solo; REC maps to `turntable{deck}.recordSample` (`docs/full-midi-test.md`; `src/full/catalog.rs`). | Neural Mix mute/solo is a useful custom performance layout, but not Traktor's modifier-plus-volume/filter behavior. The public Djay sample-recording workflow is performed in Sampler > Edit > pad menu > Record new sample; it records a selected Deck/Microphone source while held and saves to My Samples. That does not prove `recordSample` starts that UI workflow, picks a particular sample slot, or reproduces Traktor's quantized Pattern Recorder. Those native-action semantics require direct testing. |
+| **MUTE, STEMS, and REC pads** | MUTE is a modifier used with a pad to mute/unmute a Remix sample or STEM part; STEMS selects STEM controls on a STEM Deck. STEM pads expose part volume/filter functions (§5.1.2, p. 24; §§7.17–7.18, pp. 71–78). REC enables the Remix Deck Pattern Recorder; pad taps record a quantized repeating sequence (§5.1.2, p. 24; §7.17.1, p. 74). | STEMS and MUTE both select the bridge's Stems pad layer. Four pads map to Neural Mix mute, four to solo, with Shift+STEMS pads 1–4 mapped to exclusive solo; REC maps to `turntable{deck}.recordSample` (`docs/reference/full-midi-test.md`; `src/full/catalog.rs`). | Neural Mix mute/solo is a useful custom performance layout, but not Traktor's modifier-plus-volume/filter behavior. The public Djay sample-recording workflow is performed in Sampler > Edit > pad menu > Record new sample; it records a selected Deck/Microphone source while held and saves to My Samples. That does not prove `recordSample` starts that UI workflow, picks a particular sample slot, or reproduces Traktor's quantized Pattern Recorder. Those native-action semantics require direct testing. |
 | **Shift+Sync / tempo range** | SYNC synchronizes the deck; Shift+SYNC locks/unlocks that deck's tempo fader (§5.1, p. 22; §7.7, pp. 54–56). This is a tempo-fader lock, not a tempo-range selector. | `sync` maps only to `turntable{deck}.bpmSync` and declares no shifted target (`src/full/catalog.rs`). | Djay Sync is mapped, but the factory Shift+Sync tempo lock is not. Do not describe the bridge as changing tempo range with this combination. A separate lock action/equivalent has not been established. |
 | **Crossfader startup and channel assignments** | The quick-start procedure explicitly sets the crossfader to the left-most position before mixing (§6.1, p. 32). Front selectors assign each channel left/right/center-through and the front curve switch selects constant/smooth/sharp (§7.3, pp. 48–49; Overview, p. 30). This is a setup recommendation, not a statement that the controller boots at the left edge. | The crossfader sends its position to `mixer.crossfade`. `front_panel` starts selector caches as unknown and emits a selector pulse when it first observes each decoded selector state (`src/full/mod.rs`, `Translator::default` and `front_panel`, around lines 90–105 and 623–650). | Crossfader position is controllable, and selector state is not simply ignored at bridge startup: the first observed snapshot causes a pulse. Because that pulse is momentary, it can still be lost if Djay has not attached its mapping listener yet. The evidence supports a startup-listener race as a possibility, not a missing initialization pulse. Reapplication after the MIDI mapping/listener is ready or on reconnect is a proposal requiring a lifecycle test; no extra initialization or device I/O was done here. |
 | **Browse direction** | The Browse encoder scrolls/selects tracks and its press loads the selected track (§5.1.1, p. 23; §7.1, pp. 39–40). While Preview is held, turning Browse seeks within the preview (§7.15, p. 68); the manual does not state clockwise/forward polarity or which direction moves down/up the browser list. | The relative encoder routes to `musicLibrary.libraryRotary` (Shift: `sectionRotary`) (`src/full/catalog.rs`). | Browser navigation is mapped, but direction polarity in Djay is not proven by the action name or the manual. Verify clockwise/down-list and counterclockwise/up-list on the running target; do not silently flip the relative sign based on labels. |
@@ -71,7 +71,7 @@ parameter knob selects previous/next effects in its slot using relative
 movement. Release Shift for parameter pickup; dry/wet and the old Shift +
 button next-effect shortcut remain. This requires the matching new mapping.
 It is an ergonomic adaptation for finite-travel knobs, not a claim of Traktor
-parity. See [manual FX operation](user-guide.md#manual-fx-strips).
+parity. See [manual FX operation](../../user-guide.md#manual-fx-strips).
 
 ## Historical shared loop-length and beat-jump proposal
 
@@ -115,10 +115,10 @@ The minimal profile is unchanged.
 
 The user mouse-verified beat jump moving an active loop. Native MIDI/GUI
 jumping, confirmed-size restoration and LED-report checks are recorded in
-[control validation](controls-state-sync-validation.md); a complete physical
+[control validation](../../validation/controls/controls-state-sync-validation.md); a complete physical
 gesture matrix is a separate check. Reinstall a newly generated mapping under
 a new filename when bindings change, preserving custom maps. See the focused
-[live checks](full-midi-test.md#encoder-layout-live-check).
+[live checks](../../reference/full-midi-test.md#encoder-layout-live-check).
 
 ## Current hardware tension and mixer EQ overlay
 
@@ -134,14 +134,14 @@ and this response update needs no mapping export. Physical response and Djay's
 audio floor remain unverified. Normal rings
 illustrate playback/Scratch/pause; TT rings track physical rotation.
 This is not Traktor parity or a published-download promise. See the
-[current workflow](user-guide.md#testing-motorized-playback) and
-[retired absolute Scratch approach](absolute-position-scratch-experiment.md).
+[current workflow](../../user-guide.md#testing-motorized-playback) and
+[retired absolute Scratch approach](../jog/absolute-position-scratch-experiment.md).
 
 The normal full-profile bridge now supports saved hardware wheel tension:
 one Assist / Neutral / Brake setting, with independent per-wheel movement
 and touch response. The user confirmed the focused integration checks on
 October 20, 2026. This is not playback-driven TT rotation, haptic cue points,
-or full Traktor jog parity. See [the integration record](jog-tension-integration.md).
+or full Traktor jog parity. See [the integration record](../../guides/jog-tension-integration.md).
 
 Mixer Filter now arms/cancels a one-shot deck selection; the next channel ON
 toggles only that deck's native Neural Mix EQ without changing the Instant FX
@@ -149,7 +149,7 @@ target. Outside selection, ON still targets Instant FX. ON reports EQ mode
 in white/cyan, brightens for the target deck, and temporarily shows an active
 effect's color. Idle Filter is dim cyan. This custom workflow replaces filter
 reset, not Traktor's mixer-FX selection model. Live MIDI feedback and general
-user acceptance are recorded in [the focused check](neural-mix-eq-check.md).
+user acceptance are recorded in [the focused check](../../validation/controls/neural-mix-eq-check.md).
 
 ## Djay public support evidence
 
@@ -196,32 +196,32 @@ C 5-6 LINE/MIC C and D 7-8 LINE/MIC D. THRU feedback doesn't establish
 global DVS enable or audible input.
 
 Install a newly generated matching mapping for this current-source addition;
-it is not a newly published release. [EXT validation](ext-input-validation.md)
+it is not a newly published release. [EXT validation](../../validation/controls/ext-input-validation.md)
 confirms all four indicator addresses, physical switching, mouse-driven
 feedback and Shift suppression. Channel 4's manually selected
 route is confirmed, but remaining mixer-control coverage, phono-stage behavior
 and four simultaneous sources still need validation. See the
-[external-audio workflow](user-guide.md#external-audio-through-a-deck).
+[external-audio workflow](../../user-guide.md#external-audio-through-a-deck).
 
 ## Explicitly deferred
 
 - **Additional on-device pages and settings:** current source implements Info
   screens and reactive STEMS/MUTE legends, with optional FX pickup warnings.
   Hotcue/sample pad grids, artwork, waveforms, playback-position tracking and
-  an on-controller settings menu are not implemented. See [screens](screens.md).
+  an on-controller settings menu are not implemented. See [screens](../../guides/screens.md).
 - **A+C+B+D settings chord:** deferred. A and C are ordinary left-deck focus
   controls and B and D are ordinary right-deck focus controls (manual §7.16,
   p. 69; bridge selectors in `src/full/mod.rs`). Consuming all four as a settings
   chord conflicts with their normal deck-selection role unless a distinct,
   tested gesture is designed.
 - **Encoder and button physical pairing:** subsequently verified by the
-  isolated [physical capture](encoder-capture.md), including clockwise polarity
+  isolated [physical capture](../../reference/encoder-capture.md), including clockwise polarity
   and Shift. The full-profile naming correction is implemented; fresh musical
   routing and selector-LED validation remain pending.
 - **Preview and navigation:** held Preview+BROWSER scrubbing, Shift+BROWSER
   source selection and Star's Switch Library Table route are implemented.
   Preview toggle state can still need mouse-close recovery; there is no
-  latched-preview mode. See [navigation](user-guide.md#browse-preview-and-load).
+  latched-preview mode. See [navigation](../../user-guide.md#browse-preview-and-load).
 - **Startup and feedback:** physical volume/EQ application, FX pickup and
   confirmed-size restoration are implemented. Musical-key feedback ordering
   is fixed and physically verified for replacement/eject. Reconnection still

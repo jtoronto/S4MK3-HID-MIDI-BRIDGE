@@ -11,7 +11,7 @@ backspin controls affect runtime detection and event-only scratch routing/gain.
   default; normal Vinyl stays on) and an integer TT pitch-bend floor from
   1 to 95% of target RPM, default 1%. These are save/restart runtime
   preferences, not mapping changes or a measured CC4 limit. See the
-  [calibration workflow](tt-speed-scratch-diagnostic.md).
+  [calibration workflow](../validation/jog/tt-speed-scratch-diagnostic.md).
 
 - Current source adds app-managed screen on/off, optional automatic NI-driver
   stopping, restoration, and manual recovery. Screen controls save immediately;
@@ -57,7 +57,7 @@ restart. They do not require mapping regeneration or a Rust toolchain.
 Current-source startup volume/EQ synchronization and shared-FX pickup are
 runtime behavior, not additional sensitivity settings. They need the matching
 feedback mapping. See [operation](controls-state-sync.md) and the
-[user guide](user-guide.md#settings-what-needs-saving-or-a-new-mapping).
+[user guide](../user-guide.md#settings-what-needs-saving-or-a-new-mapping).
 
 Ordinary scratch/bend settings are different: save preferences, install the newly generated
 mapping under a new filename, then select it in Djay. Export uses the current
@@ -86,7 +86,7 @@ the normal force law without changing the saved tension preference in
 `~/Library/Application Support/S4 MK3 Bridge/tension-config.json`.
 Nonzero assist opt-in selects the paced motor runtime even if no tension file is
 supplied, using neutral as the normal selection. Minimal MIDI never accepts these options.
-See [the jog investigation](jog-wheel-investigation.md).
+See [the jog investigation](../research/jog/jog-wheel-investigation.md).
 
 ## Testing-only and future control settings
 
@@ -101,7 +101,7 @@ TT independently
 toggles motorized playback and starts off, while JOG toggles Vinyl red/on and
 blue/off. These testing controls are not a commitment to expose every
 parameter in a release. See the
-[user workflow](user-guide.md#testing-motorized-playback).
+[user workflow](../user-guide.md#testing-motorized-playback).
 
 These are candidates, not options silently applied by this release.
 

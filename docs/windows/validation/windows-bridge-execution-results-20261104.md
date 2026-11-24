@@ -21,7 +21,7 @@ The original bounded checkpoints ended without extensions:
 | Task 2, cross-build and native harness | `2026-11-04T04:07:54Z` | `2026-11-04T12:07:54Z` | Eight-hour bound expired. Software/headless proof accepted narrowly; C14 GUI proof absent. |
 | Task 12, screen access and ownership | `2026-11-04T07:51:40.106Z` | `2026-11-04T11:51:40.106Z` | Four-hour bound expired. Final metadata-source and native/display acceptance absent; unaccepted additions preserved and rolled back. |
 
-No numeric task was reopened by the closeout audits. A closed-unmet row doesn't satisfy its dependencies. The [execution ledger](../.omo/ulw-execute/ledger.jsonl) and [checkpoint record](../.omo/ulw-execute/current-checkpoints.json) retain the history. At this report's read, the checkpoint's F1/F3 summary still said running, while the later ledger completions, current plan checkboxes and parent gates confirmed both audits. The later acceptance records govern the audit state reported here.
+No numeric task was reopened by the closeout audits. A closed-unmet row doesn't satisfy its dependencies. The [execution ledger](../../../.omo/ulw-execute/ledger.jsonl) and [checkpoint record](../../../.omo/ulw-execute/current-checkpoints.json) retain the history. At this report's read, the checkpoint's F1/F3 summary still said running, while the later ledger completions, current plan checkboxes and parent gates confirmed both audits. The later acceptance records govern the audit state reported here.
 
 ## Exact source and absent package
 
@@ -44,14 +44,14 @@ Only these eight files landed in main under the source-landing parent gate:
 
 | Landed path | Accepted scope |
 | --- | --- |
-| [docs/windows-parity-matrix.md](windows-parity-matrix.md) | Current-source workflow inventory and required Windows evidence. |
-| [docs/windows-bridge-validation.md](windows-bridge-validation.md) | Historical unchanged-source Mac baseline. |
-| [docs/windows-device-access.md](windows-device-access.md) | Observed Windows inventory, selection evidence and access limits. |
-| [docs/windows-bridge-contracts.md](windows-bridge-contracts.md) | Shared interface and provisional wire specifications. |
-| [windows/contracts/config-fields.json](../windows/contracts/config-fields.json) | Preference/configuration field specification. |
-| [windows/contracts/managed-lifecycle.json](../windows/contracts/managed-lifecycle.json) | Future managed-process lifecycle specification. |
-| [windows/contracts/wire-layout.json](../windows/contracts/wire-layout.json) | Proposed command/feedback address partition. |
-| [windows/qa/device-inventory.ps1](../windows/qa/device-inventory.ps1) | Standalone PnP inventory diagnostic. |
+| [docs/windows/windows-parity-matrix.md](../windows-parity-matrix.md) | Current-source workflow inventory and required Windows evidence. |
+| [docs/windows/validation/windows-bridge-validation.md](windows-bridge-validation.md) | Historical unchanged-source Mac baseline. |
+| [docs/windows/validation/windows-device-access.md](windows-device-access.md) | Observed Windows inventory, selection evidence and access limits. |
+| [docs/windows/windows-bridge-contracts.md](../windows-bridge-contracts.md) | Shared interface and provisional wire specifications. |
+| [windows/contracts/config-fields.json](../../../windows/contracts/config-fields.json) | Preference/configuration field specification. |
+| [windows/contracts/managed-lifecycle.json](../../../windows/contracts/managed-lifecycle.json) | Future managed-process lifecycle specification. |
+| [windows/contracts/wire-layout.json](../../../windows/contracts/wire-layout.json) | Proposed command/feedback address partition. |
+| [windows/qa/device-inventory.ps1](../../../windows/qa/device-inventory.ps1) | Standalone PnP inventory diagnostic. |
 
 Their exact bytes are recorded in landed-files.json. These are specifications, inventory and baseline records, not the Windows product. Sixteen owned Foundations source additions belonging to the unaccepted build/GUI/runner unit were removed only after their complete snapshots were preserved. The excluded set includes `windows/build-bridge.sh`, `windows/test.ps1`, `windows/verify.ps1`, the build-smoke project, toolchain manifest and Rust dependency example. Its historical named inventory route isn't a runnable route in the landed source.
 
@@ -166,7 +166,7 @@ The relocation map resolves historical worktree evidence-root prefixes to main's
 
 ## Retained resources and remaining closeout
 
-The [retained-resource record](../.omo/ulw-execute/retained-resources.json) preserves later-created build-smoke `bin`/`obj`, the corrected 300-file diagnostic handoff and failed Task 12 source-gate evidence for named audit/ownership consumers. Earlier absence receipts don't make recreated directories absent. Shared SDK, Cargo and NuGet caches or compiler servers aren't adopted for cleanup.
+The [retained-resource record](../../../.omo/ulw-execute/retained-resources.json) preserves later-created build-smoke `bin`/`obj`, the corrected 300-file diagnostic handoff and failed Task 12 source-gate evidence for named audit/ownership consumers. Earlier absence receipts don't make recreated directories absent. Shared SDK, Cargo and NuGet caches or compiler servers aren't adopted for cleanup.
 
 The corrected historical cleanup gate supports three original cleanup rows: build-route temporary roots, refreshed inventory staging and dependency-regression repair resources. Two original lifecycle rows retain provenance gaps: initial native smoke/fixture restoration, and original inventory staging. Missing original helper/PID identities, literal restoration hashes, creation/termination clocks and remote timeout termination aren't filled in by later absence.
 

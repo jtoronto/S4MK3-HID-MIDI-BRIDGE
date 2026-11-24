@@ -36,7 +36,7 @@ historical, including their upper-speed handoff behavior.
   multiplies the existing full-error law. The full response is restored at
   3.25 RPM deviation. Independent braking and nudge Strength/Shape controls
   default to 10x / Shape 1 and 3x / Shape 1.6. The legacy shared gain remains
-  readable for saved configurations; see the [response law](bridge-function-reference.md#current-source-motorized-playback-testing).
+  readable for saved configurations; see the [response law](../../reference/bridge-function-reference.md#current-source-motorized-playback-testing).
 - Normal rings advance with playback, follow Scratch movement and freeze where
   paused. Scratch release resumes from that position. TT rings stay physical.
   Firmware loop flashing is retained and restores the mode's phase on exit.

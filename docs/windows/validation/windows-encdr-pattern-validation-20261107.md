@@ -23,6 +23,6 @@ different service-selected device, so strict serial binding was not proved.
 The separate hardware-free Rust (4/4), portable supervisor (13/13), and
 native JobObject (12/12) checks did not exercise the NI session.
 
-See the [screen supervisor documentation](../windows/screen-supervisor/README.md)
+See the [screen supervisor documentation](../../../windows/screen-supervisor/README.md)
 for the screen-only helper protocol. The result does not qualify the ordinary
 app's NI Bridge mode, blocked-call recovery, or concurrent hardware behavior.

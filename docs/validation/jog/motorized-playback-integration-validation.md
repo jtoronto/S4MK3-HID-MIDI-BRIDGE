@@ -28,7 +28,7 @@ their forces. Powered counts must not become unconditional bend/seek MIDI.
 ## Explicit testing limitation
 
 Current implementation and package evidence are summarized in
-[normal-ring and nudge recovery validation](tt-normal-ring-recovery-validation.md).
+[normal-ring and nudge recovery validation](../feedback/tt-normal-ring-recovery-validation.md).
 It supersedes the earlier behavior described in dated trial sections below.
 On October 30, after testing the correction, the user reported it much better
 and chose extended beta testing. This does not establish every individual

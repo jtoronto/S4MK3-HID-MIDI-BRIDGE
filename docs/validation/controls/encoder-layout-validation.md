@@ -44,7 +44,7 @@ New regressions use the real decoder, feedback cache, translator, and mapping.
 They cover both launch orders, all assignment/curve positions, the latest
 pre-feedback snapshot, zero playback followed by an unloaded track, no later
 replay, native Browse flip flags, and REV release/shutdown ownership.
-Follow the focused live check in [full-midi-test.md](full-midi-test.md).
+Follow the focused live check in [full-midi-test.md](../../reference/full-midi-test.md).
 
 The user's partly checked palette corrections in saved app preferences are
 not promoted to bundled defaults and are not overwritten by packaging.
@@ -88,5 +88,5 @@ rebuilt package, and active-loop one-beat adjustment remain to be tested with
 the updated mapping. Unit tests and successful builds do not establish those
 physical results. No screen or motor reports were added.
 
-Use the focused checks in [full-midi-test.md](full-midi-test.md), installing the
+Use the focused checks in [full-midi-test.md](../../reference/full-midi-test.md), installing the
 new mapping under a new name and preserving existing customized mappings.

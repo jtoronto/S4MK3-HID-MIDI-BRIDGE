@@ -4,12 +4,12 @@ Recorded October 4, 2026. This document captures decisions and research from the
 initial discussion, not a completed engineering specification.
 
 Update October 5: the user authorized the first Encdr connectivity stage.
-See [connectivity-test.md](connectivity-test.md) for its bounded scope and checks.
+See [connectivity-test.md](../../validation/macos/connectivity-test.md) for its bounded scope and checks.
 The minimal macOS virtual MIDI stage was subsequently authorized; see
-[midi-test.md](midi-test.md). Broader MIDI mappings and standalone audio remain
+[midi-test.md](../../validation/midi/midi-test.md). Broader MIDI mappings and standalone audio remain
 future stages.
 
-Update October 8: [standalone hardware research](hardware-bridge-research.md)
+Update October 8: [standalone hardware research](../hardware/hardware-bridge-research.md)
 records the USD 30/50 board search, full-duplex audio requirement, Rust/USB
 software findings, and dated Brooklyn Micro Center availability. S4 audio inputs
 are now required as well as playback; this supersedes the output-only research
@@ -47,7 +47,7 @@ the application actually expects.
 | Audio | S4 master and headphone outputs required for the first usable standalone version |
 | Screens | Working screens in alternate software are not required |
 | FX assignments | Exact behavior deferred; not a blocker for architecture discussion |
-| EXT and front-panel switches | HID fields recorded in [connectivity-test.md](connectivity-test.md#deferred-controls-verified-hid-fields); decoding and Djay assignments deferred |
+| EXT and front-panel switches | HID fields recorded in [connectivity-test.md](../../validation/macos/connectivity-test.md#deferred-controls-verified-hid-fields); decoding and Djay assignments deferred |
 | Hardware | Not selected; Pi Zero was an initial suggestion, not a requirement |
 | Current work | Stage 1 Encdr input/LED probe and stage 2 minimal macOS MIDI output authorized October 5 |
 
@@ -391,5 +391,5 @@ support and community observations are not project test results.
 
 The October 4 discussion contained no project software or hardware tests.
 Stage 1 connectivity work is tracked separately in
-[connectivity-test.md](connectivity-test.md). No Djay MIDI mapping or standalone
+[connectivity-test.md](../../validation/macos/connectivity-test.md). No Djay MIDI mapping or standalone
 audio-forwarding path has been implemented.

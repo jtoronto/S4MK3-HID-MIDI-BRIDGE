@@ -1,7 +1,7 @@
 # Control synchronization and navigation validation
 
 Validated October 23-24, 2026. This is an internal evidence record, not a setup
-guide. User instructions are in [controls-state-sync.md](controls-state-sync.md).
+guide. User instructions are in [controls-state-sync.md](../../guides/controls-state-sync.md).
 
 ## Scope and boundaries
 
@@ -10,7 +10,7 @@ pickup and indications, preservation of confirmed jump size, library-table
 switching and shifted source navigation. Held Preview remains the scrub gesture.
 At this validation stage, intermittent musical-key diagnostics were explicitly
 deferred until the user was present. The subsequent
-[captured key fix](key-feedback-order-validation.md) resolves that issue.
+[captured key fix](../feedback/key-feedback-order-validation.md) resolves that issue.
 
 Native acceptance used a unique virtual MIDI endpoint, **S4 Controls QA 20261023**,
 and freshly imported configurations. The existing custom S4 mapping was not
@@ -121,7 +121,7 @@ The final pair was repeated four times in total. The bridge emitted all ten
 CC 2 messages, but the paused native waveform ended two beats behind the origin.
 `native-normal-move-burst.png` records this without any Shift-size restoration.
 Separate positive/negative four-detent actions work. The native limitation is
-tracked in [issues.md](issues.md); it is not reported as fixed.
+tracked in [issues.md](../../issues.md); it is not reported as fixed.
 
 ## FX pickup and indication: PASS
 
@@ -293,6 +293,6 @@ No push, tag or release publication was requested or performed.
 ## Follow-up use
 
 The user subsequently reported a successful hour-long set with the latest
-build on the actual DJ laptop. The [set record](dj-laptop-set-validation.md)
+build on the actual DJ laptop. The [set record](../macos/dj-laptop-set-validation.md)
 captures that general acceptance without treating it as a focused check of
 every startup, pickup or modifier case above.

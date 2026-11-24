@@ -28,7 +28,7 @@ The retained executable is 14,028,000 bytes, PE32+ x86-64, image base
 ```
 
 This matches the executable recorded in
-[the attended writer-attribution validation](windows-writer-attribution-attended-validation-20261122.md).
+[the attended writer-attribution validation](../validation/windows-writer-attribution-attended-validation-20261122.md).
 That run attributed 32,245 exact zero-force motor submissions and 6,101 ring
 submissions to NIHardwareService, including motor-stack RVAs `0x238a13`,
 `0x25d6ff`, `0x25add9`, `0x248cc4`, `0x237194` and `0x228d1f`.

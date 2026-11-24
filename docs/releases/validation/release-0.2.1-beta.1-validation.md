@@ -1,7 +1,7 @@
 # Release version replacement: 0.2.1-beta.1
 
 October 26, 2026. Internal verification record. End-user notes are in
-[release-0.2.1-beta.1.md](release-0.2.1-beta.1.md).
+[release-0.2.1-beta.1.md](../notes/release-0.2.1-beta.1.md).
 
 ## Scope
 

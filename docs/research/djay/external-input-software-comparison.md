@@ -11,7 +11,7 @@ draft and proposed diagnostic are retained below as history, not current work.
 
 **Later implementation:** current full-profile source adds per-channel EXT
 INT/THRU switching and confirmed-THRU indicators, with
-[attended acceptance on all four channels](ext-input-validation.md).
+[attended acceptance on all four channels](../../validation/controls/ext-input-validation.md).
 Global DVS enablement and input assignments remain manual setup.
 
 ## Conclusion
@@ -37,7 +37,7 @@ own checks.
 
 ## What the attended test established
 
-The [MIC D test record](external-input-routing-test.md) contains the exact
+The [MIC D test record](../../validation/controls/external-input-routing-test.md) contains the exact
 settings and user observations:
 
 - S4 MIC D was assigned to Djay Deck 4 through USB input pair 7-8.
@@ -74,7 +74,7 @@ Hardware eligibility, audio-interface routing and licensing still apply.
 | Mixxx | Deck passthrough from Vinyl Control inputs; separate auxiliary channels | The released control manual documents both. Inspected source places deck passthrough before pregain/pre-fader effects, then applies channel/crossfader gains to main buses separately from PFL. | This is documentation and source-level evidence, not an executed audio test. The pinned source is development code, not a claimed released-binary test. [M1, M2, M3] |
 | Serato DJ Pro | Hardware-dependent software THRU or a hardware analog-input path | Official THRU documentation says most processing is bypassed, with DJ-FX and Sampler retained. | A pass-through mode does not promise the complete normal deck strip; hardware eligibility and downstream mixer behavior matter. [S1] |
 | rekordbox | Hardware analog-input mixing; DVS THROUGH in the reviewed interface setup | The versioned guide describes THROUGH as direct input-to-output, with virtual-deck playback paused. | That section concerns a standalone audio interface. It is not evidence that every controller or every input facility behaves identically. [R1, R2] |
-| Djay Pro for Mac | Per-deck DVS input assignments and THRU; separate global microphone path | The user subsequently confirmed channel 4 fader, FX and mix/cue working with the bridge active; see the [test record](external-input-routing-test.md). | Input pairs A-D are user-confirmed, but not every gain/EQ control or four-source operation. The detailed vendor FX/gain discussions are iOS-scoped. [D1, D2, D3, D6] |
+| Djay Pro for Mac | Per-deck DVS input assignments and THRU; separate global microphone path | The user subsequently confirmed channel 4 fader, FX and mix/cue working with the bridge active; see the [test record](../../validation/controls/external-input-routing-test.md). | Input pairs A-D are user-confirmed, but not every gain/EQ control or four-source operation. The detailed vendor FX/gain discussions are iOS-scoped. [D1, D2, D3, D6] |
 
 Traktor's four deck positions and Mixxx's Vinyl Control 1-4 input slots support
 multi-input configurations in principle. This research did not exercise four

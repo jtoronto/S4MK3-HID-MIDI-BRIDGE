@@ -69,8 +69,8 @@ Focused physical tension checks passed, including both-wheel independence,
 Djay/MIDI/LED coexistence, Stop/Quit, persistence, and explicit restart after
 USB reconnect. Live EQ feedback was captured independently for all four decks;
 the user accepted the physical workflow and dim-cyan idle refinement.
-See [tension integration](jog-tension-integration.md) and
-[EQ validation](neural-mix-eq-check.md).
+See [tension integration](../../guides/jog-tension-integration.md) and
+[EQ validation](../../validation/controls/neural-mix-eq-check.md).
 
 The new Jog image is a capture of the production native view at defaults,
 with an isolated controller and no hardware bridge started. It does not
@@ -80,4 +80,4 @@ Broader actual-laptop testing and exhaustive EQ edge cases remain open.
 The initial laptop launch error for `default-tension-config.json` stopped
 occurring without changes; its cause is not confirmed. Backspin continuation,
 playback-driven platter rotation, screens, and jog-ring touch/position polish
-are not part of this release. See [current issues](issues.md).
+are not part of this release. See [current issues](../../issues.md).

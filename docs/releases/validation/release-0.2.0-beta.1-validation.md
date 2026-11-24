@@ -1,7 +1,7 @@
 # Release preparation: 0.2.0-beta.1
 
 October 24, 2026. Internal validation record. User-facing notes are in
-[release-0.2.0-beta.1.md](release-0.2.0-beta.1.md).
+[release-0.2.0-beta.1.md](../notes/release-0.2.0-beta.1.md).
 
 ## Scope and baseline
 
@@ -14,7 +14,7 @@ Feature work through `1141e1c` and the maintained-guide commit `244fb9d`
 were pushed to `main` before final release preparation. The final preparation
 changes version metadata, release notes and availability documentation only.
 The portable packages include the same controller behavior as the successful
-[hour-long DJ-laptop set](dj-laptop-set-validation.md).
+[hour-long DJ-laptop set](../../validation/macos/dj-laptop-set-validation.md).
 
 This preparation targets an unpublished GitHub draft with DMG and ZIP assets.
 Publication is a separate action. The README continues to identify

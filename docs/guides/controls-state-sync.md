@@ -2,7 +2,7 @@
 
 These controls require 0.2.0-beta.1 and its matching generated Djay mapping.
 They are not included in 0.1.1-beta.3 or older downloads.
-For the complete daily workflow, start with the [user guide](user-guide.md).
+For the complete daily workflow, start with the [user guide](../user-guide.md).
 
 ## Setup
 
@@ -101,4 +101,4 @@ the current numeric screen feedback can stay selected. Older mappings still
 need replacing for the screen/navigation/FX additions above. If Djay shows a
 key but the latest bridge shows `?`, retain the track and report its deck,
 title, Djay key and app Diagnostics. See the
-[captured fix and physical checks](key-feedback-order-validation.md).
+[captured fix and physical checks](../validation/feedback/key-feedback-order-validation.md).

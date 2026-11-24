@@ -1,7 +1,7 @@
 # Shift + FX knob browsing
 
 October 26, 2026. Internal implementation and verification record.
-See the [user guide](user-guide.md#manual-fx-strips) for the normal workflow.
+See the [user guide](../../user-guide.md#manual-fx-strips) for the normal workflow.
 
 ## Behavior and evidence path
 

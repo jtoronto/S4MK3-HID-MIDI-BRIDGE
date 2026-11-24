@@ -73,7 +73,7 @@ SHA-256:
 ## Physical checks and cleanup
 
 Physical ring transitions and actual nudge return to 33 RPM await the
-[attended runbook](tt-speed-scratch-diagnostic.md). No hardware was started,
+[attended runbook](../jog/tt-speed-scratch-diagnostic.md). No hardware was started,
 and no saved settings, mappings or previous packages were replaced.
 No staging or commit operation was made; existing dirty/staged work remains.
 The build cleaned its owned staging directory and verification subscriptions

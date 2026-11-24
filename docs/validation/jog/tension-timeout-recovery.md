@@ -86,4 +86,4 @@ or MIDI ports were opened and no motor commands were sent during these tests.
 
 This change is included in `v0.1.1-beta.3`. Older `v0.1.1-beta.2` packages
 still have the original fatal-timeout behavior. See
-[release validation](release-0.1.1-beta.3.md).
+[release validation](../../releases/notes/release-0.1.1-beta.3.md).

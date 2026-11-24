@@ -2,7 +2,7 @@
 
 October 27, 2026. Software preparation passed; attended passive measurements,
 bounded powered trials and ring-following checks are recorded below.
-Use [the ordered runbook](platter-diagnostic.md).
+Use [the ordered runbook](../../research/jog/platter-diagnostic.md).
 
 ## October 30 source checkpoint
 
@@ -1203,7 +1203,7 @@ The sensor-timed 20 ms speed window, 100 ticks/microsecond calibration,
 one-selected-wheel output, STOP and neutral cleanup remain fixed. This
 provides a repeatable command-line tuning loop, not live parameter changes:
 edit values for the next attended invocation and use a fresh `--out` path.
-The sample command and flag ranges are in `docs/platter-diagnostic.md`.
+The sample command and flag ranges are in `docs/research/jog/platter-diagnostic.md`.
 
 Parameter tests cover CLI defaults and custom overrides, upper-bound
 rejection, custom PI/feed-forward math, startup-step/slew behavior, and the

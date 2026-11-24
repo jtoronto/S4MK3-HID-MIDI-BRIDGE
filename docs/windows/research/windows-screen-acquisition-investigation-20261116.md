@@ -220,7 +220,7 @@ The earlier November 15 WPR report independently lacked attributed HID
 payloads and did not show a broad motor-thread scheduling freeze. It cannot
 fill the remaining device-output gap; generic CPU/wait activity is not a
 motor-write count. See
-`docs/windows-input-screen-latency-analysis-20261115.md`.
+`docs/windows/research/windows-input-screen-latency-analysis-20261115.md`.
 
 ## Smallest useful next verification
 

@@ -1,7 +1,7 @@
 # Physical rings and upper-speed Scratch diagnostic
 
 October 30, 2026. Follow-up to
-[the first speed-Scratch diagnostic](tt-speed-scratch-validation.md).
+[the first speed-Scratch diagnostic](../jog/tt-speed-scratch-validation.md).
 The user reported rings continuing during held TT and normal-mode scratching,
 and returning to noon on pause. They also requested the same Scratch handoff
 at the symmetric upper pitch-bend limit.
@@ -72,7 +72,7 @@ SHA-256:
 UI verification remains excluded for this diagnostic. No agent-triggered
 hardware run occurred. Physical ring alignment/direction and upper-handoff
 audio continuity still need the ordered
-[attended checks](tt-speed-scratch-diagnostic.md).
+[attended checks](../jog/tt-speed-scratch-diagnostic.md).
 
 Previous packages, user mappings, saved preferences, staged work and unrelated
 dirty files were preserved. No commit or staging operation was made.

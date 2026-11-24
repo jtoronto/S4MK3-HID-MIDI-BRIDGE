@@ -52,7 +52,7 @@ Left and right transport always address decks 1 and 2. A/C and B/D selection,
 shift, jogs, tempo, other controls, and MIDI feedback are not implemented here.
 The probe's left Play LED still mirrors the held button; it is not Djay playback
 feedback. EXT and front-panel assignment/curve switches remain deferred as
-recorded in [connectivity-test.md](connectivity-test.md#deferred-controls-verified-hid-fields).
+recorded in [connectivity-test.md](../macos/connectivity-test.md#deferred-controls-verified-hid-fields).
 
 ## Configure Djay
 

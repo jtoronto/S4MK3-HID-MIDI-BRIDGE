@@ -625,8 +625,8 @@ See preservation baseline,
 the source-landing receipts and the main package parent record. These bounded
 checks don't claim that every temporary artifact or GUI option was restored.
 
-The existing [Windows prerequisites](windows-setup.md) and Windows notice in
-the [user guide](user-guide.md) remain accurate. The supported provisioning
+The existing [Windows prerequisites](../windows-setup.md) and Windows notice in
+the [user guide](../../user-guide.md) remain accurate. The supported provisioning
 route has Traktor installed to supply the NI S4 MK3 driver and
 NIHardwareService; Traktor itself needn't be running. Standalone provisioning
 of the required service remains unverified. Keep the NI driver and service;

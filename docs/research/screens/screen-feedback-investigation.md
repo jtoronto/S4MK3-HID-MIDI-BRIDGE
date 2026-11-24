@@ -31,7 +31,7 @@ interface. Playback stayed paused; no bridge, LED, or motor service ran.
 | Selected loop length while OFF | Still no verified source; the tested size flags describe an active loop |
 
 The current source generator and renderer now integrate these fields as
-documented in [screen support](screens.md). Software regressions cover all four
+documented in [screen support](../../guides/screens.md). Software regressions cover all four
 deck routes. Physical readability and live B/C/D acceptance are not established
 by the deck-A probes.
 
@@ -115,7 +115,7 @@ These particular output configurations do not provide a usable selected
 length in the installed version. This does not rule out every possible
 Djay output route; no deeper reverse engineering was undertaken.
 
-The tested fixture is [`loop-duration-20261021-b61c.plist`](fixtures/loop-duration-20261021-b61c.plist),
+The tested fixture is [`loop-duration-20261021-b61c.plist`](../../fixtures/loop-duration-20261021-b61c.plist),
 removed from Djay's user mappings folder and validated with plutil.
 Capture `bash_56` / `mon_APSB380QQHKTY5E5` received 16 packets and was manually
 stopped after testing; no overflow warning or playback ON packet was observed.
@@ -198,7 +198,7 @@ ejected, pitch restored, Finder closed, and desktop control released.
 
 The successful capture was `bash_48` / `mon_KSSR2MTZJX4EWGXG`; its complete
 raw packet log is retained by the session. The exact active mapping is preserved
-in [`fixtures/screen-data-probe-076e0732.plist`](fixtures/screen-data-probe-076e0732.plist).
+in [`fixtures/screen-data-probe-076e0732.plist`](../../fixtures/screen-data-probe-076e0732.plist).
 Djay moved the original import into its user mapping folder; that owned test
 configuration was moved out again after the probe. Existing custom mappings
 were not edited.
@@ -220,9 +220,9 @@ ended normally and foreground control was released.
 - `Contents/Resources/MIDI Mappings/Denon DJ SC6000.djayMidiMapping`
 - `Contents/Resources/MIDI Mappings/AlphaTheta CDJ-3000X.djayMidiMapping`
 - `/Applications/djay Pro.app/Contents/MacOS/djay Pro` (selector strings only)
-- [Version-scoped catalog](djay-action-reference.md), including its historical
+- [Version-scoped catalog](../../reference/djay-action-reference.md), including its historical
   root-output union; that union includes HID fields and is not all MIDI.
-- [Existing MIDI-only capture and historical progress probe](led-feedback.md)
+- [Existing MIDI-only capture and historical progress probe](../../guides/led-feedback.md)
 
 ## Repeat this focused probe
 

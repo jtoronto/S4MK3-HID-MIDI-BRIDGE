@@ -32,7 +32,7 @@ for provenance; those paths are not required to build or use the app.
   the driver and service, but Traktor need not run with Djay. Standalone
   service provisioning and the new app-level mode selection have not been
   qualified on Windows hardware. See the
-  [NI trial validation](windows-ni-decks-validation-20261123.md).
+  [NI trial validation](validation/windows-ni-decks-validation-20261123.md).
 - The separate screen/motor diagnostic route uses a supervisor and
   Encdr-based worker. That worker pins Encdr revision `a5414658a69c4330d10b95f2359371dfc8550326`
   through Cargo. The main bridge retains its separate Encdr revision and a local
@@ -47,9 +47,9 @@ See [Windows development setup](windows-setup.md) for operational instructions, 
 
 ## Evidence and unresolved behavior
 
-- **Earlier diagnostics:** the [November 7 Encdr run](windows-encdr-pattern-validation-20261107.md)
+- **Earlier diagnostics:** the [November 7 Encdr run](validation/windows-encdr-pattern-validation-20261107.md)
   verified independent solid-color display updates, not production pages.
-  The [November 9 wheel trace](windows-motor-timing-validation-20261109.md)
+  The [November 9 wheel trace](validation/windows-motor-timing-validation-20261109.md)
   reproduced chatter on an older loopMIDI build without establishing its cause.
 - **BLOOP source integration:** the SDK boundary and integrated Windows host
   cross-build, and the real Windows worker and its native test executables
@@ -65,23 +65,23 @@ See [Windows development setup](windows-setup.md) for operational instructions, 
   screen, motor and audio acceptance remains open. Historical LoopBe
   or standalone BLOOP transport results do not establish this integrated app's
   behavior. See the
-  [BLOOP integration validation record](bloop-integration-validation-20261115.md)
+  [BLOOP integration validation record](validation/bloop-integration-validation-20261115.md)
   for retained checks, package identity and bounded acceptance evidence.
 - **Software:** the November 7 MIDI-capture development build passed a
   hardware-free Windows native runner with 110 shared, 269 engine and two CLI
   tests, plus 111 host tests. An earlier Encdr integration build passed its
   Windows host, worker and supervisor suites. These are build-specific
   component checks, not end-to-end product acceptance. See
-  [capture validation](windows-midi-capture-validation-20261107.md) and
-  [screen integration validation](windows-encdr-screen-integration-validation-20261107.md).
+  [capture validation](validation/windows-midi-capture-validation-20261107.md) and
+  [screen integration validation](validation/windows-encdr-screen-integration-validation-20261107.md).
 - **Historical LoopBe and feedback:** a bounded isolated proof demonstrated Djay
   crossfader control, independent mouse-driven feedback and rejection of
   outgoing echoes. MIDI-driven changes did not return feedback in that proof.
   A later attended bridge run confirmed physical crossfader control and lit
   LEDs, and observed genuine feedback, including deck-A playback feedback.
   This does not prove every feedback family or control. See the
-  [LoopBe proof](windows-djay-loopbe1-proof-20261104.md) and
-  [recovery record](windows-recovery-validation-20261104.md).
+  [LoopBe proof](validation/windows-djay-loopbe1-proof-20261104.md) and
+  [recovery record](validation/windows-recovery-validation-20261104.md).
 - **Historical startup:** starting the LoopBe bridge before Djay has received startup feedback;
   opening the receiver after Djay can leave fields unknown until values
   change. Initial feedback remains an unresolved reliability boundary, not a
@@ -94,7 +94,7 @@ See [Windows development setup](windows-setup.md) for operational instructions, 
   the user later observed recovery after a large temporary memory increase.
   A later repeat did not stall. The cause and FX-knob recovery after switching
   remain unknown; this is not an established safe workaround. See
-  [comparison validation](windows-loopmidi-comparison-validation-20261107.md).
+  [comparison validation](validation/windows-loopmidi-comparison-validation-20261107.md).
 - **Screens:** a bounded attended Encdr test showed independent left/right
   HOTCUE and STEMS pages, Off/On, Retry and stop/start, with clean process
   exit and NIHardwareService left running. Subsequently the user reported

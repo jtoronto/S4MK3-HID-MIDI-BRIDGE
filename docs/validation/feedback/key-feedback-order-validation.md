@@ -122,5 +122,5 @@ resources are removed. Captures and this record are retained.
 
 The user subsequently reported a successful hour-long set with the latest
 build on the actual DJ laptop. See the
-[set validation record](dj-laptop-set-validation.md) for the report and its
+[set validation record](../macos/dj-laptop-set-validation.md) for the report and its
 scope; it is separate from the focused key replacement/eject check above.

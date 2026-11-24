@@ -21,7 +21,7 @@ screens without requiring MIDI or development knowledge.
 - A Traktor Kontrol S4 MK3, its power adapter, and a USB connection to the Mac.
 
 Windows development builds have separate requirements and remain unaccepted.
-See [Windows setup](docs/windows-setup.md); the downloads described below are
+See [Windows setup](docs/windows/windows-setup.md); the downloads described below are
 for macOS.
 
 ## Download and install
@@ -34,10 +34,10 @@ for macOS.
 
 **0.2.1-beta.1 (build 7)** adds backspin continuation and motor assistance,
 Shift + FX knob effect browsing, and clearer LED/FX feedback. See
-[what changed and how to use it](docs/release-0.2.1-beta.1.md).
+[what changed and how to use it](docs/releases/notes/release-0.2.1-beta.1.md).
 The next beta, **0.3.0-beta.1 (build 8)**, is being prepared as a draft:
 motorized playback, simpler Jog tuning, EXT switching and multi-deck Instant FX.
-See its [illustrated release notes](docs/release-0.3.0-beta.1.md).
+See its [illustrated release notes](docs/releases/notes/release-0.3.0-beta.1.md).
 Until it is published, use the latest published release for downloads.
 Version 0.2.0 adds screens, updated Preview/CUE/library controls, startup channel
 synchronization, FX pickup and jump-size restoration. Use the app and mapping
@@ -111,7 +111,7 @@ lamp/FX-warning corrections are not included in 0.2.0-beta.1.
 per-deck THRU/Internal switching and indicators from Djay's actual THRU state.
 Install a newly generated matching mapping. This addition is not a newly
 published release. EXT lamp locations are confirmed; integrated switching
-acceptance is tracked in the [EXT validation record](docs/ext-input-validation.md).
+acceptance is tracked in the [EXT validation record](docs/validation/controls/ext-input-validation.md).
 
 **Current-source testing build:** TT independently enables motorized playback;
 JOG toggles Vinyl red/on and blue/off. Jog settings include a Vinyl startup
@@ -178,7 +178,7 @@ or with **Enable S4 screens** in the menu bar. HOTCUE and SAMPLES show JUMP,
 active LOOP size, KEY and tempo RANGE; STEMS/MUTE shows the reactive mute/solo
 legend. Install the mapping from the same app under a new filename, preserving
 custom mappings; older mappings lack numeric screen feedback.
-The [screen-driver controls](docs/screen-driver-handover.md) can temporarily
+The [screen-driver controls](docs/guides/screen-driver-handover.md) can temporarily
 stop NIHardwareAgent with confirmation and restore it afterward. Manual recovery
 remains available even with screen support off.
 Published downloads do not provide powered playback rotation; the
@@ -199,7 +199,7 @@ A mismatched knob blinks its FX button; dry/wet uses the strip's main ON button.
 With screens enabled, `FX SYNC` identifies the affected deck, left/right strip,
 knobs 1-3 and `W` for dry/wet. A `?` means feedback is unavailable.
 These changes are not in the published beta.3 download. See
-[setup and operation](docs/controls-state-sync.md).
+[setup and operation](docs/guides/controls-state-sync.md).
 
 ## App settings
 
@@ -236,7 +236,7 @@ Brief controller-input gaps no longer close the bridge. Tension clears while
 readings are missing and returns automatically after fresh readings and new
 wheel movement; Stop/Start is not required. The 50 ms cutoff and touch rules
 remain in place. Physical timeout-recovery testing is still pending; see
-[timeout recovery](docs/tension-timeout-recovery.md).
+[timeout recovery](docs/validation/jog/tension-timeout-recovery.md).
 
 #### Djay scratch and pitch-bend response
 
@@ -340,14 +340,15 @@ for the S4 MK3 protocol documentation and controller support this bridge builds 
 
 ## Developer and reference documentation
 
+- [Documentation index](docs/README.md)
 - [User guide and everyday workflows](docs/user-guide.md)
 - [macOS app, packaging, and developer checks](macos/README.md)
-- [Full mapping layout and test records](docs/full-midi-test.md)
-- [Settings and control tuning](docs/configurable-controls.md)
+- [Full mapping layout and test records](docs/reference/full-midi-test.md)
+- [Settings and control tuning](docs/guides/configurable-controls.md)
 - [Current issue checklist](docs/issues.md)
-- [Traktor comparison and historical evidence](docs/traktor-djay-comparison.md)
-- [Djay action reference](docs/djay-action-reference.md)
-- [Bridge function reference](docs/bridge-function-reference.md)
-- [LED feedback](docs/led-feedback.md)
-- [Standalone hardware research and board shortlist](docs/hardware-bridge-research.md)
-- [Design history](docs/design.md)
+- [Traktor comparison and historical evidence](docs/research/djay/traktor-djay-comparison.md)
+- [Djay action reference](docs/reference/djay-action-reference.md)
+- [Bridge function reference](docs/reference/bridge-function-reference.md)
+- [LED feedback](docs/guides/led-feedback.md)
+- [Standalone hardware research and board shortlist](docs/research/hardware/hardware-bridge-research.md)
+- [Design history](docs/research/design/design.md)

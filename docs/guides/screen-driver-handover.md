@@ -2,7 +2,7 @@
 
 These controls are in 0.2.0-beta.1, not 0.1.1-beta.3 or older downloads.
 No Terminal commands or extra development tools are required on the DJ laptop.
-For the full daily workflow, start with the [user guide](user-guide.md).
+For the full daily workflow, start with the [user guide](../user-guide.md).
 
 ## Start with screens
 
@@ -130,6 +130,6 @@ control protocol or manage NI. The standalone CLI still opts in with `--screens`
 ## Validation records
 
 Native handover, Stop/Quit, restoration and return-to-Traktor evidence are in
-the [handover validation record](screen-driver-handover-validation.md).
-The [DJ-laptop set record](dj-laptop-set-validation.md) captures subsequent
+the [handover validation record](../validation/screens/screen-driver-handover-validation.md).
+The [DJ-laptop set record](../validation/macos/dj-laptop-set-validation.md) captures subsequent
 ordinary use, separately from focused driver fault/recovery checks.

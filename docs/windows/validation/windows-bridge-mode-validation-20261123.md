@@ -23,7 +23,7 @@ BLOOP result is displayed as unavailable, not proof that the package is
 absent. The app links to Microsoft's Preview 14 x64 Transports installer
 and instructions, then lets the user recheck. It does not install anything.
 No WinGet manifest was verified for the specified Preview 14 Transports
-asset. The [Windows development setup](windows-setup.md) provides an
+asset. The [Windows development setup](../windows-setup.md) provides an
 optional PowerShell command that downloads, verifies and opens the same
 installer, not an installer-free deployment.
 

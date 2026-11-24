@@ -259,7 +259,7 @@ R-01/R-02 and R-26/R-28/R-30/R-31 span profiles; the profile map above distingui
 
 ### R-28 Audio-local controls and no audio routing
 
-- Source: `src/main.rs:244-280` (audio interfaces not claimed); `docs/traktor-djay-comparison.md`, `docs/user-guide.md` (master/booth/headphone remain hardware-local); `src/screens.rs:166-168` (no audio detach).
+- Source: `src/main.rs:244-280` (audio interfaces not claimed); `docs/research/djay/traktor-djay-comparison.md`, `docs/user-guide.md` (master/booth/headphone remain hardware-local); `src/screens.rs:166-168` (no audio detach).
 - Current behavior: bridge never routes audio; Djay/NI own audio; booth/master/headphone knobs stay local.
 - Limitation: Windows composite-interface ownership/cleanup untested (GAP-7).
 - Expected Windows: same; HID/display access must not replace or claim audio interfaces.

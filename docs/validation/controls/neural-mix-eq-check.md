@@ -17,7 +17,7 @@ Local capture evidence is `.omo/evidence/neural-eq/djay-feedback.log`.
 The user subsequently reported "Works good" for the physical workflow and
 "Lookin good" after the dim-cyan idle Filter refinement on October 20, 2026.
 On October 25, 2026, the user confirmed working LED/FX behavior in the
-[DJ-laptop test set](dj-laptop-set-validation.md), with no LED/FX fault reported.
+[DJ-laptop test set](../macos/dj-laptop-set-validation.md), with no LED/FX fault reported.
 The scenarios below remain optional exhaustive regression checks, not known
 failures or outstanding normal-use acceptance requirements. No instrumented
 pass of every simultaneous-button scenario is claimed.
