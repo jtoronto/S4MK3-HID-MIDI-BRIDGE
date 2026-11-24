@@ -159,6 +159,7 @@ record; they are not evidence of broader physical acceptance.
 
 - [windows input screen latency analysis 20261115](windows/research/windows-input-screen-latency-analysis-20261115.md)
 - [windows midi shutdown investigation 20261103](windows/research/windows-midi-shutdown-investigation-20261103.md)
+- [Stock JOG tension through NI: message, renderer and Windows verification gap](windows/research/windows-ni-jog-tension-2026-11-24.md)
 - [windows ni motor service investigation 20261123](windows/research/windows-ni-motor-service-investigation-20261123.md)
 - [windows screen acquisition investigation 20261116](windows/research/windows-screen-acquisition-investigation-20261116.md)
 - [windows screen motor diagnostic plan](windows/research/windows-screen-motor-diagnostic-plan.md)
