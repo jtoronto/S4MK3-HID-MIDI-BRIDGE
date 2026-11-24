@@ -11,6 +11,7 @@ enum Event {
     Outputs([DeckOutput; 2]),
     Frames([u64; 2]),
     Quiesced,
+    Tension(u8),
     Closed,
 }
 
@@ -71,6 +72,11 @@ impl Transport for Peer {
         self.events.send(Event::Quiesced)?;
         Ok(())
     }
+
+    async fn set_jog_tension(&mut self, value: u8) -> anyhow::Result<()> {
+        self.events.send(Event::Tension(value))?;
+        Ok(())
+    }
 }
 
 impl Drop for Peer {
@@ -116,6 +122,7 @@ fn busy_worker(gate_first_pair: bool) -> anyhow::Result<Fixture> {
             })
         },
         move |state| assert!(state_tx.send(state).is_ok()),
+        None,
     )?;
     let control = worker.control();
     control.bind_identity(Identity::selected_hid("12345678901234")?)?;
@@ -198,6 +205,45 @@ fn mixed_worker_preserves_pause_then_quiesces_before_closing_healthy_transport()
 }
 
 #[test]
+fn tension_coalesces_behind_screen_pair_and_pause_barrier() -> anyhow::Result<()> {
+    let Fixture {
+        mut worker,
+        control,
+        events,
+        states: _,
+        resume,
+    } = busy_worker(false)?;
+    let paused = PLAYING.map(|output| DeckOutput {
+        playing: false,
+        ..output
+    });
+    control.set_ni_jog_tension(0)?;
+    control.set_ni_jog_tension(255)?;
+    control.queue_ni_decks(paused)?;
+    assert!(resume.send(true).is_ok());
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Outputs(paused));
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Tension(255));
+    worker.stop_ni_decks()?;
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Quiesced);
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Closed);
+    assert!(control.set_ni_jog_tension(3).is_err());
+    Ok(())
+}
+
+#[test]
+fn trial_mode_rejects_managed_tension_without_touching_transport() -> anyhow::Result<()> {
+    let trial = trial::Trial::new("unused".into())?;
+    let mut worker = Worker::start_mixed(
+        |_, _| async { Err::<Peer, _>(Error::Disconnected) },
+        |_| {},
+        Some(trial),
+    )?;
+    assert!(worker.control().set_ni_jog_tension(25).is_err());
+    worker.stop_ni_decks()?;
+    Ok(())
+}
+
+#[test]
 fn mixed_worker_reports_lost_control_without_quiescing_or_replaying_play() -> anyhow::Result<()> {
     for gate_first_pair in [true, false] {
         assert_loss(gate_first_pair)?;
@@ -252,6 +298,7 @@ fn stop_inhibits_play_from_an_in_flight_apply() -> anyhow::Result<()> {
             })
         },
         |_| {},
+        None,
     )?;
     let control = worker.control();
     control.bind_identity(Identity::selected_hid("12345678901234")?)?;
@@ -304,6 +351,7 @@ fn in_flight_play_cannot_enable_a_superseded_mode() -> anyhow::Result<()> {
                 })
             },
             |_| {},
+            None,
         )?;
         let control = worker.control();
         let initial = PLAYING.map(|output| DeckOutput {
@@ -337,5 +385,77 @@ fn in_flight_play_cannot_enable_a_superseded_mode() -> anyhow::Result<()> {
         assert_eq!(events.recv_timeout(WAIT)?, Event::Quiesced);
         assert_eq!(events.recv_timeout(WAIT)?, Event::Closed);
     }
+    Ok(())
+}
+
+#[test]
+fn trial_never_drives_even_when_play_and_turntable_requested() -> anyhow::Result<()> {
+    let path = std::env::temp_dir().join(format!("s4-jogt-worker-{}", std::process::id()));
+    std::fs::write(&path, b"idle")?;
+    let (send, events) = bounded(16);
+    let mut worker = Worker::start_mixed(
+        move |_, live| async move {
+            Ok(Peer {
+                events: send,
+                frame_gate: None,
+                play_gate: None,
+                live,
+            })
+        },
+        |_| {},
+        Some(trial::Trial::new(path.clone())?),
+    )?;
+    let control = worker.control();
+    control.bind_identity(Identity::selected_hid("12345678901234")?)?;
+    control.queue_ni_decks(PLAYING)?;
+    worker.publish([page::Page::Empty; 2]);
+    assert_eq!(
+        events.recv_timeout(WAIT)?,
+        Event::Outputs([DeckOutput::default(); 2])
+    );
+    assert!(matches!(events.recv_timeout(WAIT)?, Event::Frames(_)));
+    assert_eq!(
+        events.recv_timeout(WAIT)?,
+        Event::Outputs(PLAYING.map(|deck| DeckOutput {
+            playing: false,
+            turntable: false,
+            ..deck
+        }))
+    );
+    worker.stop_ni_decks()?;
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Quiesced);
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Closed);
+    std::fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn changed_trial_quiesces_before_restoring_baseline() -> anyhow::Result<()> {
+    let path = std::env::temp_dir().join(format!("s4-jogt-restore-{}", std::process::id()));
+    std::fs::write(&path, b"idle")?;
+    let mut trial = trial::Trial::new(path.clone())?;
+    let paused = [DeckOutput {
+        ring: Some(1),
+        ..DeckOutput::default()
+    }; 2];
+    assert_eq!(trial.command(paused, 0)?, None);
+    std::fs::write(&path, b"25")?;
+    assert_eq!(trial.command(paused, 0)?, Some(25));
+    trial.restored(25);
+    let (send, events) = bounded(4);
+    let (_keep, live) = watch::channel(false);
+    let mut peer = Peer {
+        events: send,
+        frame_gate: None,
+        play_gate: None,
+        live,
+    };
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    shutdown(&runtime, &mut peer, Some(&mut trial))?;
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Quiesced);
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Tension(107));
+    std::fs::remove_file(path)?;
     Ok(())
 }

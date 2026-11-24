@@ -16,6 +16,73 @@ fn drain(peer: &mut super::Wire) -> Vec<Vec<u8>> {
     messages
 }
 
+#[tokio::test(start_paused = true)]
+async fn jog_tension_packets_leave_both_display_acknowledgements_intact() -> TestResult {
+    let (bus, service) = fixture();
+    let (_cancel, rx) = watch::channel(false);
+    let (session, peer) = tokio::join!(
+        Session::connect(&bus, identity()?, rx),
+        service.handshake("S4ABC123", Some(&ACTIVE)),
+    );
+    let mut session = session?;
+    let mut peer = peer?;
+    for value in [25, 244, 107] {
+        session.set_jog_tension(value).await?;
+        assert_eq!(
+            peer.instance.read().await?,
+            [
+                0x75, 0x73, 0x56, 0x03, 0x54, 0x47, 0x4f, 0x4a, value, 0, 0, 0
+            ]
+        );
+    }
+    let pixels = vec![0; protocol::PIXELS];
+    let raster = Raster::new(&pixels)?;
+    let (result, acknowledgements) = tokio::join!(session.publish_pair([raster, raster]), async {
+        for side in [0, 1] {
+            let frame = peer.instance.read().await?;
+            assert_eq!(frame[4], side);
+            peer.instance.write(&YES).await?;
+        }
+        Ok::<_, Error>(())
+    });
+    result?;
+    acknowledgements?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn jog_tension_short_write_is_reported_and_closes_session() -> TestResult {
+    let (bus, service) = fixture();
+    let (_cancel, rx) = watch::channel(false);
+    let (session, peer) = tokio::join!(
+        Session::connect(&bus, identity()?, rx),
+        service.handshake("S4ABC123", Some(&ACTIVE)),
+    );
+    let mut session = session?;
+    let mut peer = peer?;
+    session
+        .resources
+        .as_mut()
+        .ok_or("missing live resources")?
+        .instance
+        .request
+        .max_write = Some(8);
+    assert!(matches!(
+        session.set_jog_tension(25).await,
+        Err(Error::ShortWrite {
+            expected: 12,
+            actual: 8
+        })
+    ));
+    assert_eq!(peer.instance.read().await?.len(), 8);
+    assert!(peer.instance.read().await.is_err());
+    assert!(matches!(
+        session.set_jog_tension(25).await,
+        Err(Error::Disconnected)
+    ));
+    Ok(())
+}
+
 #[tokio::test]
 async fn deck_updates_are_safe_independent_and_preserve_screen_replies() -> TestResult {
     let (bus, service) = fixture();

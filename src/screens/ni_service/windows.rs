@@ -61,6 +61,17 @@ impl NiService {
         self.0.set_deck_output(desired).await
     }
 
+    /// Submit the global JOG tension property on the acquired instance.
+    ///
+    /// The stock capture confirms the write but not service reply semantics.
+    /// Success confirms transport submission only, not physical effect.
+    ///
+    /// # Errors
+    /// Transport failure closes the session; no retry is attempted.
+    pub async fn set_jog_tension(&mut self, value: u8) -> Result<(), Error> {
+        self.0.set_jog_tension(value).await
+    }
+
     /// Apply outputs, checking `allow_play` immediately before each Play write.
     ///
     /// Returns submitted states; a rejected Play has `playing` set to false.

@@ -26,4 +26,9 @@ impl Transport for NiService {
         self.quiesce_decks().await?;
         Ok(())
     }
+
+    async fn set_jog_tension(&mut self, value: u8) -> anyhow::Result<()> {
+        NiService::set_jog_tension(self, value).await?;
+        Ok(())
+    }
 }

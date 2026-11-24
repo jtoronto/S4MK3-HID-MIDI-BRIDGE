@@ -184,6 +184,10 @@ impl Session {
                     .as_ref()
                     .filter(|_| !args.screens.ni_decks)
                     .and_then(full::screens::Output::control),
+                screens
+                    .as_ref()
+                    .filter(|_| args.screens.ni_decks && args.managed.stdin)
+                    .and_then(full::screens::Output::control),
                 stop.clone(),
                 args.capture_handle.clone(),
             )?;

@@ -45,9 +45,18 @@ fn parse_marker(line: &str) -> Option<(u64, &str)> {
     Some((id.parse().ok()?, label))
 }
 
+fn parse_ni_jog_tension(line: &str) -> Option<u8> {
+    let value = line.strip_prefix("ni_jog_tension ")?;
+    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    value.parse().ok()
+}
+
 fn serve(
     reader: impl io::Read,
     control: Option<&Control>,
+    ni_tension: impl Fn(u8) -> anyhow::Result<()>,
     stop: impl Fn(Option<u64>) -> anyhow::Result<()>,
     capture: &crate::midi_capture::Handle,
 ) -> anyhow::Result<()> {
@@ -57,6 +66,10 @@ fn serve(
             stop(Some(id))?;
         } else if let Some((id, label)) = parse_marker(&line) {
             capture.marker(label).emit(id)?;
+        } else if let Some(value) = parse_ni_jog_tension(&line) {
+            if let Err(error) = ni_tension(value) {
+                tracing::warn!(%error, "NI jog tension command rejected");
+            }
         } else if let (Some(control), Some((id, action))) = (control, parse(&line)) {
             control.request(id, action);
         } else {
@@ -71,6 +84,7 @@ fn serve(
 
 pub fn start(
     control: Option<Control>,
+    ni_control: Option<Control>,
     stop: crate::lifecycle::Stop,
     capture: crate::midi_capture::Handle,
 ) -> anyhow::Result<()> {
@@ -80,6 +94,14 @@ pub fn start(
             if let Err(error) = serve(
                 io::stdin(),
                 control.as_ref(),
+                |value| {
+                    #[cfg(windows)]
+                    if let Some(control) = &ni_control {
+                        return control.set_ni_jog_tension(value);
+                    }
+                    let _ = (&ni_control, value);
+                    anyhow::bail!("managed NI decks are not enabled")
+                },
                 |id| stop.request(id),
                 &capture,
             ) {
@@ -122,6 +144,7 @@ mod tests {
         serve(
             b"S4_MIDI_CAPTURE_MARK 41 before_play\nS4_BRIDGE_CONTROL 42 STOP\n".as_slice(),
             None,
+            |_| anyhow::bail!("NI decks not enabled"),
             |id| Ok(tx.try_send(id)?),
             &capture.handle(),
         )?;
@@ -183,6 +206,20 @@ mod tests {
     }
 
     #[test]
+    fn managed_jog_tension_dispatches_only_valid_unsigned_bytes() -> anyhow::Result<()> {
+        let (tx, rx) = crossbeam_channel::unbounded();
+        serve(
+            b"ni_jog_tension 0\nni_jog_tension 255\nni_jog_tension 256\nni_jog_tension +1\nni_jog_tension 1 extra\n".as_slice(),
+            None,
+            |value| Ok(tx.send(value)?),
+            |_| Ok(()),
+            &crate::midi_capture::Handle::default(),
+        )?;
+        assert_eq!(rx.try_iter().collect::<Vec<_>>(), [0, 255]);
+        Ok(())
+    }
+
+    #[test]
     fn managed_stdin_eof_uses_normal_stop_channel() -> anyhow::Result<()> {
         // Given a managed screen worker and a subscribed stop receiver.
         let worker = Worker::start_managed(false)?;
@@ -191,6 +228,7 @@ mod tests {
         serve(
             io::empty(),
             Some(&worker.control()),
+            |_| anyhow::bail!("NI decks not enabled"),
             |_| Ok(stop_tx.try_send(())?),
             &crate::midi_capture::Handle::default(),
         )?;
@@ -217,6 +255,7 @@ mod tests {
         serve(
             "S4_BRIDGE_CONTROL 18446744073709551615 STOP\n".as_bytes(),
             None,
+            |_| anyhow::bail!("NI decks not enabled"),
             |id| Ok(tx.send(id)?),
             &crate::midi_capture::Handle::default(),
         )?;

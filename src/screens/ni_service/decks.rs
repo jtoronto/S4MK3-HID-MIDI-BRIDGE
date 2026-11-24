@@ -13,7 +13,7 @@ const RING_MODE: u32 = 0x036a_734c;
 const TRUE: u32 = 0x7472_7565;
 
 impl<C: Connector> Session<C> {
-    // These setters have no replies; never consume a display acknowledgement.
+    // Scalar writes do not read replies; never consume a display acknowledgement.
     pub(super) async fn scalar_write(
         &mut self,
         side: u32,
@@ -37,6 +37,12 @@ impl<C: Connector> Session<C> {
         .await?;
         self.resources = Some(resources);
         Ok(())
+    }
+
+    pub(super) async fn set_jog_tension(&mut self, value: u8) -> Result<(), Error> {
+        // Stock Windows capture establishes the write, not its reply semantics.
+        self.scalar_write(0x4a4f_4754, (0x0356_7375, u32::from(value)))
+            .await
     }
 
     async fn mode(&mut self, side: u32, turntable: bool) -> Result<(), Error> {

@@ -45,7 +45,10 @@ struct ProbeCounts {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    validate_ni_decks(&args)?;
+    validate_ni_decks(
+        &args,
+        std::env::var_os("S4_BRIDGE_NI_JOGT_TRIAL_FILE").is_some(),
+    )?;
     ensure!(
         args.midi_capture.is_none() || args.midi_backend.port_name().is_some(),
         "--midi-capture requires --midi-backend loopbe or bloop"
@@ -140,7 +143,11 @@ fn main() -> anyhow::Result<()> {
     run(args, tension, jog)
 }
 
-fn validate_ni_decks(args: &Args) -> anyhow::Result<()> {
+fn validate_ni_decks(args: &Args, trial_enabled: bool) -> anyhow::Result<()> {
+    ensure!(
+        !trial_enabled || args.screens.ni_decks,
+        "S4_BRIDGE_NI_JOGT_TRIAL_FILE requires --ni-decks"
+    );
     ensure!(
         !args.screens.ni_decks
             || (cfg!(windows)
@@ -675,6 +682,20 @@ fn full_control_descriptor(original: &DeviceDescriptor) -> anyhow::Result<Device
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trial_requires_ni_decks_before_direct_or_recovery_startup() -> anyhow::Result<()> {
+        for arguments in [
+            vec!["bridge"],
+            vec!["bridge", "--midi", "full"],
+            vec!["bridge", "--list"],
+        ] {
+            let args = Args::try_parse_from(arguments)?;
+            assert!(validate_ni_decks(&args, true).is_err());
+            assert!(validate_ni_decks(&args, false).is_ok());
+        }
+        Ok(())
+    }
 
     #[test]
     fn motor_config_receipt_contains_the_complete_loaded_jog_config() -> anyhow::Result<()> {
