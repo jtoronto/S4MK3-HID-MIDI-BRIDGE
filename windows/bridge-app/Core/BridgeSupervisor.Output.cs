@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using S4Bridge.Diagnostics;
 
 namespace S4Bridge.Core;
 
@@ -85,7 +86,10 @@ public sealed partial class BridgeSupervisor
             motorReadiness?.Accept(text);
             if (stdout) Protocol?.Invoke(id, text);
             else StderrLine?.Invoke(id, text);
-            Output?.Invoke(id, text);
+            // The live platter panel and diagnostic capture consume Protocol at every level.
+            if (!stdout || ActiveSpec?.Run.LogLevel == "debug" ||
+                !text.StartsWith(PlatterSnapshot.Prefix, StringComparison.Ordinal))
+                Output?.Invoke(id, text);
         }
         if (changed) Changed?.Invoke();
     }

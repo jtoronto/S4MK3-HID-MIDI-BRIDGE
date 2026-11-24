@@ -12,6 +12,14 @@ internal static class ChildFixture
         if (args.Contains("--generate-mapping")) return Generate(args);
         if (args[0] == "motor-readiness") return await MotorReadinessFixture.Run();
         var profile = args.ElementAtOrDefault(1) ?? "full";
+        if (args[0] == "platter-log")
+        {
+            Console.WriteLine(DiagnosticsTests.Platter);
+            Console.WriteLine("S4_PLATTER_STATUS invalid");
+            Console.WriteLine("S4_NI_JOG_TENSION submitted 244");
+            Console.Error.WriteLine("Warning about S4_PLATTER_STATUS");
+            return 0;
+        }
         if (args[0] == "ni-tension")
         {
             Console.WriteLine(ProtocolTests.Status(profile, "starting"));

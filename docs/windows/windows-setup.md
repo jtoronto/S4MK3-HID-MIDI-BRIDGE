@@ -206,6 +206,10 @@ process's actual launch command. Unsaved editor changes don't replace it.
 
 ## Attended screen and motor diagnostics
 
+In **Diagnostics**, the live platter readouts update at every log level.
+Raw `S4_PLATTER_STATUS` samples appear in the text log only at **Debug**;
+use **Info** for normal operation. Invalid telemetry still produces a warning.
+
 For motor or ring problems that appear only with screens enabled, use the
 separate [screen/motor diagnostic package instructions](../../windows/qa/screen-motor/README.md).
 

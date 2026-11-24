@@ -21,6 +21,26 @@ internal static class DiagnosticsTests
         "{\"deck\":2,\"rpm\":-1,\"bend_counts_per_second\":-42,\"mode\":\"scratch\"}]}";
     public static void Register(List<(string, Func<Task>)> tests)
     {
+        foreach (var level in new[] { "warn", "info", "debug" })
+            tests.Add(($"raw platter samples respect {level} log detail without suppressing diagnostics", async () =>
+            {
+                using var f = new Fixture();
+                var host = new HostController(f.Resources, f.Root);
+                using var hub = host.Diagnostics;
+                var (exe, args) = Fixture.Child("platter-log", "full");
+                var run = new RunPreferences { LogLevel = level, Profile = "full" };
+                host.Supervisor.Protocol += (_, line) =>
+                {
+                    if (line == Platter) hub.Refresh(true, true);
+                };
+                host.Supervisor.Start(new LaunchSpec(exe, args, run));
+                await host.Supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                Check.Equal(level == "debug", hub.Log.Text.Contains(Platter, StringComparison.Ordinal));
+                Check.True(hub.Presentation.Left.Contains("33.0 RPM", StringComparison.Ordinal));
+                Check.True(hub.Log.Text.Contains("Invalid platter telemetry:", StringComparison.Ordinal));
+                Check.True(hub.Log.Text.Contains("Warning about S4_PLATTER_STATUS", StringComparison.Ordinal));
+                Check.True(hub.Log.Text.Contains("S4_NI_JOG_TENSION submitted 244", StringComparison.Ordinal));
+            }));
         Check.Add(tests, "bounded log deltas recreate retained Unicode text", () =>
         {
             var log = new BoundedLog(); var displayed = ""; long cursor = 0;
@@ -58,12 +78,14 @@ internal static class DiagnosticsTests
             hub.BeginLaunch(id); hub.Accept(id, "S4_MOTOR_CONFIG {\"jog\":{\"platter_target_rpm\":45}}");
             hub.StartCapture(f.Root, new() { Profile = "full", LogLevel = "debug" });
             hub.Accept(Guid.NewGuid(), "MOTOR_REGULATOR wrong launch");
+            hub.Accept(id, Platter);
             hub.Accept(id, "MOTOR_REGULATOR first");
             hub.Log.Append(new string('x', 70000)); hub.Accept(id, "MOTOR_TT_STATE last");
             hub.StopCapture();
             var text = File.ReadAllText(hub.CapturePath!);
             Check.True(text.Contains("\"platter_target_rpm\":45", StringComparison.Ordinal));
             Check.True(text.Contains("MOTOR_REGULATOR first", StringComparison.Ordinal));
+            Check.True(text.Contains(Platter, StringComparison.Ordinal));
             Check.True(text.Contains("MOTOR_TT_STATE last", StringComparison.Ordinal));
             Check.True(!text.Contains("wrong launch", StringComparison.Ordinal));
             Check.True(text.Contains("# Stopped:", StringComparison.Ordinal));
