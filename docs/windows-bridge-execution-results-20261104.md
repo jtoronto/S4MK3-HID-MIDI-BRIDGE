@@ -2,11 +2,13 @@
 
 The requested Windows 11 x64 product was not delivered. Of the 22 implementation tasks, tasks 1, 3 and 4 were verified within their baseline, inventory and specification scopes. The other 19 were closed unmet. All four final audit accountings are complete and parent-confirmed; every audit rejects the original full product. F3 product manual QA was **NOT PERFORMED**.
 
-This is an internal execution-history report, prepared in the Foundations worktree for parent review and landing. It is not installation guidance or a claim of goal completion. The root session has explicitly recorded retention of both dirty worktrees and the six unknown local inventory files. Boulder closure remains with the root session; this report authorizes no deletion.
+This is an internal execution-history report, not installation guidance or a
+statement about current builds. References to original implementation plans,
+temporary receipts, or staging locations are historical, not required inputs.
 
 ## Original goal and outcome
 
-The [approved plan](../.omo/plans/windows-bridge.md) required a portable Windows 11 x64 tray application usable on the DJ laptop without Rust, Cargo, Visual Studio, an SDK or system-wide .NET. It retained the shared Rust engine, used ordinary Avalonia for the host and separately installed LoopBe1 for MIDI, and required current-source parity with the macOS product.
+The original plan required a portable Windows 11 x64 tray application usable on the DJ laptop without Rust, Cargo, Visual Studio, an SDK or system-wide .NET. It retained the shared Rust engine, used ordinary Avalonia for the host and separately installed LoopBe1 for MIDI, and required current-source parity with the macOS product.
 
 That scope included full, minimal and probe modes; held-note and jog-touch ownership; genuine Djay feedback with command echoes rejected; physical controls, pads, LEDs, rings and meters; both screens; both motorized jogs with current tension, Normal, TT and assistance behavior; all six settings areas; saved preferences, mapping export, diagnostics and cooperative shutdown. Audio/pre-cue coexistence, owned NI restoration, exact-package lifecycle checks, every parity row and a 60-minute attended combined-load trial were required. Screens, motors and physical acceptance were never removed from the goal.
 
@@ -23,7 +25,7 @@ No numeric task was reopened by the closeout audits. A closed-unmet row doesn't 
 
 ## Exact source and absent package
 
-The [shared final identity](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/identity.json) pins 333 explicit source files to:
+The shared final identity pins 333 explicit source files to:
 
 ```text
 source_content_sha256:
@@ -38,7 +40,7 @@ The source digest hashes the stored `source_files` array order, without sorting:
 
 The original baseline HEAD was `7ec18cf8a85a5450d2bb97043cd0bfb34555807d`, with existing uncommitted work included through content records. The original 322-file manifest omitted two tracked wrappers, `src/bin/s4mk3-jog-diagnostic.rs` and `src/bin/s4mk3-screen-diagnostic.rs`; later gates separately preserved their original pins. The older validation document's claim to cover every tracked file is therefore qualified. The landing gate protects 325 explicit existing paths in each tree, including those wrappers and `.vscode/launch.json`, then adds eight files. This isn't an assertion of a clean tree or a global filesystem audit.
 
-Only these eight files landed in main under the [source-landing parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/closeout/source-landing/parent-acceptance.json):
+Only these eight files landed in main under the source-landing parent gate:
 
 | Landed path | Accepted scope |
 | --- | --- |
@@ -51,7 +53,7 @@ Only these eight files landed in main under the [source-landing parent gate](../
 | [windows/contracts/wire-layout.json](../windows/contracts/wire-layout.json) | Proposed command/feedback address partition. |
 | [windows/qa/device-inventory.ps1](../windows/qa/device-inventory.ps1) | Standalone PnP inventory diagnostic. |
 
-Their exact bytes are recorded in [landed-files.json](../.omo/evidence/windows-bridge/20261104-01a1a4a4/closeout/source-landing/landed-files.json). These are specifications, inventory and baseline records, not the Windows product. Sixteen owned Foundations source additions belonging to the unaccepted build/GUI/runner unit were removed only after their complete snapshots were preserved. The excluded set includes `windows/build-bridge.sh`, `windows/test.ps1`, `windows/verify.ps1`, the build-smoke project, toolchain manifest and Rust dependency example. Its historical named inventory route isn't a runnable route in the landed source.
+Their exact bytes are recorded in landed-files.json. These are specifications, inventory and baseline records, not the Windows product. Sixteen owned Foundations source additions belonging to the unaccepted build/GUI/runner unit were removed only after their complete snapshots were preserved. The excluded set includes `windows/build-bridge.sh`, `windows/test.ps1`, `windows/verify.ps1`, the build-smoke project, toolchain manifest and Rust dependency example. Its historical named inventory route isn't a runnable route in the landed source.
 
 The final audits observed `windows/bridge-app/`, `windows/build-app.sh`, `dist/windows/` and `dist/S4 MK3 Bridge-0.3.0-beta.1-win-x64.zip` absent. Existing Windows probe directories in `dist/` are populated diagnostics, not an empty product folder or a product ZIP. Main README and the user guide remain untouched by this report.
 
@@ -84,11 +86,11 @@ The table preserves each original task's concrete scope. “Verified” applies 
 | 21 | Accept complete hardware product under combined load | **Closed unmet.** Task 20 unmet. No every-row physical acceptance, both-screen/both-jog/audio/pre-cue join or 60-minute attended trial. |
 | 22 | Finish product setup, developer commands and acceptance records | **Closed unmet.** Task 21 unmet. No usable Windows setup walkthrough. This internal outcome report doesn't complete task 22. |
 
-Task-specific evidence is retained in the [task 1 verification](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-1/verification.json), [task 3 verification](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-3/verification.json) and [task 4 verification](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-4/verification.json). The [F1 requirement inventory](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F1-requirements.json) records individual clauses and gaps beyond this task summary.
+Task-specific evidence is retained in the task 1 verification, task 3 verification and task 4 verification. The F1 requirement inventory records individual clauses and gaps beyond this task summary.
 
 ## What the narrower proofs establish
 
-Task 2's [repaired headless parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-2/clixml-cause-repair/parent-gate-proof.json) confirms C1-C13 and S1-S4 only:
+Task 2's repaired headless parent gate confirms C1-C13 and S1-S4 only:
 
 - C1 preserves the baseline; C2/C3 establish locked diagnostic Rust builds, self-contained managed cross-publish and a native self-test. They don't establish a complete Windows worker or visible application.
 - C4-C6 cover actual native Offline execution, deliberate assertion/missing-executable/missing-native failures, the manifest collision repair, exact error-cause handling and restoration. The Rust injected assertion exited 101; the restored suite exited 0. Three Rust tests and 13 managed assertions are diagnostic coverage.
@@ -96,7 +98,7 @@ Task 2's [repaired headless parent gate](../.omo/evidence/windows-bridge/2026110
 - C11 explicitly preserves full-worker/all-target blockers, including Unix MIDI imports and `create_virtual` errors. C12/C13 cover named local/native cleanup observations with explicit retained resources, not global or perpetual absence.
 - S1 corrects PowerShell CLIXML error normalization and rejects wrong causes. S2 joins actual command/version/stream receipts. S3 declares recreated `bin`/`obj` and the retained runtime rather than recycling old absence claims. S4 distinguishes current managed-component bytes from earlier builds, even when apphost bytes matched.
 
-The final delegated C14 attempt is separately recorded in [authenticated-gui-live-context/gui-proof.json](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-2/authenticated-gui-live-context/gui-proof.json). Its first Observe request returned `kernel_tool_host_denied` before Windows MCP dispatch. That attempt made zero Windows contacts and created zero Windows assets. It supplied no pixels, dynamic module paths, normal Quit exit or disappearance evidence.
+The final delegated C14 attempt is separately recorded in authenticated-gui-live-context/gui-proof.json. Its first Observe request returned `kernel_tool_host_denied` before Windows MCP dispatch. That attempt made zero Windows contacts and created zero Windows assets. It supplied no pixels, dynamic module paths, normal Quit exit or disappearance evidence.
 
 This was a local host-tool scope denial, not evidence of current Windows authentication failure. Earlier Task 2 native smoke/headless trials did contact Windows and have process receipts; “zero contacts” applies only to the final delegated GUI attempt. The denied GUI purpose remains stopped. No alternate or direct route was approved, and neither this report nor audit completion grants one.
 
@@ -108,7 +110,7 @@ The earlier [isolated LoopBe1/Djay proof](windows-djay-loopbe1-proof-20261104.md
 
 ## Checks performed historically and acceptance still absent
 
-The original Task 1 baseline ran from `2026-11-04T03:47:27Z` through `2026-11-04T03:48:24Z`. All eight required Mac commands exited 0, as recorded in the [baseline](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-1/baseline.json) and [logs](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-1/logs/):
+The original Task 1 baseline ran from `2026-11-04T03:47:27Z` through `2026-11-04T03:48:24Z`. All eight required Mac commands exited 0, as recorded in the baseline and logs:
 
 | Command | Original result |
 | --- | --- |
@@ -121,7 +123,7 @@ The original Task 1 baseline ran from `2026-11-04T03:47:27Z` through `2026-11-04
 | `plutil -lint macos/Info.plist` | Passed. |
 | `git diff --check` | Passed, recorded with `GIT_MASTER=1`. |
 
-SwiftPM's existing unhandled-file warning for `macos/Assets/AppIcon.png` and `macos/build-jog-diagnostic.sh` remains. Later, Task 4's parallel `cargo test --locked` failed `explicit_free_play_startup_reaches_log_creation_before_hid` at `tests/jog_play_cli.rs:109`, exit 101. The unchanged serial `cargo test --locked -- --test-threads=1` passed 510 tests, exit 0. Both [parallel](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-4/logs/cargo-test.log) and [serial](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/task-4/logs/cargo-test-serial.log) logs remain. The cause is unexplained; the serial pass neither repairs nor erases the failure. Task 4's filesystem-derived log times and recorded serial-log trailing-blank normalization mustn't be presented as original instrumented command clocks or unqualified raw-byte identity.
+SwiftPM's existing unhandled-file warning for `macos/Assets/AppIcon.png` and `macos/build-jog-diagnostic.sh` remains. Later, Task 4's parallel `cargo test --locked` failed `explicit_free_play_startup_reaches_log_creation_before_hid` at `tests/jog_play_cli.rs:109`, exit 101. The unchanged serial `cargo test --locked -- --test-threads=1` passed 510 tests, exit 0. Both parallel and serial logs remain. The cause is unexplained; the serial pass neither repairs nor erases the failure. Task 4's filesystem-derived log times and recorded serial-log trailing-blank normalization mustn't be presented as original instrumented command clocks or unqualified raw-byte identity.
 
 This documentation worker ran no command, build, test, Git operation, Windows call or hardware check. Historical passes are reused only within their source and diagnostic scopes. No fresh Mac package or Windows product acceptance follows from them.
 
@@ -137,40 +139,40 @@ All four accounting tasks are checked complete in the current plan. This means t
 
 | Audit | Completed evidence assessment | Product verdict |
 | --- | --- | --- |
-| F1, plan compliance | 689 clauses, 2,262 assertion fragments and 290 named entries across 452 blocks, with exact text/span joins. [Report](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F1-compliance.md); [parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F1-parent-acceptance.json). | **REJECT** |
-| F2, code quality | Reviewed accepted source boundaries, state ownership, API/lifetime/queues, shutdown, preferences, driver identity and compatibility. No additional blocking defect proved within the accepted standalone inventory/specification unit; missing product and acceptance are blockers. [Report](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F2-quality.md); [parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F2-parent-acceptance.json). | **REJECT** |
-| F3, real-surface evidence | 340 scenario/assertion rows plus 133 matrix obligations: all 473 **UNMET**, zero product passes. Manual product QA **NOT PERFORMED**; exact ZIP absent. These aren't 473 executed physical tests. [Report](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F3-surface.md); [parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F3-parent-acceptance.json). | **REJECT** |
-| F4, ideal-state fidelity | 133 exact matrix rows and eight plan ideal-state/success joins: 132 rejected/uncovered, IS-8 partial Mac baseline only. Zero Windows acceptance. [Report](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F4-parity.md); [parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/final/F4-parent-acceptance.json). | **REJECT** |
+| F1, plan compliance | 689 clauses, 2,262 assertion fragments and 290 named entries across 452 blocks, with exact text/span joins. Report; parent gate. | **REJECT** |
+| F2, code quality | Reviewed accepted source boundaries, state ownership, API/lifetime/queues, shutdown, preferences, driver identity and compatibility. No additional blocking defect proved within the accepted standalone inventory/specification unit; missing product and acceptance are blockers. Report; parent gate. | **REJECT** |
+| F3, real-surface evidence | 340 scenario/assertion rows plus 133 matrix obligations: all 473 **UNMET**, zero product passes. Manual product QA **NOT PERFORMED**; exact ZIP absent. These aren't 473 executed physical tests. Report; parent gate. | **REJECT** |
+| F4, ideal-state fidelity | 133 exact matrix rows and eight plan ideal-state/success joins: 132 rejected/uncovered, IS-8 partial Mac baseline only. Zero Windows acceptance. Report; parent gate. | **REJECT** |
 
 The rejected first F1/F3/F4 reports remain under `final/attempts/`. Corrected accounting replaces their incomplete coverage and stale archive/GUI statements, not their historical bytes. F2's early archive-digest pending note is qualified by its parent gate: the later archive correction was accepted. All audits share the frozen source identity and null product identity. None supplies permission to ship, publish, restart implementation or bypass the GUI denial.
 
 ## Screen-source rollback and archive preservation
 
-Task 12's [bounded rollback parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/independent/task-12/bounded-closeout/parent-acceptance.json) confirms preservation and removal of four exact unaccepted additions:
+Task 12's bounded rollback parent gate confirms preservation and removal of four exact unaccepted additions:
 
 - `windows/qa/screen-access.ps1`
 - `windows/qa/screen-access.tests.ps1`
 - `windows/qa/fixtures/screen-metadata/historical-identity.json`
 - `windows/qa/fixtures/screen-metadata/service-identity-observations.json`
 
-Their retained copies, incomplete proof and failed corrections are under [source-before-rollback](../.omo/evidence/windows-bridge/20261104-01a1a4a4/independent/task-12/bounded-closeout/source-before-rollback/). The local F4/F5 metadata finding labels aren't final-audit F4. Rollback acceptance doesn't accept those source changes, native metadata, interface-4 open/claim/write/release, both displays, NI identity/handover or concurrent HID/audio.
+Their retained copies, incomplete proof and failed corrections are under source-before-rollback. The local F4/F5 metadata finding labels aren't final-audit F4. Rollback acceptance doesn't accept those source changes, native metadata, interface-4 open/claim/write/release, both displays, NI identity/handover or concurrent HID/audio.
 
 Both evidence archives were accepted after corrections:
 
-- [Foundations parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/closeout/foundations-relocation/parent-acceptance.json): 10,640 regular files and five literal links, 10,645 leaves and 2,579,464,115 file bytes, with zero comparison errors. Its supplemental canonical inventory digest is `7c224dda970f8cef74de2ffa6fc383dab02602401339c9b40acaada4d0569c26`. The old aggregate assertion remains unverified history; it isn't the canonical identity. Literal external compiler links don't make the archive a self-contained toolchain.
-- [Independent parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/closeout/independent-relocation/parent-acceptance.json): all 706 file leaves and represented modes preserved, 51,209,853 bytes. Nineteen directory modes were corrected; 53 empty directories were omitted, with no file descendants missing. Empty topology, ACLs and extended attributes aren't claimed. The current verdict is `r1-correction-verification.json`; the original failed verification remains history.
+- Foundations parent gate: 10,640 regular files and five literal links, 10,645 leaves and 2,579,464,115 file bytes, with zero comparison errors. Its supplemental canonical inventory digest is `7c224dda970f8cef74de2ffa6fc383dab02602401339c9b40acaada4d0569c26`. The old aggregate assertion remains unverified history; it isn't the canonical identity. Literal external compiler links don't make the archive a self-contained toolchain.
+- Independent parent gate: all 706 file leaves and represented modes preserved, 51,209,853 bytes. Nineteen directory modes were corrected; 53 empty directories were omitted, with no file descendants missing. Empty topology, ACLs and extended attributes aren't claimed. The current verdict is `r1-correction-verification.json`; the original failed verification remains history.
 
-The [relocation map](../.omo/evidence/windows-bridge/20261104-01a1a4a4/relocation-map.json) resolves historical worktree evidence-root prefixes to main's `foundations/` and `independent/` archives. Raw receipts retain their original paths and clocks. Windows and temporary paths remain historical. Archive acceptance establishes preservation, not product correctness. This report uses repository-relative links for the intended main-repository location.
+The relocation map resolves historical worktree evidence-root prefixes to main's `foundations/` and `independent/` archives. Raw receipts retain their original paths and clocks. Windows and temporary paths remain historical. Archive acceptance establishes preservation, not product correctness. This report uses repository-relative links for the intended main-repository location.
 
 ## Retained resources and remaining closeout
 
 The [retained-resource record](../.omo/ulw-execute/retained-resources.json) preserves later-created build-smoke `bin`/`obj`, the corrected 300-file diagnostic handoff and failed Task 12 source-gate evidence for named audit/ownership consumers. Earlier absence receipts don't make recreated directories absent. Shared SDK, Cargo and NuGet caches or compiler servers aren't adopted for cleanup.
 
-The [corrected historical cleanup gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/cleanup-recovery/correction/parent-acceptance.json) supports three original cleanup rows: build-route temporary roots, refreshed inventory staging and dependency-regression repair resources. Two original lifecycle rows retain provenance gaps: initial native smoke/fixture restoration, and original inventory staging. Missing original helper/PID identities, literal restoration hashes, creation/termination clocks and remote timeout termination aren't filled in by later absence.
+The corrected historical cleanup gate supports three original cleanup rows: build-route temporary roots, refreshed inventory staging and dependency-regression repair resources. Two original lifecycle rows retain provenance gaps: initial native smoke/fixture restoration, and original inventory staging. Missing original helper/PID identities, literal restoration hashes, creation/termination clocks and remote timeout termination aren't filled in by later absence.
 
-The later [native cleanup parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/bounded-closeout/native-resource-cleanup/parent-acceptance.json) accepts a bounded negative snapshot: 50 exact old QA paths absent, zero visible original-window process fingerprint matches, zero mutations, native and SSH exits 0, and operator release. It doesn't prove universal process absence, service health or those missing original lifecycles. Unknown or inaccessible process metadata and outside-window processes remain outside its claim. No Windows operator grant remains.
+The later native cleanup parent gate accepts a bounded negative snapshot: 50 exact old QA paths absent, zero visible original-window process fingerprint matches, zero mutations, native and SSH exits 0, and operator release. It doesn't prove universal process absence, service health or those missing original lifecycles. Unknown or inaccessible process metadata and outside-window processes remain outside its claim. No Windows operator grant remains.
 
-The [local staging parent gate](../.omo/evidence/windows-bridge/20261104-01a1a4a4/foundations/cleanup-recovery/local-staging-cleanup/parent-acceptance.json) confirms eight proven file removals and their retained snapshots. Six unknown-version files remain in `/tmp/s4inv`: `pnp-devices.json`, `inventory2.json`, `inventory.json`, `run2_inventory.json`, `s4-match-detail.json` and `sha256sums.txt`. Their historical exact-version ownership wasn't established. The nonempty directory and these files remain preserved for adequate ownership proof or an explicit user decision; no further deletion is authorized.
+The local staging parent gate confirms eight proven file removals and their retained snapshots. Six unknown-version files remain in `/tmp/s4inv`: `pnp-devices.json`, `inventory2.json`, `inventory.json`, `run2_inventory.json`, `s4-match-detail.json` and `sha256sums.txt`. Their historical exact-version ownership wasn't established. The nonempty directory and these files remain preserved for adequate ownership proof or an explicit user decision; no further deletion is authorized.
 
 Both registered detached worktrees, `windows-bridge-foundations` and `windows-bridge-independent` under `/Users/joey/Development/S4MK3-HID-MIDI-BRIDGE-wt/`, remain dirty and retained. The root session's read-only Git preflight, recorded in the retained-resource record, found inherited tracked `docs/djay-action-reference.md` edits and untracked investigation/Windows files in each. Neither worktree or branch was removed. They aren't cleaned or scheduled for automatic deletion: removal requires an explicit user approval for the exact operation and per-path ownership disposition. Foundations also remains this report worker's live dependency until handoff.
 

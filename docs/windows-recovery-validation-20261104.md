@@ -27,7 +27,7 @@ This is the current recovery record. The earlier
 [failed execution report](windows-bridge-execution-results-20261104.md)
 is immutable historical evidence and hasn't been changed. Its closed-unmet
 tasks don't become passes because later software exists. The
-[recovery plan](../.omo/plans/windows-recovery.md) retains the original full
+original recovery plan retained the original full
 product obligations and all 133 parity rows.
 
 The initial readiness question expired without confirmation, so no attended
@@ -48,7 +48,7 @@ were not requested. Physical lamp and jog observations remain pending.
 The pinned Windows HID backend pads short reports to the collection's
 95-byte output capacity and returns that padded count. The motor writer
 compared it with the logical 11-byte report length. See
-[first attended attempt](../.omo/evidence/windows-recovery/20261104/first-attended-attempt.md).
+first attended attempt.
 Earlier package and test evidence remains tied to its original snapshots.
 
 The shared output boundary was then corrected without changing report bytes,
@@ -70,7 +70,7 @@ messages, exclusively deck-A Play/Cue note pulses, with no dedicated playback
 CC. The user reported that the Play LED appeared to work. These establish
 basic genuine feedback, not the separate playback-state signal needed for
 full jog/screen integration. See
-[correction and attended retry](../.omo/evidence/windows-recovery/20261104/hid-output-fix/parent-verification.md).
+correction and attended retry.
 
 ## Evidence locations and interpretation
 
@@ -90,7 +90,7 @@ The Windows-only production correction passed required source checks and
 335 native Windows tests. Its subsequent attended run logged the real
 deck-A CC 4 values 127/0 and reported feedback received. Package replacement
 and all-deck acceptance remain pending. See
-[native property trial](../.omo/evidence/windows-recovery/20261104/playback-feedback-investigation/isplaying-variant/native-trial.md).
+native property trial.
 
 The same attended run failed NI screen registration with
 `ShortWrite { expected: 20, actual: 0 }` before any accepted screen frames.
@@ -99,7 +99,7 @@ movement. Managed Stop request 1 was acknowledged; the worker exited 0 and
 accepted its final neutral write. NIHardwareService remained at PID 4968,
 and the subsequent process snapshot found no bridge worker. Screen
 integration remains unmet. See
-[attended screen trial](../.omo/evidence/windows-recovery/20261104/ni-playback-attended-prep/attended-trial.md).
+attended screen trial.
 
 The bounded zero-write correction subsequently passed 342 native tests.
 A user-provided webcam enabled right-side observation while the user was away;
@@ -109,8 +109,8 @@ discriminator then proved that posting the asynchronous reply read before
 the registration write receives a complete 63-byte reply, while reading
 after the same write returns zero bytes. That real reply also exposes a
 trailing word parser mismatch. Those were the limits at that checkpoint. See
-[camera trial](../.omo/evidence/windows-recovery/20261104/ni-write-attended-prep/camera-trial.md)
-and [bootstrap discriminator](../.omo/evidence/windows-recovery/20261104/ni-bootstrap-probe/README.md).
+camera trial
+and bootstrap discriminator.
 
 ### Physical right-screen delivery
 
@@ -149,9 +149,9 @@ were not retained from stdout. Do not infer their physical acceptance from
 the right image. A fresh process snapshot found no bridge, diagnostic or
 Traktor process; NIHardwareService remained PID 4968. The complete stderr,
 receipt and physical image are retained under
-[production trial](../.omo/evidence/windows-recovery/20261104/ni-minimal-attended-prep/).
+production trial.
 The separate diagnostics and their hashes are recorded in
-[setup investigation](../.omo/evidence/windows-recovery/20261104/ni-setup-probe/README.md).
+setup investigation.
 
 An independent source assessment also identified that Mio can retain an
 OS-pending bootstrap write after dropping the future. The subsequent
@@ -180,7 +180,7 @@ Jump-size GUI changes and production screen refresh were not exercised by
 these receive-only captures. The silent clip was left paused at displayed
 00:01.4, key 5A, loop length four active, range 16% and pitch 0%; exact loop
 boundaries were not captured or proved restored. See
-[numeric native evidence](../.omo/evidence/windows-recovery/20261104/playback-feedback-investigation/numeric-state-native.md).
+numeric native evidence.
 
 A receiver-first startup discriminator then captured an initial state burst:
 814 total packets, 346 CCs, all 33 numeric addresses on each of channels
@@ -201,7 +201,7 @@ loaded test deck or dynamic mixer positions. Root reloaded only the owned
 silent clip and later observed it stopped at the beginning; the prior
 00:01.4 position and loop/mixer state were not restored. Subsequent trials
 must use the fresh baseline described in
-[receiver-first startup](../.omo/evidence/windows-recovery/20261104/playback-feedback-investigation/startup-receiver-first.md).
+receiver-first startup.
 
 Main-workspace evidence is under
 `.omo/evidence/windows-recovery/20261104/`, abbreviated `R/` below.
@@ -226,7 +226,7 @@ drains stdout and stderr concurrently, preserves causal errors, and bounds
 cleanup of its owned child. The Windows LED fixture correction retained the
 production validation assertions.
 
-Evidence: [engine parent acceptance](../.omo/evidence/windows-recovery/20261104/engine-parent-acceptance.json),
+Evidence: engine parent acceptance,
 `F/engine-review/review.md`, and
 `F/engine-review/correction-verification.json`. Actual LoopBe/Djay behavior,
 physical HID delivery and teardown remain outside that component approval.
@@ -239,7 +239,7 @@ The final capture test uses a scoped reader with `FileShare.ReadWrite` and
 stops capture before fixture deletion; its content assertion remains intact.
 Neither test correction changed production code.
 
-Evidence: [V6 source landing](../.omo/evidence/windows-recovery/20261104/source-landing/v6-host-landing.md),
+Evidence: V6 source landing,
 `H/corrections-v6/handoff.json`, and `windows/bridge-app/DESIGN.md`.
 The design's workflow coverage target isn't proof of complete native UI parity.
 
@@ -280,17 +280,17 @@ upgraded.
 
 Sources:
 
-- [Engine parent gate](../.omo/evidence/windows-recovery/20261104/engine-parent-acceptance.json)
+- Engine parent gate
   and `F/engine-review/correction-verification.json`.
 - `F/screens-implementation/integrated/receipt.json`, `mac-gates.log`,
   `windows-build.log`, and `review/review.md`.
-- [Integrated native summaries](../.omo/evidence/windows-recovery/20261104/ni-integrated-native-summary.txt).
-- [Initial main landing](../.omo/evidence/windows-recovery/20261104/source-landing/results.json),
-  [continuation](../.omo/evidence/windows-recovery/20261104/source-landing/continuation-results.json),
-  and [independent repairs](../.omo/evidence/windows-recovery/20261104/source-landing/independent-repairs-results.json).
-- [V6 landing checks](../.omo/evidence/windows-recovery/20261104/source-landing/v6-host-landing.md),
-  [parent native host checks](../.omo/evidence/windows-recovery/20261104/host-v6-parent-native.md),
-  and [main package native checks](../.omo/evidence/windows-recovery/20261104/main-package/parent-native.md).
+- Integrated native summaries.
+- Initial main landing,
+  continuation,
+  and independent repairs.
+- V6 landing checks,
+  parent native host checks,
+  and main package native checks.
 
 The earlier main host run was 85/86. Initial Windows all-target compilation
 failed in two examples using Unix-only MIDI APIs; later portability repairs
@@ -366,7 +366,7 @@ the Screens checkbox Off/On prepared healthy access detail in its normal
 section without a false error banner. Its status was pending, not active;
 this UI check sent no screen traffic. Normal tray Quit exited 0, and all five
 original preferences were restored exactly, with no host or worker remaining.
-The [parent native UI receipt](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/parent-native-ui.md)
+The parent native UI receipt
 links these observations to the retained PNGs, session log and restoration
 receipt. This establishes the two specific corrections, not complete UI
 acceptance.
@@ -374,7 +374,7 @@ acceptance.
 A separate CLI trial used the actual r2 worker with the host stopped and
 retained full stdout: generation 1 OFF acknowledged `inactive`, then
 generation 2 ON acknowledged `pending` and `active` within the same worker.
-The [protocol trial](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/protocol-trial.md)
+The protocol trial
 establishes release/reacquisition through the production status contract.
 It isn't a new app-checkbox protocol transcript. The 90-second timer ended
 with exit 0 and accepted neutral debug writes; a later Stop attempt sent
@@ -386,20 +386,20 @@ The camera ended before ON, and its final image was dark with an overexposed
 screen. This trial adds no physical ON-recovery or field-legibility evidence.
 Normal motors, both jogs, audio, remaining recovery paths and endurance remain
 unaccepted. The later
-[UI/package gate](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/integration-ui-gate.md)
-and [integration milestone gate](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/integration-milestone-gate.md)
+UI/package gate
+and integration milestone gate
 approve their bounded scopes. They supersede the earlier pending-review
 wording without turning this trial into complete native workflow acceptance.
 
 The failed `509bcbe4...` archive remains preserved and wasn't transferred for
 native UI use. The r2 inventory retains 161 third-party Rust packages, including
 the actual vendored Mio notice and socket2 notices. See
-[inventory provenance](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/inventory-provenance-r2.md)
+inventory provenance
 for source attribution and the limits of retained compilation evidence.
 
 ### Focused r2 native workflows
 
-The [workflow record](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/native-workflows-progress.md)
+The workflow record
 extends the same r2 package's evidence. All six settings tabs were reachable.
 Duration 0 visibly disabled Start and Save, and Error details showed the
 nonempty range error. Restoring 3600 cleared it. Retrying screens while
@@ -409,7 +409,7 @@ real failure.
 
 Native LED export wrote brightness 90. After an editor change to 45, Import
 restored 90 and Reset restored 127. The exported JSON and
-[roundtrip receipt](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/native-ui-led-roundtrip-proof.json)
+roundtrip receipt
 record exported 90, saved 127, five unchanged original preference hashes and
 zero workers. A separate Palette change saved Deck A cyan; after host 6448
 quit with exit 0, fresh host PID 8008 visibly reloaded cyan. Revealing Jog
@@ -428,7 +428,7 @@ MainWindowHandle 0. A window-based helper's no-match result wasn't an app
 exit. Tray Settings restored the same Diagnostics tab, Debug editor value
 and capture path. Normal Quit exited 0. Before cleanup, the only semantic
 preference difference was the deliberately saved cyan value. The
-[restoration receipt](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/native-workflows-restoration.json)
+restoration receipt
 records preservation of the trial profile, restoration of all five originals
 by SHA-256 and absence of host/worker.
 
@@ -445,21 +445,21 @@ editor values when no child is owned and retains the owned child's actual
 launch command otherwise. Startup still validates and saves, prepares screen
 access, then builds the runtime arguments from saved preferences.
 
-The [source verification](../.omo/evidence/windows-recovery/20261104/launch-preview-fix/verification.md)
+The source verification
 records a rejecting regression before the fix and 93/93 afterward. The
-[package verification](../.omo/evidence/windows-recovery/20261104/launch-preview-fix/package-verification.md)
+package verification
 records ZIP SHA-256
 `264be03947d43903b00a369a1c4edc8c0f424bb0746f4592553144c812e24d62`.
 Its 591 payloads were checked locally and after native extraction, with the
 per-file native hashes retained in
-[preview-native-payloads.json](../.omo/evidence/windows-recovery/20261104/launch-preview-fix/preview-native-payloads.json).
+preview-native-payloads.json.
 The frozen Rust worker remains
 `a9dfbb3b05af134d9eb7f2435200d93487cd38d426b056a4f1efb09c60d84b36`;
 the mapping, screen declaration and corrected 161-package Rust inventory
 are unchanged from r2. These are package identity checks, not a fresh worker
 build or complete build-input attestation.
 
-The [parent native preview record](../.omo/evidence/windows-recovery/20261104/launch-preview-fix/parent-native-preview.md)
+The parent native preview record
 and actual native output record 93/93 passing, exit 0. Retained screenshots
 show stopped host 6232 displaying unsaved Minimal with 45 seconds and Raw on,
 Probe without a MIDI argument, and Full with the requested screens and full
@@ -469,7 +469,7 @@ the native regression's supervised fixture child, not a new physical runtime.
 Normal Quit exited 0; the cleanup receipt records all five original hashes
 matching and no host/worker. No controller Start occurred.
 
-The separate [independent preview gate](../.omo/evidence/windows-recovery/20261104/launch-preview-fix/independent-gate.md),
+The separate independent preview gate,
 `st_01a1a9b0`, approves the preview defect unit. It supersedes the earlier
 pending-review wording, without establishing native running-controller UI
 or physical behavior. Neither package is a published or fully accepted
@@ -483,7 +483,7 @@ the answer at `2026-11-05T04:17:05.116Z`. The supported Windows route keeps
 NIHardwareService running and uses an engine-managed screen session.
 Legacy automatic service stop/restore and manual service stop/restart are
 unsupported, not passing legacy lifecycle tests. The
-[NI applicability addendum](../.omo/evidence/windows-recovery/20261104/remaining-acceptance/ni-workflow-disposition.md)
+NI applicability addendum
 assesses the affected rows individually and retains applicable pending-state,
 ownership, cancellation, screenless/cancel and recovery safety obligations.
 The historical parity matrix isn't rewritten by this decision.
@@ -492,7 +492,7 @@ The canonical installed mapping is **S4 Corrected Playback Windows**, SHA-256
 `dcd21f55908ff6ba88ce87529ea21c43a2a48c0d8525006244ab9584fbe2b172`.
 The unsuffixed and plus1/plus2 mappings differ. LoopBe Mute caused the earlier
 silent receive tests; after the user unchecked it, the
-[corrected receive-only capture](../.omo/evidence/windows-recovery/20261104/provider-gui-20261105/corrected-cue-925323d1-8bcf-43b3-a07b-3cff5259b659.jsonl)
+corrected receive-only capture
 received exactly `0x00000097`, `0x007F0097`, `0x00000197`, `0x007F0197` for
 left then right channel headphone cue off/on, then closed with exit 0.
 That packet result alone wasn't physical-light evidence.
@@ -503,18 +503,18 @@ neither platter moving. Native observation recorded host 9012, worker 10632
 and `Bridge: ready | Screens: active` with full/screens/180-second settings.
 No running motor capture was created: live log updates pulled the outer
 Diagnostics page away from **Start motor capture**. The
-[restoration receipt](../.omo/evidence/windows-recovery/20261104/provider-gui-20261105/attended-preferences-restored.txt)
+restoration receipt
 records app/worker absence and all five original preference hashes matching;
 trial settings were preserved separately. This shutdown observation doesn't
 establish numeric process exit codes.
 
-The [scrolling investigation](../.omo/evidence/windows-recovery/20261104/live-log-scroll-fix/diagnosis.md)
+The scrolling investigation
 records the rejecting local 93/94 regression, corrected 94/94 result and
 successful build with zero warnings/errors. The local source fix is accepted.
 Packaging is underway under `st_01a1a9df`; native package QA hasn't passed
 at this checkpoint. No accepted successor hash or running capture is inferred
 from the local result. The
-[operator runbook](../.omo/evidence/windows-recovery/20261104/remaining-acceptance/operator-runbook.md)
+operator runbook
 keeps live capture and subsequent attended stages behind that gate.
 
 ### Earlier host GUI and mapping checks
@@ -524,7 +524,7 @@ Earlier host GUI checks exercised duration validation, saving and reloading
 restored to a full profile, unlimited duration, stored duration 3600, raw
 reports off and info logging. These observations belong to that earlier
 package, as recorded in
-[workflow-result.json](../.omo/evidence/windows-recovery/20261104/host-ui/workflow-result.json).
+workflow-result.json.
 
 The parent subsequently quit the stopped V3 host normally, confirmed its
 process was gone and launched V6. Setting duration to 0 disabled both window
@@ -533,7 +533,7 @@ restored to 3600. No Start action occurred.
 
 Djay accepted a generated mapping and selected `S4 MK3 Bridge Windows` for
 `LoopBe Internal MIDI`. The
-[mapping setup record](../.omo/evidence/windows-recovery/20261104/djay-mapping-setup.json)
+mapping setup record
 records that the learn editor was closed. Its advanced-options restoration
 field is not a verified account of the final option state. Selection isn't
 evidence of working control or genuine feedback.
@@ -547,7 +547,7 @@ confirmation, exactly one new file appeared:
 `S4 MK3 Bridge Windows 2.djayMidiMapping`. All three existing mapping files
 retained their hashes. The staging file remains in Generated Mappings.
 
-Evidence: [main package parent checks](../.omo/evidence/windows-recovery/20261104/main-package/parent-native.md),
+Evidence: main package parent checks,
 with captures and before/after inventories under `R/host-ui/22-*`,
 `23-main-before-import.txt` and `24-main-after-import.txt`. These checks don't
 establish Start/Stop with a controller, complete UI acceptance or live output.
@@ -582,10 +582,10 @@ The retained license inventories cover 159 Rust and 23 NuGet dependencies.
 Provenance records the exact metadata, notice sources and fallback license
 texts. These inventories aren't general redistribution approval.
 
-Evidence: [provenance.json](../.omo/evidence/windows-recovery/20261104/main-package/provenance.json),
-[verification log](../.omo/evidence/windows-recovery/20261104/main-package/logs/verification.log),
-[ZIP integrity log](../.omo/evidence/windows-recovery/20261104/main-package/logs/unzip-test.log),
-and [parent native verification](../.omo/evidence/windows-recovery/20261104/main-package/parent-native.md).
+Evidence: provenance.json,
+verification log,
+ZIP integrity log,
+and parent native verification.
 
 This is an unsigned integration candidate, not a published or accepted Windows
 product. It has no `screen-access.json` approval declaration. NI driver/service
@@ -604,8 +604,8 @@ It contains the tested corrected worker
 and unchanged ADDA mapping. Its build and archive checks passed; KENSUKE
 verified all 587 manifest payloads. It remains unsigned with no screen-access
 declaration. The earlier package is preserved. See
-[successor provenance](../.omo/evidence/windows-recovery/20261104/main-package-hid-fixed/provenance.json)
-and [parent verification](../.omo/evidence/windows-recovery/20261104/main-package-hid-fixed/parent-native.md).
+successor provenance
+and parent verification.
 
 Source landing recorded 78 landed files with zero hash mismatches and checked
 141 protected files with zero mismatches. Later repair receipts retained zero
@@ -621,7 +621,7 @@ The original Hercules mapping's preservation baseline was:
 `f4bd84d5e400cc5a7d07a69ded1661c27b0b6476b9c5503c452fd0f46792dffb`.
 The main candidate import preserved that file and both other existing
 mappings, adding its own name instead of replacing user work.
-See [preservation baseline](../.omo/evidence/windows-recovery/20261104/preservation-baseline.json),
+See preservation baseline,
 the source-landing receipts and the main package parent record. These bounded
 checks don't claim that every temporary artifact or GUI option was restored.
 
@@ -683,7 +683,7 @@ final delivery still open.
 
 The first controls script's ValidateOnly run exited 0 and generated a mapping
 offline without opening hardware, as recorded in
-[host-v6-parent-native.md](../.omo/evidence/windows-recovery/20261104/host-v6-parent-native.md).
+host-v6-parent-native.md.
 Its preparation artifacts remain under `F/engine/first-control-prep/`.
 The expired readiness question supplied no watching confirmation at that
 checkpoint. The first confirmed-watching launch failed, then the corrected

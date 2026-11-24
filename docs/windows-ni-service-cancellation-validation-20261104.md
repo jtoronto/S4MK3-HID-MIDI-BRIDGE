@@ -131,9 +131,9 @@ enumeration, no interfaces opened and `EXIT: 0`. Stopped Screens Off/On
 prepared healthy access detail without a false error banner; this was pending
 access, not active screens. Normal Quit exited 0 and all five original
 preferences were restored exactly. See
-[native UI evidence](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/parent-native-ui.md).
+native UI evidence.
 
-The separate [r2 worker protocol trial](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/protocol-trial.md)
+The separate r2 worker protocol trial
 retains full stdout with OFF generation 1 `inactive`, followed by ON generation
 2 `pending` and `active`, in one worker launch. This closes the missing retained
 release/reacquisition acknowledgment evidence for that CLI trial. It doesn't
@@ -145,8 +145,8 @@ and NIHardwareService Running, PID 4968.
 
 The camera ended before ON and its dark, overexposed final image cannot prove
 physical ON recovery or field appearance. The later
-[UI/package gate](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/integration-ui-gate.md)
-and [integration milestone gate](../.omo/evidence/windows-recovery/20261104/app-ui-corrected-package/integration-milestone-gate.md)
+UI/package gate
+and integration milestone gate
 approve their bounded software/native scopes. This supersedes the earlier
 pending-review statement. The recovery plan is now 8/11 milestones complete;
 normal motors, both jogs, audio, all fields, full recovery and endurance

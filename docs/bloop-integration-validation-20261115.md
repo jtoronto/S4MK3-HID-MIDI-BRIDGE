@@ -1,5 +1,20 @@
 # BLOOP integration validation - November 15, 2026
 
+## Earlier transport probes
+
+On November 14, Preview 13 Basic Loopback (`1.0.1.8`) passed two independent
+WinMM process round trips on the test PC, including handle closure and
+transient endpoint removal. Each process also received its own sends, so a
+distinct return message was required to prove bidirectional delivery.
+
+A separate Djay test moved the crossfader with a mapped MIDI command and
+confirmed the change in Djay's UI; the decoder rejected the command echo.
+Receive-only tests with empty and loaded decks both timed out waiting for
+Djay's configured crossfader feedback. A synthetic legacy WinRT output reached
+WinMM on the same endpoint but did not explain why Djay's output was absent.
+These were feasibility tests, not production backend or throughput checks.
+The subsequent integrated test below established genuine Djay feedback.
+
 The isolated `omos/bloop-integration` branch starts at
 `986a0dbcd0e2fd4f6207fb12ac23c09ba1a271c0`. Local implementation, regression
 checks and private packaging are complete. Attended Windows SDK operation,

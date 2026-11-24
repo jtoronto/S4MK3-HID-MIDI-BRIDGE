@@ -6,8 +6,8 @@ digits. The executable requires Windows and is published with its own .NET
 runtime. It has no Encdr dependency and performs no NI, HID, MIDI, motor, driver
 or service operations.
 
-The binding interface is
-`.omo/evidence/encdr-public-session-a5414658-20261105/production-helper-contract.md`.
+This document describes the private screen-only protocol used by the separate
+screen/motor diagnostic route, not the ordinary app's in-process NI Bridge mode.
 The bridge must launch this supervisor inside its outer kill-on-close job,
 assigning the supervisor before allowing it to execute. The supervisor creates
 an unnamed non-inheritable kill-on-close job for its worker, retains the job and

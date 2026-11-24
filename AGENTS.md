@@ -186,10 +186,10 @@ The working tree is shared and can contain user edits and unfinished work.
 - Reuse the retained Windows cross-build toolchain instead of preserving
   another SDK or dependency copy for each run. A build may stage its own copy
   inside its temporary workspace.
-- Keep `.omo/evidence` for useful results, not whole build trees: record what
-  was tested, outcomes and limits, relevant logs and hashes, and unique
-  captures or observations. Preserve user mappings and source snapshots not
-  otherwise accounted for.
+- Use `.omo/evidence` as scratch space only while work is in progress. Before
+  clearing it, record durable findings, verification limits and any necessary
+  provenance in `docs/`. Keep user mappings and irreplaceable source snapshots
+  outside the scratch tree. Do not make builds or maintained docs depend on it.
 - Keep an exact temporary package while an attended test or investigation
   needs it. Once the work is finished, preserve the useful evidence and remove
   the task-owned build workspace. Do not rely on the OS to clear it, and do

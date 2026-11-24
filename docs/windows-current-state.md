@@ -4,8 +4,8 @@ The source tree contains a Windows implementation and private development
 packages. Windows support is **not
 accepted or published as a ready-to-use download**. Historical test results
 below apply to the particular builds in their records, not necessarily every
-subsequent working-tree change. Some detailed records link to local
-`.omo/evidence` artifacts that are not tracked in Git.
+subsequent working-tree change. Dated records may name temporary artifacts
+for provenance; those paths are not required to build or use the app.
 
 ## Architecture
 
@@ -47,6 +47,10 @@ See [Windows development setup](windows-setup.md) for operational instructions, 
 
 ## Evidence and unresolved behavior
 
+- **Earlier diagnostics:** the [November 7 Encdr run](windows-encdr-pattern-validation-20261107.md)
+  verified independent solid-color display updates, not production pages.
+  The [November 9 wheel trace](windows-motor-timing-validation-20261109.md)
+  reproduced chatter on an older loopMIDI build without establishing its cause.
 - **BLOOP source integration:** the SDK boundary and integrated Windows host
   cross-build, and the real Windows worker and its native test executables
   cross-build. Portable process/host and packager regressions pass. These are

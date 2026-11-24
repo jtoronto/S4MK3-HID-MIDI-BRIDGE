@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>endpointName</key><string>S4 Screen Data Probe 076e0732</string>
+<key>schemeVersion</key><integer>1</integer>
+<key>version</key><integer>0</integer>
+<key>controls</key><array>
+<dict><key>keyPath</key><string>application.tempoSliderRangeNext</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>1</integer><key>midiMessageType</key><integer>1</integer><key>output</key><dict><key>midiMinValue</key><integer>1</integer></dict></dict>
+<dict><key>keyPath</key><string>application.tempoSliderRangeMinus</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>2</integer><key>midiMessageType</key><integer>1</integer><key>output</key><dict><key>midiMinValue</key><integer>1</integer></dict></dict>
+<dict><key>keyPath</key><string>application.tempoSliderRangePlus</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>3</integer><key>midiMessageType</key><integer>1</integer><key>output</key><dict><key>midiMinValue</key><integer>1</integer></dict></dict>
+</array>
+<key>outputs</key><array>
+<dict><key>keyPath</key><string>turntable1.playing</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>0</integer><key>midiMessageType</key><integer>3</integer><key>midiMinValue</key><integer>0</integer><key>midiMaxValue</key><integer>127</integer></dict>
+<dict><key>keyPath</key><string>turntable1.song.loadingSuccess</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>0</integer><key>midiMessageType</key><integer>1</integer><key>midiMinValue</key><integer>0</integer><key>midiMaxValue</key><integer>127</integer></dict>
+<dict><key>keyPath</key><string>application.tempoSliderRange</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>10</integer><key>midiMessageType</key><integer>3</integer><key>midiMinValue</key><integer>0</integer><key>midiMaxValue</key><integer>127</integer></dict>
+<dict><key>keyPath</key><string>application.tempoSliderRangeIndex</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>11</integer><key>midiMessageType</key><integer>3</integer><key>midiMinValue</key><integer>0</integer><key>midiMaxValue</key><integer>127</integer></dict>
+<dict><key>keyPath</key><string>userDefaults.DJTempoSliderRange</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>12</integer><key>midiMessageType</key><integer>3</integer><key>midiMinValue</key><integer>0</integer><key>midiMaxValue</key><integer>127</integer></dict>
+<dict><key>keyPath</key><string>application.tempoRangeIs6Percent</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>13</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>application.tempoRangeIs10Percent</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>14</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>application.tempoRangeIs16Percent</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>15</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>application.tempoRangeIs75Percent</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>16</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>customProcessor.tempoSliderRange</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>17</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>customProcessor.tempoSliderRangeIndex</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>18</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>customProcessor.tempoRangeIs6Percent</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>19</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>customProcessor.tempoRangeIs10Percent</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>20</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>customProcessor.tempoRangeIs16Percent</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>21</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>customProcessor.tempoRangeIs75Percent</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>22</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.autoLoop1BeatIntervalActive</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>24</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.autoLoop2BeatIntervalActive</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>25</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.autoLoop4BeatIntervalActive</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>26</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.autoLoop8BeatIntervalActive</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>27</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.autoLoop16BeatIntervalActive</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>28</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.skipping1BeatInterval</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>29</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.skipping2BeatInterval</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>30</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.skipping4BeatInterval</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>31</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.skipping8BeatInterval</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>32</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.skipping16BeatInterval</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>33</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.song.keyIndex</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>34</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntable1.displayKeyIndex</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>35</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntableSelected.song.keyIndex</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>36</integer><key>midiMessageType</key><integer>3</integer></dict>
+<dict><key>keyPath</key><string>turntableSelected.displayKeyIndex</string><key>controlType</key><string>control</string><key>midiChannel</key><integer>15</integer><key>midiData</key><integer>37</integer><key>midiMessageType</key><integer>3</integer></dict>
+</array>
+</dict></plist>

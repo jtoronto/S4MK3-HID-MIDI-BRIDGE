@@ -115,7 +115,7 @@ These particular output configurations do not provide a usable selected
 length in the installed version. This does not rule out every possible
 Djay output route; no deeper reverse engineering was undertaken.
 
-The tested fixture is `.omo/evidence/screens/loop-duration-20261021-b61c.plist`,
+The tested fixture is [`loop-duration-20261021-b61c.plist`](fixtures/loop-duration-20261021-b61c.plist),
 removed from Djay's user mappings folder and validated with plutil.
 Capture `bash_56` / `mon_APSB380QQHKTY5E5` received 16 packets and was manually
 stopped after testing; no overflow warning or playback ON packet was observed.
@@ -198,7 +198,7 @@ ejected, pitch restored, Finder closed, and desktop control released.
 
 The successful capture was `bash_48` / `mon_KSSR2MTZJX4EWGXG`; its complete
 raw packet log is retained by the session. The exact active mapping is preserved
-locally at `.omo/evidence/screens/screen-data-probe-076e0732.plist`.
+in [`fixtures/screen-data-probe-076e0732.plist`](fixtures/screen-data-probe-076e0732.plist).
 Djay moved the original import into its user mapping folder; that owned test
 configuration was moved out again after the probe. Existing custom mappings
 were not edited.
@@ -226,8 +226,8 @@ ended normally and foreground control was released.
 
 ## Repeat this focused probe
 
-These commands use the local retained fixture in this development checkout,
-not a release resource. Keep this terminal open so its path variables survive.
+From the repository root, use the checked-in diagnostic fixture, not the
+release mapping. Keep this terminal open so its path variables survive.
 
 1. Pause all decks and stop any previous `feedback-capture` process using
    `S4 Screen Data Probe 076e0732`. Do not run this during a set. In Djay's
@@ -241,7 +241,7 @@ not a release resource. Keep this terminal open so its path variables survive.
    cargo build --locked --example feedback-capture
    probe_dir="$(mktemp -d /tmp/s4-screen-data-recheck.XXXXXX)"
    probe_mapping="$probe_dir/Screen Data Recheck-$(uuidgen).djayMidiMapping"
-   cp .omo/evidence/screens/screen-data-probe-076e0732.plist "$probe_mapping"
+   cp docs/fixtures/screen-data-probe-076e0732.plist "$probe_mapping"
    open -a "/Applications/djay Pro.app" "$probe_mapping"
    ```
 

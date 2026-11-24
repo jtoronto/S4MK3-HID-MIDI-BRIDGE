@@ -37,7 +37,7 @@ Use the user-approved anti-aliased bold sans-serif direction on every screen,
 including STEMS/MUTE, stopped output and the diagnostic patterns. S4 Screen Sans
 is a pre-rendered glyph atlas derived from Liberation Sans Bold 2.1.5, an
 Arial-compatible OFL font. Its license accompanies the source and prototype.
-The approved comparison is `.omo/evidence/screens/font-preview-20261022/comparison.png`.
+See the [approved font comparison](../../docs/images/s4-screen-font-comparison.png).
 
 Keep labels and SELECT at 16 pixels, and select the largest 32/40/48-pixel
 numeric font whose measured advance fits the 136-pixel value area.
