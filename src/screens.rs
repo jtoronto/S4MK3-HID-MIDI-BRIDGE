@@ -1,7 +1,7 @@
 //! S4 display raster and interface-scoped USB output, independent of HID/audio.
 //!
 //! Raw blit framing follows Mixxx's TraktorKontrolS4MK3Screens.qml:
-//! 16-byte 0x84/0x21 header, RGB565 big-endian pixels, 4-byte 0x40 footer.
+//! 16-byte 0x84/0x21 header, BGR565 big-endian pixels, 4-byte 0x40 footer.
 
 use std::io::Write as _;
 use std::path::Path;
@@ -106,12 +106,14 @@ impl Frame {
             0xf0,
         ]);
         for pixel in &self.pixels {
-            output.extend_from_slice(&pixel.to_be_bytes());
+            // The panel interprets the outer five-bit channels in BGR order.
+            let wire = (pixel & 0x07e0) | ((pixel & 0x001f) << 11) | (pixel >> 11);
+            output.extend_from_slice(&wire.to_be_bytes());
         }
         output.extend_from_slice(&[0x40, 0, display.index(), 0]);
     }
 
-    /// Offline view of the exact quantized pixels sent to the controller.
+    /// Offline view of the logical colors at the controller's native resolution.
     ///
     /// # Errors
     /// Returns an error if the destination exists or file creation/writing fails.
@@ -159,7 +161,7 @@ pub fn test_pattern(display: Display) -> Frame {
         frame.rect(16 + index * 76, 80, 60, 90, color);
         frame.text(16 + index * 76, 180, label, 1, rgb(255, 255, 255));
     }
-    frame.text(16, 216, "320 X 240 / RGB565", 1, rgb(255, 255, 255));
+    frame.text(16, 216, "320 X 240 / BGR565", 1, rgb(255, 255, 255));
     frame.rect(0, 0, 8, 8, rgb(255, 255, 255));
     frame.rect(WIDTH - 8, HEIGHT - 8, 8, 8, rgb(255, 255, 0));
     frame
@@ -229,10 +231,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn raw_blit_frames_both_displays_with_big_endian_pixels() {
+    fn raw_blit_frames_both_displays_with_big_endian_bgr_pixels() {
         // Given a known RGB565 frame.
         let mut frame = Frame::default();
         frame.rect(0, 0, 1, 1, rgb(255, 0, 0));
+        frame.rect(1, 0, 1, 1, rgb(0, 255, 0));
         frame.rect(WIDTH - 1, HEIGHT - 1, 1, 1, rgb(0, 0, 255));
         for display in [Display::Left, Display::Right] {
             // When serialized using the real transport framing.
@@ -261,8 +264,8 @@ mod tests {
                     0xf0,
                 ]
             );
-            assert_eq!(&packet[16..18], &[0xf8, 0]);
-            assert_eq!(&packet[16 + PIXEL_BYTES - 2..16 + PIXEL_BYTES], &[0, 0x1f]);
+            assert_eq!(&packet[16..20], &[0, 0x1f, 0x07, 0xe0]);
+            assert_eq!(&packet[16 + PIXEL_BYTES - 2..16 + PIXEL_BYTES], &[0xf8, 0]);
             assert_eq!(&packet[16 + PIXEL_BYTES..], &[0x40, 0, display.index(), 0]);
         }
     }
