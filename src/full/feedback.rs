@@ -106,7 +106,8 @@ impl FeedbackState {
             return Some(changed);
         }
         let changed = self.info.apply(message);
-        (deck < 4 && (80..=112).contains(&message.number) || deck == 6 && message.number == 8)
+        (deck < 4 && (80..=super::catalog::TEMPO_POSITION_CC).contains(&message.number)
+            || deck == 6 && message.number == 8)
             .then_some(changed)
     }
 

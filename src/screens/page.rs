@@ -1,6 +1,6 @@
 //! Live-data quadrants and a reactive physical STEMS legend.
 
-pub use super::info::Info;
+pub use super::info::{Info, TempoPickup};
 use super::{Frame, HEIGHT, WIDTH, rgb};
 
 const BACKGROUND: u16 = rgb(10, 12, 18);

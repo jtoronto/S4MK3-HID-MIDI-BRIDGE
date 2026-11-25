@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 use super::catalog::PadMode;
 use super::feedback::FeedbackState;
+use super::tempo_pickup::Indication;
 
 const REPORT_LEN: usize = 95;
 const MIXER_ROW: usize = 4;
@@ -232,6 +233,7 @@ pub struct LocalState {
     pub held: [bool; 11],
     /// Physical tempo-fader positions normalized to 0.0..=1.0.
     pub tempo: [Option<f32>; 2],
+    pub(super) tempo_indication: [Indication; 2],
     /// Jump-size selection belongs to logical decks, not physical sides.
     pub move_selecting: [bool; 4],
     pub eq_selecting: bool,
@@ -258,6 +260,7 @@ impl Default for LocalState {
             grid: [false; 2],
             held: [false; 11],
             tempo: [None; 2],
+            tempo_indication: [Indication::Off; 2],
             move_selecting: [false; 4],
             eq_selecting: false,
             mute_fx_buttons: true,
@@ -430,10 +433,18 @@ impl ButtonRenderer<'_> {
             [18, 41][side],
             self.palette(Color::White, self.local.grid[side]),
         );
-        if let Some(tolerance) = self.config.tempo_center_tolerance {
-            if self.local.tempo[side].is_some_and(|position| (position - 0.5).abs() <= tolerance) {
-                self.set([11, 34][side], self.palette(Color::White, true));
-            }
+        let detent = match self.local.tempo_indication[side] {
+            Indication::Mismatch(_) => Some(Color::Red),
+            Indication::Center => Some(Color::Blue),
+            Indication::Off => self
+                .config
+                .tempo_center_tolerance
+                .zip(self.local.tempo[side])
+                .filter(|(tolerance, position)| (position - 0.5).abs() <= *tolerance)
+                .map(|_| Color::White),
+        };
+        if let Some(color) = detent {
+            self.set([11, 34][side], self.palette(color, true));
         }
     }
 
@@ -866,6 +877,51 @@ mod tests {
         local.pads[0] = PadMode::Hotcue;
         let report = render_buttons(&fixed, &feedback, &local);
         assert_eq!(report[1], Color::Yellow.base() + 2);
+    }
+
+    #[test]
+    fn tempo_detent_filters_delayed_feedback_and_marks_the_synced_center() {
+        use std::time::Duration;
+
+        use super::super::{Deck, Translator, feedback::Decoder};
+
+        let config = config();
+        let mut translator = Translator {
+            decks: [Deck::C, Deck::D],
+            ..Translator::default()
+        };
+        let mut feedback = FeedbackState::default();
+        let mut decoder = Decoder::default();
+        let red = Color::Red.base() + config.palette_active_intensity;
+        let blue = Color::Blue.base() + config.palette_active_intensity;
+        for (ms, cc, wire, expected) in [
+            (
+                0,
+                61_u8,
+                &[0x96, 2, 127, 0xb2, 113, 64, 0xb3, 113, 127][..],
+                blue,
+            ),
+            (5, 66, &[][..], blue),
+            (10, 72, &[][..], 0),
+            (12, 80, &[0xb2, 113, 72][..], 0),
+            (14, 91, &[0xb2, 113, 80][..], 0),
+            (16, 91, &[0xb2, 113, 91][..], 0),
+            (100, 91, &[][..], 0),
+            (105, 91, &[0xb2, 113, 127][..], 0),
+            (179, 91, &[][..], 0),
+            (180, 91, &[][..], red),
+            (182, 64, &[][..], red), // At the detent, but software is not centered.
+            (185, 64, &[0xb2, 113, 64][..], blue),
+        ] {
+            let now = Duration::from_millis(ms);
+            decoder.feed(wire, |message| {
+                feedback.apply(message, now);
+            });
+            translator.tempos = [Some(f32::from(cc) / 127.0), Some(0.5)];
+            translator.update_tempo_pickup(&feedback, now);
+            let report = render_buttons(&config, &feedback, &translator.local_led_state());
+            assert_eq!([report[12], report[35]], [expected, 0], "at {ms} ms");
+        }
     }
 
     #[test]

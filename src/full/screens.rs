@@ -1,6 +1,6 @@
 //! Adapt held MIDI owners and confirmed Djay state to the hardware screens.
 
-use s4mk3_hid_midi_bridge::screens::page::{FxWarning, Info, PadState, Page};
+use s4mk3_hid_midi_bridge::screens::page::{FxWarning, Info, PadState, Page, TempoPickup};
 
 use super::{Address, Translator, catalog::PadMode, feedback::FeedbackState};
 
@@ -125,6 +125,7 @@ pub(super) fn pages(translator: &Translator, feedback: &FeedbackState) -> [Page;
                     loop_size: feedback.info.active_loop_size(deck),
                     key: feedback.info.key_raw[deck].and_then(key::label),
                     tempo_range: feedback.info.tempo_range,
+                    tempo_pickup: translator.tempo_gesture[side].warning(),
                     selecting: translator.move_selecting[deck],
                     fx,
                     backspin,
@@ -246,6 +247,7 @@ pub fn write_previews(path: &std::path::Path) -> anyhow::Result<()> {
         frame.write_ppm(&path.join(format!("{name}.ppm")))?;
     }
     write_info_previews(path, &mut frame)?;
+    write_tempo_pickup_previews(path, &mut frame)?;
     write_fx_previews(path, &mut frame)?;
     write_backspin_previews(path, &mut frame)?;
     page::stopped(&mut frame);
@@ -419,6 +421,35 @@ fn write_info_previews(
             );
         }
         page::render_phase(&pages(&translator, &feedback)[0], frame, bright);
+        frame.write_ppm(&path.join(format!("{name}.ppm")))?;
+    }
+    Ok(())
+}
+
+fn write_tempo_pickup_previews(
+    path: &std::path::Path,
+    frame: &mut s4mk3_hid_midi_bridge::screens::Frame,
+) -> anyhow::Result<()> {
+    use s4mk3_hid_midi_bridge::screens::page;
+    for (name, physical, target, warnings) in [
+        ("tempo-pickup-right", 36, 92, false),
+        ("tempo-pickup-left", 114, 23, true),
+        ("tempo-pickup-acquired", 92, 92, false),
+    ] {
+        let info = Info {
+            jump: Some("8"),
+            loop_active: Some(false),
+            key: Some("9A"),
+            tempo_range: Some(4),
+            tempo_pickup: TempoPickup::new(physical, target),
+            backspin: warnings.then_some(0),
+            fx: FxWarning {
+                mismatch: [u8::from(warnings), 0],
+                ..FxWarning::default()
+            },
+            ..Info::default()
+        };
+        page::render(&Page::Info(info), frame);
         frame.write_ppm(&path.join(format!("{name}.ppm")))?;
     }
     Ok(())

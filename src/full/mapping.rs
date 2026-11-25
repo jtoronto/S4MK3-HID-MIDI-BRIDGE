@@ -68,7 +68,7 @@ pub fn generate_with_jog(jog: &jog::Config) -> Result<Value> {
     generate_controls(jog, true)
 }
 
-fn generate_controls(jog: &jog::Config, mute_fx_buttons: bool) -> Result<Value> {
+fn generate_controls(jog: &jog::Config, core_midi: bool) -> Result<Value> {
     jog.validate()?;
     let mut controls = Vec::new();
     let mut addresses = BTreeSet::new();
@@ -116,7 +116,8 @@ fn generate_controls(jog: &jog::Config, mute_fx_buttons: bool) -> Result<Value> 
         }
     }
     push_info_outputs(&mut outputs, &mut output_addresses)?;
-    if mute_fx_buttons {
+    if core_midi {
+        push_tempo_positions(&mut outputs, &mut output_addresses)?;
         push_mute_fx(
             &mut controls,
             &mut addresses,
@@ -227,6 +228,26 @@ fn push_jump_restores(
         let binding = super::catalog::jump_restore_binding(index)
             .context("jump restoration binding missing")?;
         push_deck_bindings(std::slice::from_ref(&binding), controls, addresses)?;
+    }
+    Ok(())
+}
+
+fn push_tempo_positions(
+    outputs: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+) -> Result<()> {
+    for deck in 1..=4 {
+        push_output(
+            outputs,
+            addresses,
+            OutputSpec {
+                key_path: &format!("turntable{deck}.effects.tempo.currentValue"),
+                channel: deck - 1,
+                data: super::catalog::TEMPO_POSITION_CC,
+                message_type: 3,
+                meter: true,
+            },
+        )?;
     }
     Ok(())
 }
@@ -787,6 +808,46 @@ mod tests {
                         == Some(1)
                     && field(control, "midiData").and_then(Value::as_unsigned_integer)
                         == Some(u64::from(super::super::catalog::SCRATCHING_MODE_NOTE))
+            }));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn tempo_pickup_feedback_is_continuous_per_deck_and_macos_only() -> anyhow::Result<()> {
+        use crate::midi_transport::Backend;
+        let native = generated_outputs()?;
+        for deck in 1_u64..=4 {
+            let key = format!("turntable{deck}.effects.tempo.currentValue");
+            let matches: Vec<_> = native
+                .iter()
+                .filter(|out| {
+                    field(out, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                })
+                .collect();
+            let [out] = matches.as_slice() else {
+                anyhow::bail!("expected exactly one tempo position output for deck {deck}");
+            };
+            let number = |name| field(out, name).and_then(Value::as_unsigned_integer);
+            assert_eq!(number("midiChannel"), Some(deck - 1));
+            assert_eq!(number("midiMessageType"), Some(3));
+            assert_eq!(number("midiData"), Some(113));
+            assert_eq!(number("midiMinValue"), Some(0));
+            assert_eq!(number("midiMaxValue"), Some(127));
+            assert_eq!(
+                field(out, "controlType").and_then(Value::as_string),
+                Some("control")
+            );
+        }
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            let windows = generate_for_backend(&jog::DEFAULT, backend)?;
+            let outputs = field(&windows, "outputs")
+                .and_then(Value::as_array)
+                .context("Windows outputs")?;
+            assert!(!outputs.iter().any(|out| {
+                field(out, "keyPath")
+                    .and_then(Value::as_string)
+                    .is_some_and(|key| key.ends_with(".effects.tempo.currentValue"))
             }));
         }
         Ok(())

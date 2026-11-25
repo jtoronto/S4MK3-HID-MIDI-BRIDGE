@@ -269,7 +269,7 @@ For example:
 | `palette_active_intensity`, `palette_inactive_intensity` | Palette lamp/pad/ring intensities, 0-3; the inactive value also controls REV/FLX idle |
 | `inactive_display` | `dim` or `dark`; applies to software and local inactive indicators |
 | `quantize_mixed` | `dim` or `dark`; bright means all four known deck states are on |
-| `tempo_center_tolerance` | Disabled (`null`) until physical center tolerance is calibrated |
+| `tempo_center_tolerance` | Optional local white center indicator, off by default. With the macOS pickup mapping, confirmed red mismatch and blue matched center take priority. |
 | `loop_enabled`, `loop_color` | Firmware flashes the whole ring green while looping; exit restores the deck-colored segment. Flash rate is controlled by hardware, not configurable. |
 | `chase_period_ms` | Normal-mode playback revolution period, 250-10000 ms (default 2000); TT uses physical movement instead. |
 | `meter_brightness` | 0 off, 125 dim, or 127 bright |

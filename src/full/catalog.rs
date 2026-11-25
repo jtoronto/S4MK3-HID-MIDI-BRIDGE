@@ -5,6 +5,7 @@ use super::jog;
 pub const EQ_MODE_NOTE: u8 = 20;
 pub const EXT_THRU_CC: u8 = 21;
 pub const INTERNAL_MODE_CC: u8 = 22;
+pub const TEMPO_POSITION_CC: u8 = 113;
 pub const SCRATCHING_MODE_NOTE: u8 = 7;
 pub const MUTE_FX_INPUT_CHANNEL: u8 = 4;
 pub const MUTE_FX_FEEDBACK_CHANNEL: u8 = 6;

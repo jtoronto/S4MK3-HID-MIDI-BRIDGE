@@ -32,6 +32,22 @@ Both modes show four large readouts for the selected logical deck:
 | KEY | Current pitch-adjusted numerical key, such as 11A. A reported no-key value shows --. Missing or unrecognized feedback shows ?. |
 | RANGE | Djay's shared tempo-fader range. Shift+Sync cycles this globally, not just for the selected deck. |
 
+Tempo pickup guidance is available in current macOS source builds. If your
+selected Djay mapping predates tempo pickup feedback, install and select the
+mapping bundled with the build. If you already imported a pickup-enabled
+mapping, the display and bezel changes do not require another import.
+
+The tempo detent LED turns red for a persistent mismatch and blue when both
+the physical and software faders are centered. Brief gaps while Djay
+follows the physical fader do not trigger a warning. Moving away from where
+a mismatch began replaces RANGE with a light-red PICKUP tile. The arrow
+shows the physical fader and points toward the target tick. The large
+percentage is the remaining fraction of full fader travel, not a BPM change.
+Returning to your starting position restores RANGE but leaves the LED red
+if pickup is still needed. Reaching the target clears both warnings. Djay
+still controls pickup. The normal RANGE tile shows the configured setting,
+not any temporary expansion Djay applies to a deck.
+
 A/C selects the left screen's deck; B/D selects the right screen's deck.
 Jump-selection mode is remembered independently for each deck until exited or
 the bridge restarts. A hidden deck's selection does not flash its inactive

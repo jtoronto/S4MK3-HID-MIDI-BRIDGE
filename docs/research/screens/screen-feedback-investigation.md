@@ -35,6 +35,71 @@ documented in [screen support](../../guides/screens.md). Software regressions co
 deck routes. Physical readability and live B/C/D acceptance are not established
 by the deck-A probes.
 
+## Tempo position follow-up — November 24, 2026
+
+On macOS Djay Pro 5.6.11 (67174), a separate virtual MIDI mapping reported
+Deck A's software tempo position through both the root
+`turntable1.effects.tempo.currentValue` output and the embedded continuous
+output on `turntable1.speed`. The two 7-bit streams matched for all 95 samples
+each. In the first Sync trial, the user saw Deck A's software slider move
+and both outputs changed from 127 to 64 without moving the physical fader.
+After the synthetic fader was primed at 32, the user reported that repeating
+Sync did not move the software slider. The capture contains no second
+Sync-related tempo transition. A Sync press alone does not establish a
+tempo change or a pickup mismatch.
+
+Synthetic CC 0 input reached both endpoints, 0 and 127, and drove the
+software slider directly. It did not exercise physical ghost-fader pickup.
+These results do not establish whether the returned target stays fixed
+through real pickup or whether a target beyond the physical range can be
+distinguished from an endpoint. No HID was opened, and the temporary MIDI
+mapping was removed after capture. Raw evidence was archived locally outside
+the repository.
+
+### Physical pickup through the bridge
+
+A second attended capture used the real S4 left tempo fader and a temporary
+full-profile macOS bridge, with platter-motor, ring and screen writes disabled.
+The user moved the software slider to 127 while the physical fader was at 62.
+The user confirmed that the on-screen software slider did not move until
+the physical fader reached pickup. Both tempo outputs held 127 through
+input 123, returned 124 at input 124, then tracked the remaining movement
+through 127. The final capture recorded 416 messages without loss, including 314
+physical tempo CCs and 49 matched values from each software-position output.
+
+The bridge can calculate direction and distance from the reported software
+position and its own fader input. The observed three-step acquisition margin
+is from one approach to one endpoint, not a general pickup threshold. Neither
+an explicit pickup flag nor out-of-range detection was verified. The temporary
+mapping was removed and the production mapping was not modified. Raw evidence
+is archived locally in `~/Documents/S4 Bridge Evidence/tempo-physical-2026-11-24/`.
+
+On November 25, the S4 emitted both endpoints (0 and 127). In the repeated
+215.3 BPM trial, the already-initialized fader acquired the reported target
+at the upper endpoint. The user observed an effective range expansion and
+a return to ±4% at the center detent; the global configured-range output
+reported ±4% throughout that capture. A first movement after reconnect in
+the earlier run immediately changed the target from 127 to 68. Its cause
+was not established. The two captures recorded 2,736 and 1,731 packets
+without loss. Raw evidence is archived in
+`~/Documents/S4 Bridge Evidence/tempo-endpoint-2026-11-25/`.
+
+### Warning presentation
+
+The first hardware trial exposed two red LED false positives: Djay can
+report center while the physical CC is still near the detent, and its
+feedback can briefly trail the physical fader during a matched sweep. The
+bridge now treats physical CC 61–66 as centered only when Djay reports
+CC 63–64, and requires a new mismatch to persist for 75 ms. These are
+display rules informed by the captures, not changes to Djay's pickup.
+
+The same trial showed that the raw screen path displayed red as blue.
+It now packs the logical RGB565 raster as big-endian BGR565 at the USB
+boundary. The updated PICKUP tile replaces RANGE while guiding pickup,
+and the arrow sits higher to avoid the bezel at an angle. The user
+approved the bezel-adjusted macOS build. This does not independently
+validate every deck, tempo range, or approach direction.
+
 ## Tempo-slider range
 
 The user previously confirmed global range cycling via Shift+Sync, mapped to

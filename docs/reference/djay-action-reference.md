@@ -27,6 +27,12 @@ All channel labels in this document are **MIDI channels 1-based**, as requested.
 
 ## Generated S4 mapping shape
 
+The macOS source mapping includes continuous root MIDI outputs for
+`turntableN.effects.tempo.currentValue` on CC 113, channels 1–4, for the
+pickup display and detent LED. This is the software fader position, not a
+BPM or effective range measurement. Windows mapping exports do not include
+these outputs. See the [tempo pickup evidence](../research/screens/screen-feedback-investigation.md#tempo-position-follow-up--november-24-2026).
+
 ### Current-source macOS MUTE overlay
 
 Either MUTE button sends Note 4 on human channel 5 to

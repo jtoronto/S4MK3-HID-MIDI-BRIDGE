@@ -1,6 +1,58 @@
 use super::*;
 
 #[test]
+fn tempo_warning_needs_motion_and_clears_on_return_or_pickup() -> anyhow::Result<()> {
+    let mut translator = Translator {
+        decks: [Deck::C, Deck::B],
+        tempos: [Some(0.5), None],
+        ..Translator::default()
+    };
+    let mut feedback = FeedbackState::default();
+    let visible =
+        |translator: &Translator, feedback: &FeedbackState| match pages(translator, feedback)[0] {
+            Page::Info(info) => info.tempo_pickup,
+            Page::Empty | Page::Stems { .. } => None,
+        };
+    feed(&mut feedback, &[0x96, 2, 127, 0xb2, 113, 127]);
+    translator.update_tempo_pickup(&feedback, Duration::ZERO);
+    translator.update_tempo_pickup(&feedback, Duration::from_millis(75));
+    assert_eq!(visible(&translator, &feedback), None);
+    for (tick, (physical, expected)) in [
+        (0.75, TempoPickup::new(95, 127)),
+        (0.5, None),
+        (0.75, TempoPickup::new(95, 127)),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        translator.translate(
+            &[Control::Slider("left_tempo_fader", physical)],
+            None,
+            &mut Vec::new(),
+        )?;
+        translator.update_tempo_pickup(&feedback, Duration::from_millis(80 + u64::try_from(tick)?));
+        assert_eq!(visible(&translator, &feedback), expected);
+    }
+    feed(&mut feedback, &[0xb2, 113, 95]);
+    translator.update_tempo_pickup(&feedback, Duration::from_millis(85));
+    assert_eq!(visible(&translator, &feedback), None);
+    feed(
+        &mut feedback,
+        &[0x96, 0, 127, 0xb2, 113, 127, 0xb0, 113, 64],
+    );
+    translator.update_tempo_pickup(&feedback, Duration::from_millis(90));
+    translator.translate(
+        &[Control::Button("left_deck_switch_a", true)],
+        None,
+        &mut Vec::new(),
+    )?;
+    assert_eq!(translator.decks[0], Deck::A);
+    translator.update_tempo_pickup(&feedback, Duration::from_millis(165));
+    assert_eq!(visible(&translator, &feedback), None);
+    Ok(())
+}
+
+#[test]
 fn numeric_packets_route_to_each_selected_deck_and_global_range() -> anyhow::Result<()> {
     for (side, deck) in [(0, Deck::A), (1, Deck::B), (0, Deck::C), (1, Deck::D)] {
         // Given either physical side on a chosen logical deck.

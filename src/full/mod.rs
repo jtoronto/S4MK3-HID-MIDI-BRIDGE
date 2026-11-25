@@ -14,6 +14,7 @@ mod raw;
 pub mod replay;
 mod ring_position;
 pub mod screens;
+mod tempo_pickup;
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -175,6 +176,7 @@ struct Translator {
     front_panel_ready: bool,
     led_held: [bool; 11],
     tempos: [Option<f32>; 2],
+    tempo_gesture: [tempo_pickup::Gesture; 2],
     move_selecting: [bool; 4],
     jump_sizes: [Option<usize>; 4],
     jump_revision: [u64; 4],
@@ -222,6 +224,7 @@ impl Default for Translator {
             front_panel_ready: false,
             led_held: [false; 11],
             tempos: [None; 2],
+            tempo_gesture: [tempo_pickup::Gesture::default(); 2],
             move_selecting: [false; 4],
             jump_sizes: [None; 4],
             jump_revision: [0; 4],
@@ -292,13 +295,14 @@ impl FullBridge {
         self.messages.clear();
         self.translator
             .sync_front_panel(&self.feedback, &mut self.messages)?;
+        let tempo_warning_changed = self.translator.update_tempo_pickup(&self.feedback, now);
         self.translator.observe_jog(None, now, &mut self.messages)?;
         let playback = self.translator.playback_state();
         self.translator
             .motorized_bend(None, playback, &mut self.messages)?;
         self.translator.log_motor_gate_changes(&self.feedback);
         let sent = self.send_messages(now)?;
-        if received != 0 {
+        if received != 0 || tempo_warning_changed {
             self.screens
                 .refresh(screens::pages(&self.translator, &self.feedback));
         }
@@ -345,7 +349,9 @@ impl FullBridge {
         self.controls.clear();
         self.controls
             .extend(events.iter().filter_map(Control::from_event));
-        self.translator.observe_analog(&self.controls)
+        self.translator.observe_analog(&self.controls)?;
+        self.translator.observe_led_inputs(&self.controls);
+        Ok(())
     }
 
     pub fn send_report(
@@ -461,6 +467,7 @@ impl Translator {
             })
             .transpose()?;
         self.translate(controls, buttons, output)?;
+        self.update_tempo_pickup(feedback, now);
         let playback = self.playback_state();
         self.motorized_bend(Some(report), playback, output)?;
         self.log_motor_gate_changes(feedback);
@@ -689,6 +696,7 @@ impl Translator {
             grid: self.grid,
             held: self.led_held,
             tempo: self.tempos,
+            tempo_indication: self.tempo_gesture.map(tempo_pickup::Gesture::indication),
             move_selecting: self.move_selecting,
             eq_selecting: self.eq_selecting,
             mute_fx_buttons: self.mute_fx_buttons,
@@ -820,6 +828,20 @@ impl Translator {
             }
         }
         self.emit_mixer(output)
+    }
+
+    fn update_tempo_pickup(&mut self, feedback: &feedback::FeedbackState, now: Duration) -> bool {
+        let previous = self.tempo_gesture.map(tempo_pickup::Gesture::warning);
+        for (side, gesture) in self.tempo_gesture.iter_mut().enumerate() {
+            gesture.observe(
+                usize::from(self.decks[side].channel()),
+                feedback,
+                self.tempos[side],
+                self.shifted[side],
+                now,
+            );
+        }
+        previous != self.tempo_gesture.map(tempo_pickup::Gesture::warning)
     }
 
     fn release_inputs(&mut self, controls: &[Control], output: &mut Vec<[u8; 3]>) {
