@@ -95,7 +95,7 @@ pub fn start(
                 io::stdin(),
                 control.as_ref(),
                 |value| {
-                    #[cfg(windows)]
+                    #[cfg(any(windows, target_os = "macos"))]
                     if let Some(control) = &ni_control {
                         return control.set_ni_jog_tension(value);
                     }

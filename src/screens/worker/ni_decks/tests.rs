@@ -106,7 +106,7 @@ const PLAYING: [DeckOutput; 2] = [
     },
 ];
 
-fn busy_worker(gate_first_pair: bool) -> anyhow::Result<Fixture> {
+fn busy_worker(gate_first_pair: bool, initial_tension: Option<u8>) -> anyhow::Result<Fixture> {
     let (send, events) = bounded(16);
     let (state_tx, states) = bounded(4);
     let (resume, first_frame) = tokio::sync::oneshot::channel();
@@ -123,6 +123,7 @@ fn busy_worker(gate_first_pair: bool) -> anyhow::Result<Fixture> {
         },
         move |state| assert!(state_tx.send(state).is_ok()),
         None,
+        initial_tension,
     )?;
     let control = worker.control();
     control.bind_identity(Identity::selected_hid("12345678901234")?)?;
@@ -141,6 +142,9 @@ fn busy_worker(gate_first_pair: bool) -> anyhow::Result<Fixture> {
         events.recv_timeout(WAIT)?,
         Event::Outputs([DeckOutput::default(); 2])
     );
+    if let Some(value) = initial_tension {
+        assert_eq!(events.recv_timeout(WAIT)?, Event::Tension(value));
+    }
     let hashes = |pages: [page::Page; 2]| {
         pages.map(|page| {
             let mut frame = Frame::default();
@@ -168,6 +172,28 @@ fn busy_worker(gate_first_pair: bool) -> anyhow::Result<Fixture> {
 }
 
 #[test]
+fn startup_tension_precedes_readiness_and_stop_waits_for_quiesce() -> anyhow::Result<()> {
+    let Fixture {
+        mut worker,
+        control,
+        events,
+        states,
+        resume,
+    } = busy_worker(true, Some(83))?;
+    assert!(!control.ni_decks_active()?);
+    assert!(states.try_recv().is_err());
+    assert!(resume.send(true).is_ok());
+    assert_eq!(states.recv_timeout(WAIT)?, State::Active);
+    assert!(control.ni_decks_active()?);
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Outputs(PLAYING));
+    worker.stop_ni_decks()?;
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Quiesced);
+    assert_eq!(events.recv_timeout(WAIT)?, Event::Closed);
+    assert!(!control.ni_decks_active()?);
+    Ok(())
+}
+
+#[test]
 fn mixed_worker_preserves_pause_then_quiesces_before_closing_healthy_transport()
 -> anyhow::Result<()> {
     let Fixture {
@@ -176,7 +202,7 @@ fn mixed_worker_preserves_pause_then_quiesces_before_closing_healthy_transport()
         events,
         states: _,
         resume,
-    } = busy_worker(false)?;
+    } = busy_worker(false, None)?;
     let paused = PLAYING.map(|output| DeckOutput {
         playing: false,
         ..output
@@ -212,7 +238,7 @@ fn tension_coalesces_behind_screen_pair_and_pause_barrier() -> anyhow::Result<()
         events,
         states: _,
         resume,
-    } = busy_worker(false)?;
+    } = busy_worker(false, None)?;
     let paused = PLAYING.map(|output| DeckOutput {
         playing: false,
         ..output
@@ -237,6 +263,7 @@ fn trial_mode_rejects_managed_tension_without_touching_transport() -> anyhow::Re
         |_, _| async { Err::<Peer, _>(Error::Disconnected) },
         |_| {},
         Some(trial),
+        None,
     )?;
     assert!(worker.control().set_ni_jog_tension(25).is_err());
     worker.stop_ni_decks()?;
@@ -258,7 +285,7 @@ fn assert_loss(gate_first_pair: bool) -> anyhow::Result<()> {
         events,
         states,
         resume,
-    } = busy_worker(gate_first_pair)?;
+    } = busy_worker(gate_first_pair, None)?;
     let pending = PLAYING.map(|output| DeckOutput {
         ring: Some(9),
         ..output
@@ -298,6 +325,7 @@ fn stop_inhibits_play_from_an_in_flight_apply() -> anyhow::Result<()> {
             })
         },
         |_| {},
+        None,
         None,
     )?;
     let control = worker.control();
@@ -352,6 +380,7 @@ fn in_flight_play_cannot_enable_a_superseded_mode() -> anyhow::Result<()> {
             },
             |_| {},
             None,
+            None,
         )?;
         let control = worker.control();
         let initial = PLAYING.map(|output| DeckOutput {
@@ -404,6 +433,7 @@ fn trial_never_drives_even_when_play_and_turntable_requested() -> anyhow::Result
         },
         |_| {},
         Some(trial::Trial::new(path.clone())?),
+        None,
     )?;
     let control = worker.control();
     control.bind_identity(Identity::selected_hid("12345678901234")?)?;

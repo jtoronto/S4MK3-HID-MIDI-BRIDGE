@@ -116,7 +116,9 @@ fn feedback_before_controller(profile: Option<MidiProfile>, backend: Backend) ->
 }
 
 impl Session {
-    pub fn new(args: &Args) -> anyhow::Result<Self> {
+    pub fn new(args: &Args, ni_tension: Option<u8>) -> anyhow::Result<Self> {
+        #[cfg(not(any(windows, target_os = "macos")))]
+        let _unused = ni_tension;
         let full = matches!(args.midi, Some(MidiProfile::Full));
         // Djay can send its initial state as soon as the host publishes BLOOP.
         let feedback_input = feedback_before_controller(args.midi, args.midi_backend)
@@ -133,9 +135,9 @@ impl Session {
             .transpose()?;
         let screens = full
             .then(|| {
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 if args.screens.ni_decks {
-                    return full::screens::Output::ni_decks();
+                    return full::screens::Output::ni_decks(ni_tension);
                 }
                 if args.screens.control_stdin || (!cfg!(windows) && args.managed.stdin) {
                     full::screens::Output::managed(args.screens.enabled)

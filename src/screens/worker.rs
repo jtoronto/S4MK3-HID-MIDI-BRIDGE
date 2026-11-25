@@ -17,8 +17,10 @@ mod service;
 use service::run;
 #[cfg(any(windows, test))]
 mod ni;
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 mod ni_decks;
+#[cfg(any(windows, target_os = "macos", test))]
+mod presentation;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -60,11 +62,11 @@ struct Mailbox {
     release_required: bool,
     initialized: bool,
     stop: bool,
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     identity: Option<super::ni_service::Identity>,
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     cancellation: Option<tokio::sync::watch::Sender<bool>>,
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     decks: Option<ni_decks::DeckMailbox>,
 }
 
@@ -79,7 +81,7 @@ impl Control {
     pub fn request(&self, id: u64, action: Action) {
         match self.shared.0.lock() {
             Ok(mut mailbox) => {
-                #[cfg(any(windows, test))]
+                #[cfg(any(windows, target_os = "macos", test))]
                 if mailbox.decks.is_some() {
                     return;
                 }
@@ -94,7 +96,7 @@ impl Control {
                     generation,
                     action,
                 });
-                #[cfg(any(windows, test))]
+                #[cfg(any(windows, target_os = "macos", test))]
                 if let Some(cancellation) = &mailbox.cancellation {
                     cancellation.send_replace(true);
                 }
@@ -111,12 +113,12 @@ impl Control {
     ///
     /// # Errors
     /// Rejects an invalid serial, rebinding, or binding after initialized input.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub fn bind_selected_hid(&self, serial: &str) -> anyhow::Result<()> {
         self.bind_identity(super::ni_service::Identity::selected_hid(serial)?)
     }
 
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     fn bind_identity(&self, identity: super::ni_service::Identity) -> anyhow::Result<()> {
         let mut mailbox = self
             .shared
@@ -145,7 +147,7 @@ pub struct Worker {
     shared: Shared,
     thread: Option<JoinHandle<()>>,
     last: Option<[page::Page; 2]>,
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     deck_completion: Option<crossbeam_channel::Receiver<()>>,
 }
 
@@ -285,7 +287,7 @@ impl Worker {
             shared,
             thread: Some(thread),
             last: None,
-            #[cfg(any(windows, test))]
+            #[cfg(any(windows, target_os = "macos", test))]
             deck_completion: None,
         })
     }
@@ -328,7 +330,7 @@ impl Worker {
 
 impl Drop for Worker {
     fn drop(&mut self) {
-        #[cfg(any(windows, test))]
+        #[cfg(any(windows, target_os = "macos", test))]
         if self.deck_completion.is_some() {
             if self.thread.is_some()
                 && let Err(error) = self.stop_ni_decks()
@@ -340,7 +342,7 @@ impl Drop for Worker {
         match self.shared.0.lock() {
             Ok(mut mailbox) => {
                 mailbox.stop = true;
-                #[cfg(any(windows, test))]
+                #[cfg(any(windows, target_os = "macos", test))]
                 if let Some(cancellation) = &mailbox.cancellation {
                     cancellation.send_replace(true);
                 }

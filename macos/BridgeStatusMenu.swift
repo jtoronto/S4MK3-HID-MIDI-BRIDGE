@@ -13,11 +13,14 @@ func bridgeStatusMenu(controller: BridgeController?, state: BridgeState, target:
         menu.addItem(item)
     }
     add("Bridge: \(state.rawValue)", nil, enabled: false)
-    if let controller { add(controller.screens.state.rawValue, nil, enabled: false) }
+    if let controller {
+        add(controller.run.mode == .ni ? "Screens: NI service" : controller.screens.state.rawValue, nil, enabled: false)
+    }
     menu.addItem(.separator())
     add("Start bridge", #selector(AppDelegate.start), enabled: controller?.isBusy == false)
     add("Stop bridge", #selector(AppDelegate.stop), enabled: controller?.canStop == true)
     menu.addItem(.separator())
+    if controller?.run.mode != .ni {
     add("Enable S4 screens", #selector(AppDelegate.toggleScreens),
         enabled: controller?.screens.busy == false && state != .stopping, id: "screens.enabled")
     menu.items.last?.state = controller?.screens.preferences.enabled == true ? .on : .off
@@ -29,6 +32,7 @@ func bridgeStatusMenu(controller: BridgeController?, state: BridgeState, target:
         enabled: controller?.screens.busy == false && state != .stopping
             && (controller?.screens.preferences.enabled == false || controller?.screens.driverRunning != true),
         id: "screens.restore")
+    }
     menu.addItem(.separator())
     add("Settings…", #selector(AppDelegate.showSettings))
     add("Install Djay mapping…", #selector(AppDelegate.installMapping))

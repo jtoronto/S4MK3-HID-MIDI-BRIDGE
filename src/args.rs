@@ -82,9 +82,12 @@ pub struct ManagedArgs {
 
 #[derive(Debug, clap::Args)]
 pub struct ScreenArgs {
-    /// Windows BLOOP only: use one NI session for both screens, platters and rings.
+    /// Use one NI service session for both screens, platters and rings (macOS or Windows BLOOP).
     #[arg(long, requires = "midi", conflicts_with_all = ["control_stdin", "screen_motor_diagnostic_config", "tension_config"])]
     pub ni_decks: bool,
+    /// macOS NI deck tension settings as JSON: {"value":107}; independent of Direct HID.
+    #[arg(long, value_name = "PATH", requires = "ni_decks")]
+    pub ni_tension_config: Option<PathBuf>,
     /// Experimental Djay feedback and reactive STEMS on both S4 screens (full profile).
     #[arg(long = "screens", requires = "midi", conflicts_with_all = ["list", "generate_mapping"])]
     pub enabled: bool,

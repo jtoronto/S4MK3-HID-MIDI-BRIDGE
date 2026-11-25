@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use tokio::{runtime::Runtime, sync::watch};
 
+use super::presentation::Presentation;
 use super::*;
 use crate::screen_motor_diag::Case;
 use crate::screens::ni_service::{Cancellation, DeckOutput, Identity};
@@ -25,6 +26,7 @@ pub(super) struct DeckMailbox {
     failure: Option<String>,
     tension: Option<u8>,
     trial: bool,
+    active: bool,
 }
 
 impl Control {
@@ -32,7 +34,7 @@ impl Control {
     ///
     /// # Errors
     /// Rejects trial mode, stopped workers, and terminal worker failures.
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     pub fn set_ni_jog_tension(&self, value: u8) -> anyhow::Result<()> {
         let mut mailbox = lock(&self.shared)?;
         let stopped = mailbox.stop;
@@ -50,9 +52,21 @@ impl Control {
     ///
     /// # Errors
     /// Returns a terminal worker failure, or rejects a stopped or non-mixed worker.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub fn set_ni_decks(&self, desired: [DeckOutput; 2]) -> anyhow::Result<()> {
         self.queue_ni_decks(desired)
+    }
+
+    /// Whether this session acknowledged safe initialization and its first paired frame.
+    ///
+    /// # Errors
+    /// Returns a terminal worker failure instead of stale readiness.
+    #[cfg(any(target_os = "macos", test))]
+    pub fn ni_decks_active(&self) -> anyhow::Result<bool> {
+        let mailbox = lock(&self.shared)?;
+        let decks = mailbox.decks.as_ref().context("NI deck mode not enabled")?;
+        decks.check_failure()?;
+        Ok(!mailbox.stop && decks.active)
     }
 
     fn queue_ni_decks(&self, desired: [DeckOutput; 2]) -> anyhow::Result<()> {
@@ -93,18 +107,21 @@ impl DeckMailbox {
 }
 
 impl Worker {
-    /// Start the Windows-only shared NI session instead of the Encdr screen helper.
+    /// Start the shared NI session instead of the platform's Direct HID screens.
     ///
     /// # Errors
     /// Returns a thread start failure. Bind the selected HID before publishing
     /// initialized pages; asynchronous failures surface on set or stop.
-    #[cfg(windows)]
-    pub fn start_ni_decks() -> anyhow::Result<Self> {
+    #[cfg(any(windows, target_os = "macos"))]
+    pub fn start_ni_decks(initial_tension: Option<u8>) -> anyhow::Result<Self> {
         use crate::screens::ni_service::NiService;
         println!("S4_SCREEN_STATUS 0 pending");
+        #[cfg(windows)]
         let trial = std::env::var_os(trial::ENV)
             .map(|path| trial::Trial::new(path.into()))
             .transpose()?;
+        #[cfg(not(windows))]
+        let trial = None;
         if trial.is_some() {
             println!("NI_JOGT_TRIAL_ENABLED: drive inhibited; no physical feedback available");
         }
@@ -114,6 +131,7 @@ impl Worker {
                 println!("S4_SCREEN_STATUS 0 {}", state.label());
             },
             trial,
+            initial_tension,
         )
     }
 
@@ -121,6 +139,7 @@ impl Worker {
         open: F,
         status: S,
         trial: Option<trial::Trial>,
+        initial_tension: Option<u8>,
     ) -> anyhow::Result<Self>
     where
         T: Transport,
@@ -132,6 +151,7 @@ impl Worker {
             Mutex::new(Mailbox {
                 decks: Some(DeckMailbox {
                     trial: trial.is_some(),
+                    tension: initial_tension,
                     ..DeckMailbox::default()
                 }),
                 ..Mailbox::default()
@@ -247,7 +267,7 @@ fn run<T: Transport, O: Future<Output = Result<T, crate::screens::ni_service::Er
     shared: &Shared,
     open: impl FnOnce(Identity, Cancellation) -> O,
     status: &impl Fn(State),
-    trial: Option<trial::Trial>,
+    mut trial: Option<trial::Trial>,
 ) -> anyhow::Result<()> {
     let (identity, mut stop_setup) = {
         let mut mailbox = lock(shared)?;
@@ -289,13 +309,37 @@ fn run<T: Transport, O: Future<Output = Result<T, crate::screens::ni_service::Er
     };
     let Some(opened) = opened else { return Ok(()) };
     let mut session = opened.context("acquire shared NI session")?;
-    if !stopping {
-        // Initialize in a safe state before consuming a potentially stale Play.
-        let _initialized = runtime
-            .block_on(session.apply([DeckOutput::default(); 2], |_| false))
-            .context("initialize shared NI decks")?;
+    let result = (|| {
+        if !stopping {
+            // Initialize in a safe state before consuming a potentially stale Play.
+            let _initialized = runtime
+                .block_on(session.apply([DeckOutput::default(); 2], |_| false))
+                .context("initialize shared NI decks")?;
+            if submit_tension(shared, &runtime, &mut session, true)? {
+                return drive(shared, &runtime, &mut session, status, trial.as_mut());
+            }
+        }
+        Ok(())
+    })();
+    // A lost control connection cannot acknowledge Pause; never send more
+    // through that session. The Windows trial already cleans up its own errors.
+    if result.as_ref().is_err_and(|error| {
+        trial.is_some()
+            || matches!(
+                error.downcast_ref::<crate::screens::ni_service::Error>(),
+                Some(crate::screens::ni_service::Error::ControlLost)
+            )
+    }) {
+        return result;
     }
-    drive(shared, &runtime, &mut session, status, trial)
+    let cleanup = shutdown(&runtime, &mut session, trial.as_mut());
+    match (result, cleanup) {
+        (Ok(()), cleanup) => cleanup,
+        (Err(error), Ok(())) => Err(error),
+        (Err(error), Err(cleanup)) => {
+            Err(error.context(format!("NI deck quiesce also failed: {cleanup:#}")))
+        }
+    }
 }
 
 fn drive(
@@ -303,14 +347,13 @@ fn drive(
     runtime: &Runtime,
     session: &mut impl Transport,
     status: &impl Fn(State),
-    mut trial: Option<trial::Trial>,
+    mut trial: Option<&mut trial::Trial>,
 ) -> anyhow::Result<()> {
-    let mut presentation = ni::Presentation::new(Case::Normal);
+    let mut presentation = Presentation::new(Case::Normal);
     let first_pages = {
         let mut mailbox = lock(shared)?;
         if mailbox.stop {
-            drop(mailbox);
-            return shutdown(runtime, session, trial.as_mut());
+            return Ok(());
         }
         mailbox.pending.take().context("initial NI pages missing")?
     };
@@ -320,7 +363,9 @@ fn drive(
             .block_on(session.publish(frames))
             .context("publish first shared NI screen pair")
     })?;
-    status(State::Active);
+    if !announce_active(shared, status)? {
+        return Ok(());
+    }
     // Take a fresh output snapshot only after both frame acknowledgements.
     let mut applied = [DeckOutput::default(); 2];
     loop {
@@ -340,8 +385,7 @@ fn drive(
                 })
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             if mailbox.stop {
-                drop(mailbox);
-                return shutdown(runtime, session, trial.as_mut());
+                return Ok(());
             }
             current = mailbox.pending.take().unwrap_or(current);
             let decks = mailbox.decks.as_mut().context("NI deck mode not enabled")?;
@@ -391,7 +435,7 @@ fn drive(
         {
             continue;
         }
-        if !submit_tension(shared, runtime, session)? {
+        if !submit_tension(shared, runtime, session, false)? {
             continue;
         }
         // Give queued deck transitions or shutdown precedence over the next pair.
@@ -404,6 +448,21 @@ fn drive(
                 .context("publish shared NI screens")
         })?;
     }
+}
+
+fn announce_active(shared: &Shared, status: &impl Fn(State)) -> anyhow::Result<bool> {
+    let mut mailbox = lock(shared)?;
+    if mailbox.stop {
+        return Ok(false);
+    }
+    mailbox
+        .decks
+        .as_mut()
+        .context("NI deck mode not enabled")?
+        .active = true;
+    drop(mailbox);
+    status(State::Active);
+    Ok(true)
 }
 
 fn deck_transition_pending(shared: &Shared) -> anyhow::Result<bool> {
@@ -419,13 +478,14 @@ fn submit_tension(
     shared: &Shared,
     runtime: &Runtime,
     session: &mut impl Transport,
+    initializing: bool,
 ) -> anyhow::Result<bool> {
     let mut mailbox = lock(shared)?;
     if mailbox.stop {
         return Ok(false);
     }
     let decks = mailbox.decks.as_mut().context("NI deck mode not enabled")?;
-    if decks.pause.contains(&true) {
+    if !initializing && decks.pause.contains(&true) {
         return Ok(false);
     }
     let tension = decks.tension.take();
@@ -456,7 +516,7 @@ fn shutdown(
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod native;
 #[cfg(test)]
 mod tests;

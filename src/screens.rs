@@ -12,6 +12,7 @@ use nusb::MaybeFuture as _;
 use nusb::transfer::{Bulk, Out};
 
 pub mod info;
+#[cfg(any(windows, target_os = "macos", test))]
 pub mod ni_service;
 pub mod page;
 mod text;
@@ -53,7 +54,7 @@ pub struct Frame {
 }
 
 // Diagnostic-only fingerprint of logical RGB565 values, shared with NI sends.
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 fn route_fingerprint(pixels: &[u16]) -> u64 {
     pixels
         .iter()

@@ -1,4 +1,4 @@
-use super::*;
+use super::{DeckOutput, Frame, Transport};
 use crate::screens::ni_service::{NiService, Raster};
 
 impl Transport for NiService {
@@ -31,7 +31,7 @@ impl Transport for NiService {
     }
 
     async fn set_jog_tension(&mut self, value: u8) -> anyhow::Result<()> {
-        NiService::set_jog_tension(self, value).await?;
+        Self::set_jog_tension(self, value).await?;
         Ok(())
     }
 }

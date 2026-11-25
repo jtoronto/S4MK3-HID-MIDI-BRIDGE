@@ -1,4 +1,5 @@
 use super::*;
+use crate::screens::worker::presentation::update_phase;
 
 fn case_fixture(case: crate::screen_motor_diag::Case) -> anyhow::Result<(Worker, Receiver<Event>)> {
     case_fixture_clock(case, Instant::now)
@@ -102,26 +103,26 @@ fn diagnostic_updates_admit_at_most_twice_per_second_without_catchup() {
     let start = Instant::now();
     let mut next = None;
     let mut bright = false;
-    assert!(lifecycle::update_phase(start, &mut next, &mut bright));
+    assert!(update_phase(start, &mut next, &mut bright));
     assert!(bright);
-    assert!(!lifecycle::update_phase(
+    assert!(!update_phase(
         start + Duration::from_millis(499),
         &mut next,
         &mut bright
     ));
-    assert!(lifecycle::update_phase(
+    assert!(update_phase(
         start + Duration::from_millis(500),
         &mut next,
         &mut bright
     ));
     assert!(!bright);
-    assert!(lifecycle::update_phase(
+    assert!(update_phase(
         start + Duration::from_secs(5),
         &mut next,
         &mut bright
     ));
     assert!(bright);
-    assert!(!lifecycle::update_phase(
+    assert!(!update_phase(
         start + Duration::from_secs(5),
         &mut next,
         &mut bright

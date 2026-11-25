@@ -6,8 +6,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 const CONTROL_POLL: Duration = Duration::from_millis(50);
-pub(super) use lifecycle::Presentation;
-
 mod ipc;
 mod lifecycle;
 #[cfg(windows)]
@@ -109,19 +107,6 @@ fn acquire(shared: &Shared, generation: u64) -> anyhow::Result<Option<(Identity,
     mailbox.cancellation = Some(sender);
     drop(mailbox);
     Ok(Some((identity, receiver)))
-}
-
-fn log_render(owner: (u64, u64), rendered: [(page::Page, bool); 2], frames: &[Frame; 2]) {
-    if tracing::enabled!(target: "s4_screen_route_diag", tracing::Level::DEBUG) {
-        tracing::debug!(
-            target: "s4_screen_route_diag",
-            generation = owner.0,
-            pages = ?rendered.map(|(page, _)| page),
-            bright = ?rendered.map(|(_, bright)| bright),
-            hashes = ?frames.each_ref().map(|frame| crate::screens::route_fingerprint(&frame.pixels)),
-            "SCREEN_ROUTE_RENDER"
-        );
-    }
 }
 
 #[cfg(test)]

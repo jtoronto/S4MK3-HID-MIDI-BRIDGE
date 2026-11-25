@@ -1,6 +1,9 @@
 //! Diagnostic frame admission is separate from NI ownership and cleanup.
 
-use super::*;
+use std::time::{Duration, Instant};
+
+use super::{Frame, page};
+use crate::screen_motor_diag::{self as diag, Case, Kind};
 
 pub(in crate::screens::worker) struct Presentation {
     case: Case,
@@ -27,6 +30,7 @@ impl Presentation {
         }
     }
 
+    #[cfg(any(windows, test))]
     pub(super) const fn reset(&mut self, generation: u64) {
         self.generation = generation;
         self.previous = None;
@@ -53,21 +57,8 @@ impl Presentation {
             Case::Static | Case::Updates => *self.frozen.get_or_insert(pages),
             Case::Normal | Case::Off | Case::Acquired => pages,
         };
-        if self.case == Case::Updates {
-            if !update_phase(now, &mut self.deadline, &mut self.bright) {
-                return Ok(false);
-            }
-        } else if pages.iter().any(page::Page::selecting) {
-            if self.deadline.is_none() {
-                self.bright = true;
-                self.deadline = Some(now + Duration::from_millis(500));
-            } else if self.deadline.is_some_and(|deadline| now >= deadline) {
-                self.bright = !self.bright;
-                self.deadline = Some(now + Duration::from_millis(500));
-            }
-        } else {
-            self.bright = true;
-            self.deadline = None;
+        if !self.advance_phase(now, &pages) {
+            return Ok(false);
         }
         let rendered = pages.map(|page| (page, !page.selecting() || self.bright));
         if self.case != Case::Updates && self.previous == Some(rendered) {
@@ -107,7 +98,16 @@ impl Presentation {
             ],
             &[],
         );
-        log_render((self.generation, 0), rendered, &self.frames);
+        if tracing::enabled!(target: "s4_screen_route_diag", tracing::Level::DEBUG) {
+            tracing::debug!(
+                target: "s4_screen_route_diag",
+                generation = self.generation,
+                pages = ?rendered.map(|(page, _)| page),
+                bright = ?rendered.map(|(_, bright)| bright),
+                hashes = ?self.frames.each_ref().map(|frame| crate::screens::route_fingerprint(&frame.pixels)),
+                "SCREEN_ROUTE_RENDER"
+            );
+        }
         let begin = diag::record(
             Kind::ScreenPublishBegin,
             [
@@ -144,6 +144,39 @@ impl Presentation {
             self.deadline = None;
         }
         Ok(true)
+    }
+
+    fn advance_phase(&mut self, now: Instant, pages: &[page::Page; 2]) -> bool {
+        if self.case == Case::Updates {
+            return update_phase(now, &mut self.deadline, &mut self.bright);
+        }
+        if pages.iter().any(page::Page::selecting) {
+            update_phase(now, &mut self.deadline, &mut self.bright);
+        } else {
+            self.bright = true;
+            self.deadline = None;
+        }
+        true
+    }
+}
+
+pub(super) fn update_phase(
+    now: Instant,
+    deadline: &mut Option<Instant>,
+    bright: &mut bool,
+) -> bool {
+    match *deadline {
+        None => {
+            *bright = true;
+            *deadline = Some(now + Duration::from_millis(500));
+            true
+        }
+        Some(next) if now >= next => {
+            *bright = !*bright;
+            *deadline = Some(now + Duration::from_millis(500));
+            true
+        }
+        Some(_) => false,
     }
 }
 

@@ -15,6 +15,10 @@ enum AppError: LocalizedError {
     }
 }
 
+enum BridgeMode: String, Codable, CaseIterable {
+    case direct, ni
+}
+
 enum BridgeProfile: String, Codable, CaseIterable {
     case full, minimal, probe
 
@@ -28,11 +32,28 @@ enum BridgeProfile: String, Codable, CaseIterable {
 }
 
 struct RunPreferences: Codable, Equatable {
+    var mode: BridgeMode = .direct
     var profile: BridgeProfile = .full
     var limitDuration = false
     var durationSeconds = 3600
     var rawReports = false
     var logLevel = "info"
+
+    private enum CodingKeys: String, CodingKey {
+        case mode, profile, limitDuration, durationSeconds, rawReports, logLevel
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mode = try container.decodeIfPresent(BridgeMode.self, forKey: .mode) ?? .direct
+        profile = try container.decode(BridgeProfile.self, forKey: .profile)
+        limitDuration = try container.decode(Bool.self, forKey: .limitDuration)
+        durationSeconds = try container.decode(Int.self, forKey: .durationSeconds)
+        rawReports = try container.decode(Bool.self, forKey: .rawReports)
+        logLevel = try container.decode(String.self, forKey: .logLevel)
+    }
 
     func validate() throws {
         guard (1...604800).contains(durationSeconds) else {
@@ -43,7 +64,15 @@ struct RunPreferences: Codable, Equatable {
         }
     }
 
-    func arguments(ledURL: URL, jogURL: URL, tensionURL: URL, screens: Bool = true) -> [String] {
+    func arguments(ledURL: URL, jogURL: URL, tensionURL: URL, screens: Bool = true, niTensionURL: URL? = nil) -> [String] {
+        if mode == .ni {
+            var args = ["--midi", "full", "--ni-decks", "--managed-stdin",
+                        "--led-config", ledURL.path, "--jog-config", jogURL.path]
+            if let niTensionURL { args += ["--ni-tension-config", niTensionURL.path] }
+            args += ["--until-stopped"]
+            if rawReports { args.append("--raw") }
+            return args
+        }
         var arguments: [String] = []
         if profile != .probe { arguments += ["--midi", profile.rawValue] }
         if profile == .full {
@@ -402,6 +431,41 @@ enum BridgeState: String {
     case failed = "Failed"
 }
 
+struct NIManagedStatus: Decodable {
+    struct Readiness: Decodable {
+        let hid: Bool
+        let midiInput: Bool?
+        let midiOutput: Bool?
+        let controllerInitialized: Bool
+        enum CodingKeys: String, CodingKey {
+            case hid, midiInput = "midi_input", midiOutput = "midi_output"
+            case controllerInitialized = "controller_initialized"
+        }
+    }
+    struct Failure: Decodable { let stage: String; let message: String }
+    let version: Int
+    let state: String
+    let profile: String
+    let backend: String
+    let readiness: Readiness
+    let error: Failure?
+
+    var isReady: Bool {
+        version == 1 && state == "ready" && profile == "full" && backend == "core-midi"
+            && readiness.hid && readiness.midiInput == true && readiness.midiOutput == true
+            && readiness.controllerInitialized
+    }
+}
+
+struct NIJogPreferences: Codable {
+    var value: Int = 107
+    func validate() throws {
+        guard (0...255).contains(value) else {
+            throw AppError.invalid("NI jog tension must be between 0 and 255.")
+        }
+    }
+}
+
 final class OutputBuffer: @unchecked Sendable {
     private let lock = NSLock()
     private var bytes = Data()
@@ -467,6 +531,7 @@ final class BridgeController: ObservableObject {
     @Published var leds: LedPreferences
     @Published var jog: JogPreferences
     @Published var tension: TensionPreferences
+    @Published private(set) var niJog = NIJogPreferences()
     @Published private(set) var state: BridgeState = .stopped
     let livePlatter = LivePlatterDiagnostics()
     let logOutput = BridgeLog()
@@ -494,6 +559,8 @@ final class BridgeController: ObservableObject {
     private var motorDiagnosticFileHandle: FileHandle?
     private var activeLogLevel: String?
     private var activeProfile: BridgeProfile?
+    private var activeMode: BridgeMode?
+    private var stopDeadline: DispatchWorkItem?
     private var isDiagnostic = false
     private var stopRequested = false
     private var restartRequested = false
@@ -512,13 +579,14 @@ final class BridgeController: ObservableObject {
     var ledURL: URL { supportURL.appendingPathComponent("led-config.json") }
     var jogURL: URL { supportURL.appendingPathComponent("jog-config.json") }
     var tensionURL: URL { supportURL.appendingPathComponent("tension-config.json") }
+    var niTensionURL: URL { supportURL.appendingPathComponent("ni-tension-config.json") }
     var runURL: URL { supportURL.appendingPathComponent("run-settings.json") }
     var motorDiagnosticDirectoryURL: URL {
         supportURL.appendingPathComponent("diagnostics", isDirectory: true)
     }
     var executableURL: URL { resourceURL.appendingPathComponent("s4mk3-hid-midi-bridge") }
     var commandPreview: String {
-        ([executableURL.path] + run.arguments(ledURL: ledURL, jogURL: jogURL, tensionURL: tensionURL, screens: screens.preferences.enabled))
+        ([executableURL.path] + run.arguments(ledURL: ledURL, jogURL: jogURL, tensionURL: tensionURL, screens: screens.preferences.enabled, niTensionURL: niTensionURL))
             .map { "'" + $0.replacingOccurrences(of: "'", with: "'\\''") + "'" }
             .joined(separator: " ")
     }
@@ -554,6 +622,10 @@ final class BridgeController: ObservableObject {
             }
             if FileManager.default.fileExists(atPath: jogURL.path) {
                 jog = try JogPreferences.decode(Data(contentsOf: jogURL), defaults: jogDefaults)
+            }
+            if FileManager.default.fileExists(atPath: niTensionURL.path) {
+                niJog = try JSONDecoder().decode(NIJogPreferences.self, from: Data(contentsOf: niTensionURL))
+                try niJog.validate()
             }
         } catch {
             requiresReset = true
@@ -686,6 +758,36 @@ final class BridgeController: ObservableObject {
         appendLog("APP_ERROR: \(error.localizedDescription)")
     }
 
+    func setNIJogTension(_ value: Int) {
+        guard (0...255).contains(value) else { return }
+        do {
+            let updated = NIJogPreferences(value: value)
+            try FileManager.default.createDirectory(at: supportURL, withIntermediateDirectories: true)
+            try JSONEncoder().encode(updated).write(to: niTensionURL, options: .atomic)
+            niJog = updated
+            if activeMode == .ni && state == .running {
+                guard let input = screenInput else { throw AppError.invalid("The bridge control connection is closed.") }
+                try input.write(contentsOf: Data("ni_jog_tension \(value)\n".utf8))
+                message = "NI jog tension queued for both wheels."
+            }
+        } catch { report(error) }
+    }
+
+    func acceptNIStatus(_ line: String) {
+        guard activeMode == .ni, line.hasPrefix("S4_BRIDGE_STATUS "),
+              let data = line.dropFirst("S4_BRIDGE_STATUS ".count).data(using: .utf8),
+              let status = try? JSONDecoder().decode(NIManagedStatus.self, from: data),
+              status.version == 1, status.profile == "full", status.backend == "core-midi" else { return }
+        if status.isReady && state == .starting {
+            state = .running
+            // Include edits made after launch but before the service acquired the device.
+            setNIJogTension(niJog.value)
+        } else if status.state == "failed", state != .stopping {
+            state = .failed
+            if let failure = status.error { errorMessage = "\(failure.stage): \(failure.message)" }
+        }
+    }
+
     func save() throws {
         guard !requiresReset else {
             throw AppError.invalid("Reset the invalid saved preferences before saving.")
@@ -694,6 +796,7 @@ final class BridgeController: ObservableObject {
         let ledData = try leds.encoded()
         let jogData = try jog.encoded()
         let tensionData = try tension.encoded()
+        try niJog.validate()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let runData = try encoder.encode(run)
@@ -702,6 +805,7 @@ final class BridgeController: ObservableObject {
         try ledData.write(to: ledURL, options: .atomic)
         try jogData.write(to: jogURL, options: .atomic)
         try tensionData.write(to: tensionURL, options: .atomic)
+        try encoder.encode(niJog).write(to: niTensionURL, options: .atomic)
         try runData.write(to: runURL, options: .atomic)
         errorMessage = ""
     }
@@ -725,6 +829,18 @@ final class BridgeController: ObservableObject {
             return
         }
         state = .starting
+        if run.mode == .ni {
+            do {
+                try launch(arguments: run.arguments(
+                    ledURL: ledURL, jogURL: jogURL, tensionURL: tensionURL,
+                    niTensionURL: niTensionURL
+                ), diagnostic: false)
+            } catch {
+                state = .failed
+                report(error)
+            }
+            return
+        }
         screens.beginOperation()
         Task { @MainActor in
             defer { finishScreenOperation() }
@@ -771,6 +887,7 @@ final class BridgeController: ObservableObject {
         writeMotorDiagnosticLines(["# S4_MOTOR_CONFIG launchID=\(token.uuidString) pending"])
         activeLogLevel = run.logLevel
         activeProfile = run.profile
+        activeMode = diagnostic ? nil : run.mode
         child.standardOutput = pipe.fileHandleForWriting
         child.standardError = pipe.fileHandleForWriting
         isDiagnostic = diagnostic
@@ -795,7 +912,7 @@ final class BridgeController: ObservableObject {
             try child.run()
             try input?.fileHandleForReading.close()
             try pipe.fileHandleForWriting.close()
-            if !diagnostic { state = .running }
+            if !diagnostic && activeMode != .ni { state = .running }
         } catch {
             if child.isRunning {
                 report(error)
@@ -807,6 +924,7 @@ final class BridgeController: ObservableObject {
                 process = nil
                 activeLogLevel = nil
                 activeProfile = nil
+                activeMode = nil
                 livePlatter.state.reset()
                 closeScreenInput()
                 try input?.fileHandleForReading.close()
@@ -847,6 +965,28 @@ final class BridgeController: ObservableObject {
         state = .stopping
         livePlatter.state.reset()
         guard child.isRunning else { return }
+        if activeMode == .ni {
+            do {
+                guard let input = screenInput else { throw AppError.invalid("The bridge control connection is closed.") }
+                try input.write(contentsOf: Data("S4_BRIDGE_CONTROL 1 STOP\n".utf8))
+            } catch {
+                report(error)
+                closeScreenInput()
+            }
+            let deadline = DispatchWorkItem { [weak self, weak child] in
+                guard let self, let child, self.process === child, child.isRunning else { return }
+                self.restartRequested = false
+                self.state = .failed
+                self.report(AppError.invalid("The bridge did not exit after its stop request; it is still running."))
+                if self.quitRequested {
+                    self.quitRequested = false
+                    self.replyToQuit(false)
+                }
+            }
+            stopDeadline = deadline
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: deadline)
+            return
+        }
         if kill(child.processIdentifier, SIGINT) != 0 {
             restartRequested = false
             stopRequested = false
@@ -860,19 +1000,19 @@ final class BridgeController: ObservableObject {
     }
 
     private func screenControlInput(for child: Process, diagnostic: Bool) throws -> Pipe? {
-        let input = !diagnostic && run.profile == .full ? Pipe() : nil
+        let input = !diagnostic && (run.mode == .ni || run.profile == .full) ? Pipe() : nil
         if let input {
             guard fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1) != -1 else {
                 throw AppError.invalid("Could not configure the screen control pipe.")
             }
             child.standardInput = input.fileHandleForReading
             screenInput = input.fileHandleForWriting
-            screens.sendCommand = { [weak self] generation, command in
+            if run.mode == .direct { screens.sendCommand = { [weak self] generation, command in
                 guard let writer = self?.screenInput else {
                     throw AppError.invalid("The bridge's screen control connection is closed.")
                 }
                 try writer.write(contentsOf: Data("S4_SCREEN_CONTROL \(generation) \(command.rawValue)\n".utf8))
-            }
+            } }
         } else {
             child.standardInput = FileHandle.nullDevice
         }
@@ -904,6 +1044,12 @@ final class BridgeController: ObservableObject {
                 self.acceptMotorConfigReceipt(line[...], launchID: token)
             }
         }
+        let managedStatus: @Sendable (String) -> Void = { [weak self] line in
+            DispatchQueue.main.async {
+                guard let self, self.launchID == token else { return }
+                self.acceptNIStatus(line)
+            }
+        }
         return Task.detached {
             do {
                 for try await line in pipe.fileHandleForReading.bytes.lines {
@@ -912,6 +1058,7 @@ final class BridgeController: ObservableObject {
                         continue
                     }
                     if line.hasPrefix("S4_SCREEN_STATUS ") { screenStatus(line) }
+                    if line.hasPrefix("S4_BRIDGE_STATUS ") { managedStatus(line) }
                     if line.hasPrefix("S4_MOTOR_CONFIG ") { motorConfigReceipt(line) }
                     if output.append(line) { deliver() }
                 }
@@ -933,24 +1080,28 @@ final class BridgeController: ObservableObject {
 
     private func completed(_ child: Process) async {
         guard process === child else { return }
-        let normalStop = child.terminationStatus == 0 ||
-            (stopRequested && child.terminationReason == .uncaughtSignal && child.terminationStatus == SIGINT)
+        let normalStop = state != .failed && (child.terminationStatus == 0 ||
+            (stopRequested && child.terminationReason == .uncaughtSignal && child.terminationStatus == SIGINT))
         let restart = restartRequested && normalStop
         let wasDiagnostic = isDiagnostic
+        stopDeadline?.cancel()
+        stopDeadline = nil
         process = nil
         activeLogLevel = nil
         activeProfile = nil
+        let wasNI = activeMode == .ni
+        activeMode = nil
         livePlatter.state.reset()
         closeScreenInput()
         restartRequested = false
         screens.beginOperation()
-        if !wasDiagnostic || screens.restoreAfterExit {
+        if (!wasDiagnostic && !wasNI) || screens.restoreAfterExit {
             await screens.bridgeExited(restarting: restart && !quitRequested)
         }
         screens.endOperation()
         state = normalStop ? .stopped : .failed
         appendLog("EXIT: \(child.terminationStatus)")
-        if !normalStop {
+        if !normalStop && errorMessage.isEmpty {
             errorMessage = "Bridge exited with status \(child.terminationStatus). See Diagnostics for the error."
         } else if wasDiagnostic {
             message = "Controller check complete. See Diagnostics for USB results."
@@ -1013,6 +1164,7 @@ final class BridgeController: ObservableObject {
             leds = try LedPreferences.decode(defaults, defaults: defaults)
             jog = try JogPreferences.decode(jogDefaults, defaults: jogDefaults)
             tension = try TensionPreferences.decode(tensionDefaults, defaults: tensionDefaults)
+            niJog = NIJogPreferences()
             run = RunPreferences()
             screens.reset()
             invalidSavedTension = false
@@ -1316,6 +1468,14 @@ struct BridgeSettingsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 section("Bridge operation") {
+                    Picker("Controller mode", selection: $controller.run.mode) {
+                        Text("Direct HID").tag(BridgeMode.direct)
+                        Text("NI Bridge").tag(BridgeMode.ni)
+                    }.disabled(controller.isBusy)
+                    if controller.run.mode == .ni {
+                        Text("NI Bridge uses the Native Instruments service for both screens and jog wheels.")
+                            .font(.caption).foregroundColor(.secondary)
+                    } else {
                     Picker("Profile", selection: $controller.run.profile) {
                         ForEach(BridgeProfile.allCases, id: \.self) { Text($0.title).tag($0) }
                     }.disabled(controller.screens.busy || controller.isCapturingMotorDiagnostic)
@@ -1325,6 +1485,7 @@ struct BridgeSettingsView: View {
                     }
                     Text("Without a time limit, the bridge runs until you stop it or quit this app.")
                         .font(.caption).foregroundColor(.secondary)
+                    }
                 }
                 section("Djay mapping") {
                     Text("Install once, then select S4 MK3 Bridge under MIDI > Configure S4 MK3 MIDI Full in Djay.")
@@ -1349,7 +1510,26 @@ struct BridgeSettingsView: View {
     }
 
     private var jogTab: some View {
-        JogSettingsView(controller: controller)
+        Group {
+            if controller.run.mode == .ni {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("NI jog wheel tension").font(.headline)
+                    HStack {
+                        Text("Both wheels")
+                        Slider(value: Binding(
+                            get: { Double(controller.niJog.value) },
+                            set: { controller.setNIJogTension(Int($0)) }
+                        ), in: 0...255, step: 1)
+                        Text("\(controller.niJog.value)").monospacedDigit()
+                    }
+                    Text("Changes are saved immediately and sent when the NI Bridge is ready. A sent value does not confirm physical wheel response.")
+                        .font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                }.padding(20)
+            } else {
+                JogSettingsView(controller: controller)
+            }
+        }
     }
 
     private var ledTab: some View {
@@ -1678,7 +1858,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func updateMenu(_ state: BridgeState) {
         statusItem?.menu = bridgeStatusMenu(controller: controller, state: state, target: self)
-        statusItem?.button?.image = bridgeStatusImage(for: state, screenAttention: controller?.screens.needsAttention == true)
+        statusItem?.button?.image = bridgeStatusImage(for: state, screenAttention: controller?.run.mode != .ni && controller?.screens.needsAttention == true)
         statusItem?.button?.setAccessibilityLabel("S4 MK3 Bridge, \(state.rawValue), \(controller?.screens.state.rawValue ?? "")")
     }
 
@@ -1691,7 +1871,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc func restoreDriver() { controller?.restartNIDriver() }
     func menuWillOpen(_ menu: NSMenu) {
         guard let controller else { return }
-        controller.screens.refreshDriverStatus()
+        if controller.run.mode == .direct { controller.screens.refreshDriverStatus() }
         let refreshed = bridgeStatusMenu(controller: controller, state: controller.state, target: self)
         menu.removeAllItems()
         for item in refreshed.items {

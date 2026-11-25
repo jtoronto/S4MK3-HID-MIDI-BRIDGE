@@ -52,8 +52,11 @@ pub fn run(
     let started = crate::screen_motor_capture::bridge_epoch();
     let mut engine = settings.engine()?;
     let ni_decks = args.screens.ni_decks;
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     let mut last_wheel_snapshot = None;
+    let defer_ready = cfg!(target_os = "macos") && ni_decks;
+    #[cfg(target_os = "macos")]
+    let mut waiting_for_ni = defer_ready;
     let mut output = None;
     let mut service = paced::Output::with_native_motor(!ni_decks, |action| {
         match action {
@@ -63,7 +66,7 @@ pub fn run(
             }
             Action::Motor(report) => write_motor(hid, &report)?,
             Action::Frame(frame, backspin) => {
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 if ni_decks && frame.report(1).first() == Some(&3) {
                     last_wheel_snapshot = Some(frame.host_us);
                 }
@@ -91,13 +94,15 @@ pub fn run(
                 let (received, sent) = bridge.drain_feedback(Duration::from_micros(now_us))?;
                 count_feedback(&mut counts, received, sent)?;
                 *state = bridge.playback_state();
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 if ni_decks {
-                    let fresh = last_wheel_snapshot.is_some_and(|sample| {
-                        now_us.saturating_sub(sample)
-                            < s4mk3_hid_midi_bridge::jog::decode::FRESHNESS_US
-                    });
+                    let fresh = ni_snapshot_fresh(last_wheel_snapshot, now_us);
                     bridge.update_ni_decks(&led_config, fresh)?;
+                }
+                #[cfg(target_os = "macos")]
+                if waiting_for_ni && bridge.ni_decks_active()? {
+                    session.ready()?;
+                    waiting_for_ni = false;
                 }
                 diagnostics::feedback(&bridge, now_us);
                 session.feedback(bridge.feedback_state().playback_received)?;
@@ -121,7 +126,9 @@ pub fn run(
     })?;
     service.initialize()?;
     let mut reader = Reader::start(reader_hid, started)?;
-    session.ready()?;
+    if !defer_ready {
+        session.ready()?;
+    }
     let result = run_paced(
         args,
         settings,
@@ -133,15 +140,33 @@ pub fn run(
     );
     // The callback borrows the bridge; give it back before quiescing the NI session.
     drop(service);
-    #[cfg(windows)]
+    finish_owned(result, ni_decks, &mut bridge, &mut reader)?;
+    crate::report_probe_counts(args, &counts)
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+fn ni_snapshot_fresh(last_snapshot: Option<u64>, now_us: u64) -> bool {
+    last_snapshot.is_some_and(|sample| {
+        now_us.saturating_sub(sample) < s4mk3_hid_midi_bridge::jog::decode::FRESHNESS_US
+    })
+}
+
+fn finish_owned(
+    result: anyhow::Result<()>,
+    ni_decks: bool,
+    bridge: &mut full::FullBridge,
+    reader: &mut Reader,
+) -> anyhow::Result<()> {
+    #[cfg(not(any(windows, target_os = "macos")))]
+    let _unused = ni_decks;
+    #[cfg(any(windows, target_os = "macos"))]
     let result = if ni_decks {
         with_cleanup(result, bridge.stop_ni_decks(), "NI deck shutdown")
     } else {
         result
     };
     let result = with_cleanup(result, reader.stop(), "reader shutdown");
-    with_cleanup(result, bridge.finish(), "MIDI releases")?;
-    crate::report_probe_counts(args, &counts)
+    with_cleanup(result, bridge.finish(), "MIDI releases")
 }
 
 fn count_feedback(counts: &mut ProbeCounts, received: usize, sent: usize) -> anyhow::Result<()> {

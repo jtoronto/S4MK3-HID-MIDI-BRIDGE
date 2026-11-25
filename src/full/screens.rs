@@ -31,16 +31,18 @@ impl Output {
         })
     }
 
-    #[cfg(windows)]
-    pub fn ni_decks() -> anyhow::Result<Self> {
+    #[cfg(any(windows, target_os = "macos"))]
+    pub fn ni_decks(initial_tension: Option<u8>) -> anyhow::Result<Self> {
         Ok(Self {
             enabled: true,
             managed: true,
-            worker: Some(s4mk3_hid_midi_bridge::screens::Worker::start_ni_decks()?),
+            worker: Some(s4mk3_hid_midi_bridge::screens::Worker::start_ni_decks(
+                initial_tension,
+            )?),
         })
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub fn stop_ni_decks(&mut self) -> anyhow::Result<()> {
         use anyhow::Context as _;
         self.worker

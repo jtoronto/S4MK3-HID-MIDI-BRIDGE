@@ -9,6 +9,7 @@ mod midi;
 mod midi_capture;
 mod midi_layout;
 mod midi_transport;
+mod ni_runtime;
 #[path = "jog_diagnostic/ownership.rs"]
 mod ownership;
 mod platform;
@@ -45,7 +46,7 @@ struct ProbeCounts {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    validate_ni_decks(
+    let ni_tension = ni_runtime::settings(
         &args,
         std::env::var_os("S4_BRIDGE_NI_JOGT_TRIAL_FILE").is_some(),
     )?;
@@ -140,35 +141,21 @@ fn main() -> anyhow::Result<()> {
     }
     let tension =
         tension.or_else(|| jog.map(|_| s4mk3_hid_midi_bridge::tension::Config::default()));
-    run(args, tension, jog)
-}
-
-fn validate_ni_decks(args: &Args, trial_enabled: bool) -> anyhow::Result<()> {
-    ensure!(
-        !trial_enabled || args.screens.ni_decks,
-        "S4_BRIDGE_NI_JOGT_TRIAL_FILE requires --ni-decks"
-    );
-    ensure!(
-        !args.screens.ni_decks
-            || (cfg!(windows)
-                && matches!(args.midi, Some(MidiProfile::Full))
-                && matches!(args.midi_backend, midi_transport::Backend::Bloop)),
-        "--ni-decks requires Windows, --midi full, and --midi-backend bloop"
-    );
-    Ok(())
+    run(args, tension, jog, ni_tension)
 }
 
 fn run(
     args: Args,
     tension: Option<s4mk3_hid_midi_bridge::tension::Config>,
     jog: Option<full::jog::Config>,
+    ni_tension: Option<u8>,
 ) -> anyhow::Result<()> {
     let capture = screen_motor_capture::Session::start(&args)?;
     let result =
         screen_motor_capture::await_endpoint(args.managed.prepare_screen_motor_diagnostics)
             .and_then(|begin| {
                 if begin {
-                    run_owned(args, tension, jog)
+                    run_owned(args, tension, jog, ni_tension)
                 } else {
                     Ok(())
                 }
@@ -180,6 +167,7 @@ fn run_owned(
     mut args: Args,
     tension: Option<s4mk3_hid_midi_bridge::tension::Config>,
     jog: Option<full::jog::Config>,
+    ni_tension: Option<u8>,
 ) -> anyhow::Result<()> {
     let mut capture = args
         .midi_capture
@@ -190,7 +178,7 @@ fn run_owned(
         args.capture_handle = capture.handle();
     }
     let mut session = (!args.list)
-        .then(|| lifecycle::Session::new(&args))
+        .then(|| lifecycle::Session::new(&args, ni_tension))
         .transpose()?;
     let result = open_and_run(&args, tension, jog, session.as_mut());
     let result = match session {
@@ -280,6 +268,10 @@ fn open_and_run(
     );
     #[cfg(windows)]
     bind_windows_screens(args, session, collection.serial_number())?;
+    #[cfg(target_os = "macos")]
+    if args.screens.ni_decks {
+        ni_runtime::bind(session, collection.serial_number())?;
+    }
     ownership::check()?;
     let hid = api
         .open_path(collection.path())
@@ -329,12 +321,7 @@ fn bind_windows_screens(
         return Ok(());
     }
     if args.screens.ni_decks {
-        return session
-            .screens
-            .as_ref()
-            .and_then(full::screens::Output::control)
-            .context("NI deck worker missing")?
-            .bind_selected_hid(serial.context("selected S4 has no serial for NI deck output")?);
+        return ni_runtime::bind(session, serial);
     }
     if !args.screens.enabled && !args.screens.control_stdin {
         return Ok(());
@@ -691,8 +678,8 @@ mod tests {
             vec!["bridge", "--list"],
         ] {
             let args = Args::try_parse_from(arguments)?;
-            assert!(validate_ni_decks(&args, true).is_err());
-            assert!(validate_ni_decks(&args, false).is_ok());
+            assert!(ni_runtime::settings(&args, true).is_err());
+            assert_eq!(ni_runtime::settings(&args, false)?, None);
         }
         Ok(())
     }

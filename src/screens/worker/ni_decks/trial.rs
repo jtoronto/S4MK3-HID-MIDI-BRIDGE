@@ -6,6 +6,7 @@ use tokio::runtime::Runtime;
 
 use super::{DeckOutput, Shared, Transport, lock, shutdown};
 
+#[cfg(any(windows, test))]
 pub(super) const ENV: &str = "S4_BRIDGE_NI_JOGT_TRIAL_FILE";
 pub(super) const BASELINE: u8 = 107;
 
@@ -26,6 +27,7 @@ pub(super) struct Trial {
 }
 
 impl Trial {
+    #[cfg(any(windows, test))]
     pub(super) fn new(path: PathBuf) -> anyhow::Result<Self> {
         anyhow::ensure!(!path.as_os_str().is_empty(), "{ENV} must name a local file");
         Ok(Self {

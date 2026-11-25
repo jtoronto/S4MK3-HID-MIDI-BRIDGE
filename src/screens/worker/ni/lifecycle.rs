@@ -1,9 +1,8 @@
 //! Request generations and rendering are independent of helper process I/O.
 
+use super::super::presentation::Presentation;
 use super::*;
 use crate::screen_motor_diag::{self as diag, Case, Kind, Role};
-mod presentation;
-pub(in crate::screens::worker) use presentation::Presentation;
 
 fn release<T: Transport>(
     transport: &mut Option<T>,
@@ -106,26 +105,6 @@ fn ready(case: Case, generation: u64) {
         label.as_bytes(),
     );
     println!("S4_SCREEN_DIAG_READY {label}");
-}
-
-pub(super) fn update_phase(
-    now: Instant,
-    deadline: &mut Option<Instant>,
-    bright: &mut bool,
-) -> bool {
-    match *deadline {
-        None => {
-            *bright = true;
-            *deadline = Some(now + Duration::from_millis(500));
-            true
-        }
-        Some(next) if now >= next => {
-            *bright = !*bright;
-            *deadline = Some(now + Duration::from_millis(500));
-            true
-        }
-        Some(_) => false,
-    }
 }
 
 pub(super) fn run_case<F, T, S>(

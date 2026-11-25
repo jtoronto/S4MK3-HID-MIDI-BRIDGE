@@ -330,7 +330,7 @@ impl FullBridge {
         self.translator.playback_state()
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub fn update_ni_decks(
         &self,
         colors: &leds::LedConfig,
@@ -345,7 +345,15 @@ impl FullBridge {
             )
     }
 
-    #[cfg(windows)]
+    #[cfg(target_os = "macos")]
+    pub fn ni_decks_active(&self) -> anyhow::Result<bool> {
+        self.screens
+            .control()
+            .ok_or_else(|| anyhow::anyhow!("NI deck worker missing"))?
+            .ni_decks_active()
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
     pub fn stop_ni_decks(&mut self) -> anyhow::Result<()> {
         self.screens.stop_ni_decks()
     }
@@ -497,7 +505,7 @@ impl Translator {
         }
     }
 
-    #[cfg(any(windows, test))]
+    #[cfg(any(windows, target_os = "macos", test))]
     fn ni_deck_output(
         &self,
         feedback: &feedback::FeedbackState,
