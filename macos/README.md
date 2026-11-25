@@ -64,6 +64,16 @@ running.
 
 ### S4 screens
 
+**Choosing a mode in source builds:** Stop the bridge before changing modes.
+Choose **Direct HID** to keep the bridge's motor tuning and optional S4 screens.
+Choose **NI Bridge** to let the Native Instruments hardware service run both
+platters and both screens. In that mode, leave the NI service running; the
+Direct HID screen toggle and driver handover instructions do not apply.
+The **Jog** tab shows one NI tension setting for both wheels (0–255, default
+107). Changing it does not change the motor tuning used by Direct HID.
+
+The following screen setup instructions are for **Direct HID**.
+
 Version 0.2.0-beta.1 includes a **Screens** settings tab and shared
 **Enable S4 screens** menu toggle. Use the normal full-profile **Start bridge**
 action; **Save and restart** keeps your selected screen support and saved

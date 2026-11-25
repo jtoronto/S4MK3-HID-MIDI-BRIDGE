@@ -60,6 +60,13 @@ The menu-bar app is currently macOS-only.
 7. After selecting a different mapping, stop and start the bridge once.
    Confirm controls and headphone cue before using the speakers.
 
+**Mode choice in macOS source builds:** Stop the bridge before switching
+modes. **Direct HID** keeps the existing motor tuning and optional screens.
+**NI Bridge** uses the NI hardware service for both the screens and the jog
+motors. Leave the service running in this mode; you do not need to enable
+screens separately. In **Jog**, adjust **NI jog wheel tension** for both
+wheels together. Your Direct HID motor settings stay separate.
+
 If Djay offers only a blank S4 configuration, restart Djay with the bridge
 already running, then select the imported mapping.
 
