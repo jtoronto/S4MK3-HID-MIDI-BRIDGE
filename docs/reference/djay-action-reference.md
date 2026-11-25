@@ -42,6 +42,35 @@ STEMS still selects the pad layer. This overlay is not in the Windows mapping.
 See the [Mute FX validation record](../validation/controls/mute-fx-macos-validation-2026-11-24.md)
 for physical observations and verification limits.
 
+### Current-source macOS Stem FX routing
+
+For decks A–D the mapping uses channels 13–16, respectively. Each
+Manual FX slot has five consecutive route addresses: whole deck, then
+generic stems 1–4. The slot bases are 32, 37, and 42. Note commands
+target `turntableN.fxSRouting.routingDeck` and `routingGenericChannel1`
+through `routingGenericChannel4`. Root CC feedback at the corresponding
+addresses reads `turntableN.fxS.routing.isDeck` and `genericChannel1`
+through `genericChannel4`. CC 47–50 report the four
+`turntableN.view.state.hasUnmixerToolTrackMode*` availability flags.
+These assignments are not in the Windows mapping.
+
+In the November 25, 2026 software-only probe on Djay Pro 5.6.11, Deck A
+FX 1 returned root CC and embedded Note feedback for mouse edits and
+isolated Vocals and Deck MIDI commands. The two visible stems could be
+active together; Djay also asserted `isDeck` while both were active in
+that two-stem layout. The bridge displays the independent flags rather
+than inferring a single exclusive route. That initial probe was limited to
+Deck A, FX 1, and did not test physical controls or audio.
+
+**Known limitation — three-stem labels:** A follow-up output-only test on
+Deck A, FX 1 found that the tested MIDI layout fields did not update when
+switching between Drums / Harmonic / Vocals and Drums / Bass / Melodic.
+Both layouts report Drums on generic route 1, Harmonic or Bass on route 2,
+and Vocals or Melodic on route 3. The S4 keeps the labels **DRUM / HARM /
+VOX** in either layout. In Drums / Bass / Melodic, **HARM** therefore
+indicates Bass and **VOX** indicates Melodic; the labels do not change
+what Djay routes.
+
 ### Current-source EXT overlay
 
 The version-scoped audit counts, tables and S4 usage cells below remain
