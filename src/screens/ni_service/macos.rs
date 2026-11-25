@@ -18,6 +18,30 @@ const BOOTSTRAP: &str = "NIHWMainHandler";
 const NOTIFICATION_LIMIT: usize = 64;
 const SEND_BUDGET: Duration = Duration::from_millis(25);
 
+#[cfg(test)]
+static OFFLINE_BOOTSTRAP: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+#[cfg(test)]
+/// Select an isolated bootstrap for this test process.
+///
+/// # Errors
+/// Rejects nonfixture names and a second selection.
+pub fn select_offline_bootstrap(name: String) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        name.starts_with("s4.fixture.") && name.ends_with(".bootstrap"),
+        "expected a private fixture bootstrap name"
+    );
+    OFFLINE_BOOTSTRAP
+        .set(name)
+        .map_err(|_| anyhow::anyhow!("offline bootstrap already selected"))
+}
+
+#[cfg(test)]
+#[must_use]
+pub fn offline_active() -> bool {
+    OFFLINE_BOOTSTRAP.get().is_some()
+}
+
 /// Both NI registrations for the selected S4, with one serialized output channel.
 pub struct NiService(Session<Macos>);
 
@@ -27,7 +51,11 @@ impl NiService {
     /// # Errors
     /// Fails closed on missing service, identity mismatch, cancellation or timeout.
     pub async fn connect(identity: Identity, cancel: Cancellation) -> Result<Self, Error> {
-        Session::connect(&Macos(BOOTSTRAP.to_owned()), identity, cancel)
+        #[cfg(test)]
+        let name = OFFLINE_BOOTSTRAP.get().map_or(BOOTSTRAP, String::as_str);
+        #[cfg(not(test))]
+        let name = BOOTSTRAP;
+        Session::connect(&Macos(name.to_owned()), identity, cancel)
             .await
             .map(Self)
     }
@@ -201,12 +229,20 @@ impl Connector for Macos {
     type Notification = Notification;
 
     async fn open(&self, name: &str) -> Result<Request, Error> {
+        #[cfg(test)]
+        if offline_active() && !name.starts_with("s4.fixture.") {
+            return Err(Error::Unsupported("non-fixture NI message port forbidden"));
+        }
         Remote::open(name)
             .map(|port| Request(Arc::new(port)))
             .map_err(transport_error)
     }
 
     fn serve(&self, name: &str) -> Result<Notification, Error> {
+        #[cfg(test)]
+        if offline_active() && !name.starts_with("s4.fixture.") {
+            return Err(Error::Unsupported("non-fixture NI message port forbidden"));
+        }
         let (tx, rx) = mpsc::channel(NOTIFICATION_LIMIT);
         let overflow = Arc::new(AtomicBool::new(false));
         let has_overflowed = Arc::clone(&overflow);
@@ -249,4 +285,4 @@ impl Connector for Macos {
 
 #[cfg(test)]
 #[path = "macos_tests.rs"]
-mod tests;
+pub mod tests;

@@ -5,14 +5,14 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use tokio::sync::watch;
 
-const SERIAL: &str = "FIXTURE42";
+pub const SERIAL: &str = "FIXTURE42";
 const TRUE: u32 = 0x7472_7565;
 const ACK: u32 = 0x0340_4300;
 const QUERY: u32 = 0x0344_7143;
-const DISPLAY: u32 = 0x0364_7344;
+pub const DISPLAY: u32 = 0x0364_7344;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Mode {
+pub enum Mode {
     Normal,
     WrongSerial,
     RejectSecond,
@@ -20,12 +20,13 @@ enum Mode {
     LoseControl,
 }
 
-struct Fixture {
-    bootstrap: String,
-    device_note: String,
-    instance_note: String,
+pub struct Fixture {
+    pub bootstrap: String,
+    pub device_note: String,
+    pub instance_note: String,
     _ports: [Local; 3],
-    commands: Arc<Mutex<Vec<Vec<u8>>>>,
+    pub commands: Arc<Mutex<Vec<Vec<u8>>>>,
+    observed: std::sync::mpsc::Receiver<[u8; 12]>,
     frame_began: Option<tokio::sync::oneshot::Receiver<()>>,
     release: Option<std::sync::mpsc::Sender<()>>,
 }
@@ -38,14 +39,20 @@ impl Drop for Fixture {
     }
 }
 
-fn words(values: &[u32]) -> Vec<u8> {
+#[must_use]
+pub fn words(values: &[u32]) -> Vec<u8> {
     values
         .iter()
         .flat_map(|value| value.to_le_bytes())
         .collect()
 }
 
-fn command(bytes: &[u8]) -> u32 {
+/// Read the command word of a checked fixture message.
+///
+/// # Panics
+/// Panics if the message is shorter than a word.
+#[must_use]
+pub fn command(bytes: &[u8]) -> u32 {
     u32::from_le_bytes(*bytes.first_chunk().expect("command word"))
 }
 
@@ -94,7 +101,12 @@ fn bind_device(device: &str, note: String, mode: Mode) -> Local {
 }
 
 impl Fixture {
-    fn start(mode: Mode) -> Self {
+    /// Bind fresh, private ports for this test.
+    ///
+    /// # Panics
+    /// Panics if a fixture port cannot be created.
+    #[must_use]
+    pub fn start(mode: Mode) -> Self {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let prefix = format!(
             "s4.fixture.{}.{}",
@@ -125,6 +137,7 @@ impl Fixture {
         let i_note = instance_note.clone();
         let commands = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
         let observed = Arc::clone(&commands);
+        let (scalar, observed_scalar) = std::sync::mpsc::channel();
         let (frame_began, began) = tokio::sync::oneshot::channel();
         let frame_began = Mutex::new(Some(frame_began));
         let (release, unblock) = std::sync::mpsc::channel();
@@ -135,6 +148,11 @@ impl Fixture {
                 return None;
             }
             observed.lock().unwrap().push(bytes.to_vec());
+            if let Ok(bytes) = <[u8; 12]>::try_from(bytes)
+                && let Err(error) = scalar.send(bytes)
+            {
+                tracing::debug!(%error, "fixture scalar observer closed");
+            }
             match command(bytes) {
                 ACK if bytes.get(16..)?.strip_suffix(&[0])? == i_note.as_bytes()
                     && Remote::open(&i_note).is_ok() =>
@@ -176,8 +194,26 @@ impl Fixture {
             instance_note,
             _ports: [boot, dev, fixture_instance],
             commands,
+            observed: observed_scalar,
             frame_began: Some(began),
             release: Some(release),
+        }
+    }
+
+    /// Wait on service-side delivery of a scalar command, not the sender's receipt.
+    ///
+    /// # Errors
+    /// Returns an error if the service never observed the command.
+    pub fn await_scalar(&self, expected: &[u8], timeout: Duration) -> anyhow::Result<()> {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if self
+                .observed
+                .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))?
+                == expected
+            {
+                return Ok(());
+            }
         }
     }
 

@@ -9,7 +9,6 @@ use std::time::Duration;
 use anyhow::Context as _;
 #[cfg(all(test, target_os = "macos"))]
 use midir::MidiInput;
-use midir::MidiInputConnection;
 #[cfg(all(test, target_os = "macos"))]
 use tracing::debug;
 use tracing::info;
@@ -259,7 +258,7 @@ impl Decoder {
 }
 
 pub struct FeedbackInput {
-    _connection: MidiInputConnection<Decoder>,
+    _connection: crate::midi_transport::InputConnection<Decoder>,
     queue: queue::Queue,
 }
 

@@ -84,13 +84,27 @@ fn exact_index(names: &[String], direction: &str, port_name: &str) -> anyhow::Re
 }
 
 pub struct Output {
-    connection: MidiOutputConnection,
+    connection: OutputConnection,
     capture: crate::midi_capture::Handle,
+}
+
+enum OutputConnection {
+    Native(MidiOutputConnection),
+    #[cfg(all(test, target_os = "macos"))]
+    Offline,
+}
+
+pub struct InputConnection<T: Send + 'static> {
+    _native: Option<MidiInputConnection<T>>,
 }
 
 impl Output {
     pub fn send(&mut self, bytes: &[u8]) -> Result<(), midir::SendError> {
-        send_captured(&self.capture, bytes, |bytes| self.connection.send(bytes))
+        send_captured(&self.capture, bytes, |bytes| match &mut self.connection {
+            OutputConnection::Native(connection) => connection.send(bytes),
+            #[cfg(all(test, target_os = "macos"))]
+            OutputConnection::Offline => Ok(()),
+        })
     }
 }
 
@@ -109,6 +123,13 @@ pub fn output(
     capture: crate::midi_capture::Handle,
 ) -> anyhow::Result<Output> {
     backend.validate_runtime()?;
+    #[cfg(all(test, target_os = "macos"))]
+    if crate::ni_process_tests::active() {
+        return Ok(Output {
+            connection: OutputConnection::Offline,
+            capture,
+        });
+    }
     let output = MidiOutput::new("S4 MK3 bridge").context("create MIDI output client")?;
     let connection = match backend {
         Backend::CoreMidi => {
@@ -130,7 +151,7 @@ pub fn output(
         }
     }?;
     Ok(Output {
-        connection,
+        connection: OutputConnection::Native(connection),
         capture,
     })
 }
@@ -141,13 +162,17 @@ pub fn input<T: Send + 'static>(
     callback: impl FnMut(u64, &[u8], &mut T) + Send + 'static,
     data: T,
     capture: crate::midi_capture::Handle,
-) -> anyhow::Result<MidiInputConnection<T>> {
+) -> anyhow::Result<InputConnection<T>> {
     backend.validate_runtime()?;
+    #[cfg(all(test, target_os = "macos"))]
+    if crate::ni_process_tests::active() {
+        return Ok(InputConnection { _native: None });
+    }
     // Preserve midir's input policy. In the locked 0.11.0 all backends default
     // to Ignore::None; enabling capture must not change callback admission.
     let input = MidiInput::new("S4 MK3 feedback").context("create MIDI input client")?;
     let callback = captured_callback(capture, callback);
-    match backend {
+    let native = match backend {
         Backend::CoreMidi => {
             #[cfg(target_os = "macos")]
             {
@@ -165,7 +190,10 @@ pub fn input<T: Send + 'static>(
                 .connect(&port, name, callback, data)
                 .map_err(|error| anyhow::anyhow!("connect {backend} MIDI input: {error}"))
         }
-    }
+    }?;
+    Ok(InputConnection {
+        _native: Some(native),
+    })
 }
 
 fn captured_callback<T>(

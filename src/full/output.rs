@@ -3,11 +3,11 @@
 use std::time::Duration;
 
 use anyhow::{Context as _, ensure};
-use hidapi::HidDevice;
 use tracing::{debug, info, warn};
 
 use super::feedback::FeedbackState;
 use super::leds::{LedConfig, LocalState, render_buttons};
+use crate::bridge_runtime::controller::{self, Handle};
 
 const BUTTON_INTERVAL: Duration = Duration::from_millis(10);
 const RING_INTERVAL: Duration = Duration::from_millis(20);
@@ -21,7 +21,7 @@ mod ring_phase;
 mod ring_tests;
 
 pub struct LedOutput<'a> {
-    hid: &'a HidDevice,
+    hid: &'a Handle,
     native_rings: bool,
     buttons: Option<[u8; 95]>,
     rings: [Option<[u8; 41]>; 2],
@@ -33,7 +33,7 @@ pub struct LedOutput<'a> {
 }
 
 impl<'a> LedOutput<'a> {
-    pub fn new(hid: &'a HidDevice, native_rings: bool) -> anyhow::Result<Self> {
+    pub fn new(hid: &'a Handle, native_rings: bool) -> anyhow::Result<Self> {
         // Traktor capture: 28 bytes including ID; separate motor report is excluded.
         let mut init = [0_u8; 28];
         init[0] = 0x30;
@@ -42,8 +42,7 @@ impl<'a> LedOutput<'a> {
         // Mixxx's third sendOutputReport argument is FIFO ordering, not report type.
         for side in (0_u8..2).filter(|_| native_rings) {
             init[1] = side;
-            let written =
-                crate::platform::write(hid, &init).context("initialize S4 ring output")?;
+            let written = controller::write(hid, &init).context("initialize S4 ring output")?;
             ensure!(
                 written == init.len(),
                 "short S4 ring initialization output report"
@@ -131,7 +130,7 @@ impl<'a> LedOutput<'a> {
     }
 
     fn write(&self, report: &[u8]) -> anyhow::Result<()> {
-        let written = crate::platform::write(self.hid, report).context("write S4 LED output")?;
+        let written = controller::write(self.hid, report).context("write S4 LED output")?;
         ensure!(written == report.len(), "short S4 LED output write");
         debug!(id = report[0], written, "LED_WRITE");
         Ok(())

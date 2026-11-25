@@ -36,6 +36,8 @@ mod left_jog;
 mod macos;
 #[cfg(target_os = "macos")]
 pub use macos::NiService;
+#[cfg(all(test, target_os = "macos"))]
+pub use macos::{offline_active, select_offline_bootstrap, tests as macos_fixture};
 #[path = "ni_service/protocol.rs"]
 mod protocol;
 #[cfg(windows)]

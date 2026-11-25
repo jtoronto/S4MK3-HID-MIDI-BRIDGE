@@ -16,6 +16,19 @@ mod platform;
 mod screen_motor_capture;
 mod screens_control;
 
+// The macOS test executable compiles the real screen stack with its private
+// fixture enabled. Cargo otherwise builds a binary test's library without cfg(test).
+#[cfg(all(test, target_os = "macos"))]
+extern crate s4mk3_hid_midi_bridge as bridge_library;
+#[cfg(all(test, target_os = "macos"))]
+extern crate self as s4mk3_hid_midi_bridge;
+#[cfg(all(test, target_os = "macos"))]
+pub use bridge_library::{jog, screen_motor_diag, tension};
+#[cfg(all(test, target_os = "macos"))]
+mod ni_process_tests;
+#[cfg(all(test, target_os = "macos"))]
+pub mod screens;
+
 #[cfg(test)]
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -45,7 +58,10 @@ struct ProbeCounts {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+    run_cli(Args::parse())
+}
+
+fn run_cli(args: Args) -> anyhow::Result<()> {
     let ni_tension = ni_runtime::settings(
         &args,
         std::env::var_os("S4_BRIDGE_NI_JOGT_TRIAL_FILE").is_some(),
@@ -180,7 +196,14 @@ fn run_owned(
     let mut session = (!args.list)
         .then(|| lifecycle::Session::new(&args, ni_tension))
         .transpose()?;
-    let result = open_and_run(&args, tension, jog, session.as_mut());
+    let open = open_and_run;
+    #[cfg(all(test, target_os = "macos"))]
+    let open = if ni_process_tests::active() {
+        ni_process_tests::open
+    } else {
+        open
+    };
+    let result = open(&args, tension, jog, session.as_mut());
     let result = match session {
         Some(session) => session.finish(result),
         None => result,
@@ -296,9 +319,9 @@ fn open_and_run(
     if let Some((reader, config)) = tension {
         bridge_runtime::run(
             args,
-            &hid,
-            reader,
-            &mut parser,
+            &hid.into(),
+            reader.into(),
+            bridge_runtime::controller::Decoder::Native(&mut parser),
             &mut leds,
             bridge_runtime::MotorSettings {
                 tension: config,
@@ -427,15 +450,15 @@ fn run_probe(
 }
 
 fn initialize_full_analog(
-    hid: &HidDevice,
-    parser: &mut PacketParser,
+    hid: &bridge_runtime::controller::Handle,
+    parser: &mut bridge_runtime::controller::Decoder<'_>,
     bridge: &mut full::FullBridge,
 ) -> anyhow::Result<()> {
-    let report = input::read_analog(hid)?;
+    let report = bridge_runtime::controller::analog(hid)?;
     let mut events = Vec::with_capacity(48);
     // Seed the real parser once, including zero-valued sliders, without sending
     // startup FX, gain, filter, crossfader-position or tempo commands.
-    parser.parse_from("control", &report[1..], &mut events);
+    parser.parse(&report[1..], &mut events);
     bridge.seed_analog(&events)
 }
 

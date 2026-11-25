@@ -179,6 +179,11 @@ impl UsbScreens {
     /// # Errors
     /// Returns an error for enumeration, ambiguous devices, or unavailable interface access.
     pub fn open() -> anyhow::Result<Self> {
+        #[cfg(all(test, target_os = "macos"))]
+        if ni_service::offline_active() {
+            eprintln!("S4_FIXTURE_FORBIDDEN_SCREEN_USB");
+            anyhow::bail!("offline NI fixture forbids raw USB screens");
+        }
         let mut devices = nusb::list_devices()
             .wait()?
             .filter(|device| device.vendor_id() == 0x17cc && device.product_id() == 0x1720);

@@ -1,5 +1,6 @@
 //! One output owner services motors, feedback and LEDs while snapshots run apart.
 
+pub mod controller;
 mod diagnostics;
 mod input;
 mod paced;
@@ -7,13 +8,12 @@ pub mod replay;
 
 use anyhow::{Context as _, ensure};
 use encdr::device::led_builder::LedBuilder;
-use encdr::device::parser::PacketParser;
-use hidapi::HidDevice;
 use s4mk3_hid_midi_bridge::tension::{Config, Engine};
 use std::time::Duration;
 use tracing::{debug, info};
 
 use crate::{Args, ProbeCounts, full, input_payload, record_event};
+use controller::{Decoder, Handle};
 use input::Reader;
 use paced::Action;
 
@@ -34,9 +34,9 @@ impl MotorSettings {
 
 pub fn run(
     args: &Args,
-    hid: &HidDevice,
-    reader_hid: HidDevice,
-    parser: &mut PacketParser,
+    hid: &Handle,
+    reader_hid: Handle,
+    mut parser: Decoder<'_>,
     leds: &mut LedBuilder,
     settings: MotorSettings,
     session: &mut crate::lifecycle::Session,
@@ -62,7 +62,7 @@ pub fn run(
         match action {
             Action::Initialize => {
                 output = Some(full::output::LedOutput::new(hid, !ni_decks)?);
-                crate::initialize_full_analog(hid, parser, &mut bridge)?;
+                crate::initialize_full_analog(hid, &mut parser, &mut bridge)?;
             }
             Action::Motor(report) => write_motor(hid, &report)?,
             Action::Frame(frame, backspin) => {
@@ -74,7 +74,7 @@ pub fn run(
                     .map(|index| frame.report(index))
                     .filter(|report| !report.is_empty())
                 {
-                    if !report_input(args.raw, report, parser, &mut events)? {
+                    if !report_input(args.raw, report, &mut parser, &mut events)? {
                         continue;
                     }
                     for event in &events {
@@ -209,7 +209,7 @@ fn run_paced<F: FnMut(Action<'_>) -> anyhow::Result<()>>(
 fn report_input(
     raw: bool,
     report: &[u8],
-    parser: &mut PacketParser,
+    parser: &mut Decoder<'_>,
     events: &mut Vec<encdr::Event>,
 ) -> anyhow::Result<bool> {
     if raw {
@@ -219,7 +219,7 @@ fn report_input(
     let Some(payload) = input_payload(report)? else {
         return Ok(false);
     };
-    parser.parse_from("control", payload, events);
+    parser.parse(payload, events);
     Ok(true)
 }
 
@@ -236,8 +236,8 @@ fn log_output_mode(ni_decks: bool, settings: MotorSettings) {
     }
 }
 
-fn write_motor(hid: &HidDevice, report: &[u8; 11]) -> anyhow::Result<()> {
-    let written = crate::platform::write(hid, report).context("write S4 tension report")?;
+fn write_motor(hid: &Handle, report: &[u8; 11]) -> anyhow::Result<()> {
+    let written = controller::write(hid, report).context("write S4 tension report")?;
     ensure!(
         written == report.len(),
         "short S4 tension write: {written}/11"

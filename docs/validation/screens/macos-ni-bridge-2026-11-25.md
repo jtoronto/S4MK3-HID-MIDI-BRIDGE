@@ -22,13 +22,34 @@ rebuilt Jog tab showed all four Windows groups: NI tension, Vinyl at startup,
 Backspin, and Scratch and pitch bend mapping. This was a settings check, not
 a physical platter test.
 
-**Not verified:** a session with NIHardwareAgent and a real S4, physical
-screen updates, platter feel, or a full Djay set. The packaged CLI's argument
-and config checks ran without hardware, but they did not reach NI acquisition:
-the executable requires HID and CoreMIDI first and cannot redirect its NI
-connection to the private fixture. The fixture results above therefore do not
-prove end-to-end startup, missing-service behavior or shutdown of the packaged
-process. For an attended check, stop
+## Offline managed CLI process check
+
+Run on macOS:
+
+```sh
+cargo test --offline --locked --bin s4mk3-hid-midi-bridge ni_process_tests -- --nocapture
+```
+
+The macOS Rust test executable launches itself as a child, parses the normal
+NI CLI arguments, and runs the real managed runtime. Only the HID/Encdr and
+CoreMIDI boundaries are substituted. The native transport uses a unique
+private CFMessagePort fixture. No fixture bootstrap or I/O switch is compiled
+into the shipping executable.
+
+The child emitted managed `ready` after the fixture acquired the selected
+instance and acknowledged the left and right frames. The fixture observed
+startup tension `107`, a live stdin update to `173`, then both motor Pause
+commands and both ring clears after `S4_BRIDGE_CONTROL 42 STOP`. The child
+acknowledged stop ID `42` and exited successfully; both private notification
+ports were gone. Rejecting the right frame prevented readiness. An absent
+private bootstrap emitted `S4_SCREEN_STATUS 0 failed` and a terminal
+`S4_BRIDGE_STATUS` containing `NI message port unavailable`, without readiness
+or a raw HID/USB fallback write.
+
+**Not verified:** the packaged, non-test executable's acquisition against
+NIHardwareAgent, a real S4, physical screen updates, platter feel, or a full
+Djay set. The offline suite excluded the two pre-existing real CoreMIDI
+integration tests. For an attended check, stop
 Direct HID, select NI Bridge, leave the NI service running, and start. Confirm
 both screens update, both platters respond and the Jog tension slider changes
 their feel. Stop and confirm both platters release before switching back to

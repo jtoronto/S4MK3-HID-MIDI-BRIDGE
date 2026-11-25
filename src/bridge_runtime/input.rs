@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, bail};
 use crossbeam_channel::{Receiver, Sender, TryRecvError, bounded};
-use hidapi::HidDevice;
 use s4mk3_hid_midi_bridge::screen_motor_diag::{self as diag, Kind, Role};
 use tracing::warn;
 
@@ -33,7 +32,7 @@ pub struct Reader {
 }
 
 impl Reader {
-    pub fn start(hid: HidDevice, started: Instant) -> anyhow::Result<Self> {
+    pub fn start(hid: super::controller::Handle, started: Instant) -> anyhow::Result<Self> {
         let (tx, frames) = bounded(32);
         let (done_tx, done) = bounded(1);
         let (cancel, cancel_rx) = bounded(1);
@@ -54,7 +53,7 @@ impl Reader {
                         // Actual admission, never catch up missed snapshot slots.
                         next_poll = Instant::now() + Duration::from_micros(INTERVAL_US);
                         let mut buffers = [[0; 128]; 3];
-                        let lengths = crate::input::read_batch(&hid, true, &mut buffers)?;
+                        let lengths = super::controller::batch(&hid, &mut buffers)?;
                         match cancel_rx.try_recv() {
                             Ok(()) | Err(TryRecvError::Disconnected) => return Ok(()),
                             Err(TryRecvError::Empty) => {}
