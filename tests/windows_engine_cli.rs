@@ -41,7 +41,7 @@ fn windows_export_is_offline_and_preserves_existing_destination() -> anyhow::Res
             let mapping = plist::Value::from_reader(std::io::Cursor::new(&bytes))?;
             let root = mapping.as_dictionary().context("mapping dictionary")?;
             assert_eq!(root["endpointName"].as_string(), Some(endpoint));
-            assert_eq!(root["controls"].as_array().context("controls")?.len(), 582);
+            assert_eq!(root["controls"].as_array().context("controls")?.len(), 643);
             assert!(!run()?.status.success());
             assert_eq!(std::fs::read(&path)?, bytes);
         }

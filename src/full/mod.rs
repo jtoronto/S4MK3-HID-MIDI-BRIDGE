@@ -14,6 +14,7 @@ mod raw;
 pub mod replay;
 mod ring_position;
 pub mod screens;
+mod stem_fx;
 mod tempo_pickup;
 
 use std::collections::HashMap;
@@ -189,7 +190,9 @@ struct Translator {
     fx_browse_anchors: [[Option<u8>; 3]; 2],
     eq_selecting: bool,
     thru: [Option<bool>; 4],
-    mute_fx_buttons: bool,
+    core_midi_addresses: bool,
+    stem_fx_slot: [Option<u8>; 2],
+    stem_fx_layout: [Option<usize>; 4],
 }
 
 impl Default for Translator {
@@ -237,7 +240,9 @@ impl Default for Translator {
             fx_browse_anchors: [[None; 3]; 2],
             eq_selecting: false,
             thru: [None; 4],
-            mute_fx_buttons: true,
+            core_midi_addresses: true,
+            stem_fx_slot: [None; 2],
+            stem_fx_layout: [None; 4],
         }
     }
 }
@@ -279,7 +284,7 @@ impl FullBridge {
             translator: Translator {
                 jog_config,
                 vinyl: [jog_config.vinyl_enabled_at_startup; 2],
-                mute_fx_buttons: backend == crate::midi_transport::Backend::CoreMidi,
+                core_midi_addresses: backend == crate::midi_transport::Backend::CoreMidi,
                 ..Translator::default()
             },
             raw: raw::Parser::new()?,
@@ -699,7 +704,7 @@ impl Translator {
             tempo_indication: self.tempo_gesture.map(tempo_pickup::Gesture::indication),
             move_selecting: self.move_selecting,
             eq_selecting: self.eq_selecting,
-            mute_fx_buttons: self.mute_fx_buttons,
+            stem_fx_slot: self.stem_fx_slot,
             fx_positions: self.fx_positions,
             fx_acquired: self
                 .fx_pickup
@@ -1044,21 +1049,7 @@ impl Translator {
                     }
                 }
             }
-            for (suffix, mode) in [
-                ("hotcue_mode", PadMode::Hotcue),
-                ("samples_mode", PadMode::Samples),
-                ("stems_mode", PadMode::Stems),
-                (catalog::MUTE_FX_BINDING.input, PadMode::Stems),
-            ] {
-                if !(self.mute_fx_buttons && suffix == catalog::MUTE_FX_BINDING.input)
-                    && controls.iter().any(|input| {
-                        matches!(input, Control::Button(name, true)
-                    if name.strip_prefix(prefix).and_then(|s| s.strip_prefix('_')) == Some(suffix))
-                    })
-                {
-                    self.pads[side] = mode;
-                }
-            }
+            self.select_pad_mode(side, controls);
             for (name, motor) in [
                 (
                     if side == 0 {
@@ -1096,6 +1087,26 @@ impl Translator {
             self.wheel_touch(side, controls, output);
         }
         self.fx_targets(controls, output);
+    }
+
+    fn select_pad_mode(&mut self, side: usize, controls: &[Control]) {
+        for (suffix, mode) in [
+            ("hotcue_mode", PadMode::Hotcue),
+            ("samples_mode", PadMode::Samples),
+            ("stems_mode", PadMode::Stems),
+        ] {
+            if let Some(&Control::Button(name, true)) = controls.iter().find(|input| {
+                matches!(input, Control::Button(name, true) if side_name(name) == Some((side, suffix)))
+            }) && !self.held.contains_key(name)
+            {
+                let enter_routing = suffix == "stems_mode"
+                    && self.pads[side] == PadMode::Stems
+                    && self.stem_fx_slot[side].is_none();
+                self.stem_fx_slot[side] = enter_routing.then_some(0);
+                self.pads[side] = mode;
+                self.held.insert(name, Vec::new());
+            }
+        }
     }
 
     fn wheel_touch(&mut self, side: usize, controls: &[Control], output: &mut Vec<[u8; 3]>) {
@@ -1304,13 +1315,53 @@ impl Translator {
         Ok(routes)
     }
 
+    fn press_stem_fx(
+        &mut self,
+        name: &'static str,
+        output: &mut Vec<[u8; 3]>,
+    ) -> anyhow::Result<bool> {
+        if let Some((side, suffix)) = side_name(name)
+            && let Some(slot) = self.stem_fx_slot[side]
+            && let Some(pad) = suffix.strip_prefix("pad_")
+        {
+            let pad: u8 = pad.parse()?;
+            self.held.insert(name, Vec::new());
+            let deck = self.decks[side].channel();
+            match pad {
+                5..=7 => self.stem_fx_slot[side] = Some(pad - 5),
+                8 => {
+                    if self.stem_fx_layout[usize::from(deck)].is_some() {
+                        let address = if self.core_midi_addresses {
+                            stem_fx::address(deck, slot, 0)
+                        } else {
+                            stem_fx::windows_address(deck, slot, 0)
+                        };
+                        pulse(address, output);
+                    }
+                }
+                1..=4
+                    if self.stem_fx_layout[usize::from(deck)]
+                        .is_some_and(|count| usize::from(pad) <= count) =>
+                {
+                    let address = if self.core_midi_addresses {
+                        stem_fx::address(deck, slot, pad)
+                    } else {
+                        stem_fx::windows_address(deck, slot, pad)
+                    };
+                    pulse(address, output);
+                }
+                _ => {}
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     fn press(&mut self, name: &'static str, output: &mut Vec<[u8; 3]>) -> anyhow::Result<()> {
-        if self.held.contains_key(name) {
+        if self.held.contains_key(name) || self.press_stem_fx(name, output)? {
             return Ok(());
         }
-        if self.mute_fx_buttons
-            && side_name(name).is_some_and(|(_, suffix)| suffix == catalog::MUTE_FX_BINDING.input)
-        {
+        if side_name(name).is_some_and(|(_, suffix)| suffix == catalog::MUTE_FX_BINDING.input) {
             pulse(
                 Address {
                     channel: catalog::MUTE_FX_INPUT_CHANNEL,
@@ -1514,6 +1565,7 @@ impl Translator {
         output: &mut Vec<[u8; 3]>,
     ) -> anyhow::Result<()> {
         self.thru = feedback.thru;
+        self.stem_fx_layout = feedback.stem_fx.map(stem_fx::Feedback::layout);
         // Testing contract: these are the raw cached outputs, not UI masking
         // or a play-button guess. Feedback silence does not revoke permission.
         self.playback_authorized = std::array::from_fn(|deck| {
@@ -1778,17 +1830,100 @@ mod tests {
     }
 
     #[test]
-    fn windows_mute_buttons_still_select_the_stems_layer() -> anyhow::Result<()> {
-        let mut state = Translator {
-            mute_fx_buttons: false,
-            ..Translator::default()
-        };
-        let output = run(&mut state, &[Control::Button("right_mute_mode", true)])?;
-        assert!(output.is_empty());
-        assert_eq!(
-            state.local_led_state().pads,
-            [PadMode::Hotcue, PadMode::Stems]
-        );
+    fn windows_mute_buttons_use_global_feedback_without_selecting_stems() -> anyhow::Result<()> {
+        use crate::midi_transport::Backend;
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            let mut state = Translator {
+                core_midi_addresses: false,
+                ..Translator::default()
+            };
+            let mut feedback = feedback::FeedbackState::default();
+            let mut decoder = feedback::Decoder::default();
+            let config = leds::LedConfig::default();
+            for name in ["left_mute_mode", "right_mute_mode"] {
+                let output = run(&mut state, &[Control::Button(name, true)])?;
+                assert_eq!(output, [[0x94, 4, 127], [0x84, 4, 0]]);
+                for packet in output {
+                    decoder.feed(&packet, |message| {
+                        if let Some(message) = crate::midi_layout::normalize(backend, message) {
+                            feedback.apply(message, Duration::ZERO);
+                        }
+                    });
+                }
+                assert_eq!(feedback.mute_fx, None);
+                assert!(run(&mut state, &[Control::Button(name, true)])?.is_empty());
+                assert!(run(&mut state, &[Control::Button(name, false)])?.is_empty());
+            }
+            assert_eq!(state.local_led_state().pads, [PadMode::Hotcue; 2]);
+            for (value, intensity) in [
+                (0, config.palette_inactive_intensity),
+                (127, config.palette_active_intensity),
+            ] {
+                decoder.feed(&[0xb6, 9, value], |message| {
+                    if let Some(message) = crate::midi_layout::normalize(backend, message) {
+                        feedback.apply(message, Duration::ZERO);
+                    }
+                });
+                let report = leds::render_buttons(&config, &feedback, &state.local_led_state());
+                assert_eq!(
+                    [report[59], report[70]],
+                    [leds::Color::White.base() + intensity; 2]
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn windows_stem_fx_replays_feedback_and_routes_selected_deck() -> anyhow::Result<()> {
+        use crate::midi_transport::Backend;
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            let mut state = Translator {
+                core_midi_addresses: false,
+                ..Translator::default()
+            };
+            let mut feedback = feedback::FeedbackState::default();
+            let mut decoder = feedback::Decoder::default();
+            let mut output = Vec::new();
+            run(&mut state, &[Control::Button("left_stems_mode", true)])?;
+            run(&mut state, &[Control::Button("left_stems_mode", false)])?;
+            run(&mut state, &[Control::Button("left_stems_mode", true)])?;
+            run(&mut state, &[Control::Button("left_deck_switch_c", true)])?;
+            assert!(run(&mut state, &[Control::Button("left_pad_2", true)])?.is_empty());
+            run(&mut state, &[Control::Button("left_pad_2", false)])?;
+            let mut packets = Vec::new();
+            decoder.feed(&[0xbe, 66, 127, 67, 127, 68, 0, 69, 0, 63, 0], |message| {
+                packets.push(message);
+            });
+            for message in std::mem::take(&mut packets) {
+                let message = crate::midi_layout::normalize(backend, message)
+                    .ok_or_else(|| anyhow::anyhow!("stem feedback rejected"))?;
+                feedback.apply(message, Duration::ZERO);
+            }
+            state.sync_front_panel(&feedback, &mut output)?;
+            run(&mut state, &[Control::Button("left_pad_7", true)])?;
+            assert_eq!(
+                run(&mut state, &[Control::Button("left_pad_2", true)])?,
+                [[0x9a, 92, 127], [0x8a, 92, 0]]
+            );
+            assert_eq!(feedback.stem_fx[2].routes[2][2], Some(false));
+            decoder.feed(&[0xbe, 63, 127], |message| packets.push(message));
+            for message in packets {
+                let message = crate::midi_layout::normalize(backend, message)
+                    .ok_or_else(|| anyhow::anyhow!("stem feedback rejected"))?;
+                feedback.apply(message, Duration::ZERO);
+            }
+            let leds = leds::render_buttons(
+                &leds::LedConfig::default(),
+                &feedback,
+                &state.local_led_state(),
+            );
+            assert_eq!(feedback.stem_fx[2].routes[2][2], Some(true));
+            assert_eq!(
+                leds[2],
+                leds::Color::Purple.base() + leds::LedConfig::default().palette_active_intensity
+            );
+        }
         Ok(())
     }
 

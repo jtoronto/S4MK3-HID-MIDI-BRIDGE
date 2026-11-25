@@ -27,22 +27,23 @@ All channel labels in this document are **MIDI channels 1-based**, as requested.
 
 ## Generated S4 mapping shape
 
-The macOS source mapping includes continuous root MIDI outputs for
-`turntableN.effects.tempo.currentValue` on CC 113, channels 1–4, for the
-pickup display and detent LED. This is the software fader position, not a
-BPM or effective range measurement. Windows mapping exports do not include
-these outputs. See the [tempo pickup evidence](../research/screens/screen-feedback-investigation.md#tempo-position-follow-up--november-24-2026).
+The macOS and Windows source mappings include continuous root MIDI outputs
+for `turntableN.effects.tempo.currentValue` on CC 113, using channels 1–4 on
+macOS and 13–16 on Windows. This is the software fader position for the
+pickup display and detent LED, not a BPM or effective range measurement.
+See the [tempo pickup evidence](../research/screens/screen-feedback-investigation.md#tempo-position-follow-up--november-24-2026).
 
-### Current-source macOS MUTE overlay
+### Current-source Mute FX overlay
 
 Either MUTE button sends Note 4 on human channel 5 to
 `mixer.toggleUnmixerMuteFxEnabled`. One root output,
 `turntable1.unmixer.muteWithFx` on channel 7 CC 9, drives both MUTE LEDs.
-STEMS still selects the pad layer. This overlay is not in the Windows mapping.
+Both macOS and Windows use these addresses; Windows rejects command echoes
+as feedback. STEMS still selects the pad layer, and MUTE does not change it.
 See the [Mute FX validation record](../validation/controls/mute-fx-macos-validation-2026-11-24.md)
 for physical observations and verification limits.
 
-### Current-source macOS Stem FX routing
+### Current-source Stem FX routing
 
 For decks A–D the mapping uses channels 13–16, respectively. Each
 Manual FX slot has five consecutive route addresses: whole deck, then
@@ -52,7 +53,11 @@ through `routingGenericChannel4`. Root CC feedback at the corresponding
 addresses reads `turntableN.fxS.routing.isDeck` and `genericChannel1`
 through `genericChannel4`. CC 47–50 report the four
 `turntableN.view.state.hasUnmixerToolTrackMode*` availability flags.
-These assignments are not in the Windows mapping.
+Those channel and CC assignments describe the macOS mapping. On Windows,
+Stem FX commands use Notes 80–94 on channels 9–12; route feedback uses
+CC 51–65 and availability uses CC 66–69 on channels 13–16. The separate
+command and feedback addresses prevent command echoes from being treated
+as confirmations.
 
 In the November 25, 2026 software-only probe on Djay Pro 5.6.11, Deck A
 FX 1 returned root CC and embedded Note feedback for mouse edits and

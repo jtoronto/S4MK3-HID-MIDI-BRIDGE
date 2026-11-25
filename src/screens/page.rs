@@ -40,6 +40,14 @@ pub enum Page {
         fx: FxWarning,
         backspin: Option<u8>,
     },
+    StemFx {
+        deck: u8,
+        slot: u8,
+        layout: Option<usize>,
+        routes: [Option<bool>; 5],
+        fx: FxWarning,
+        backspin: Option<u8>,
+    },
 }
 
 impl Page {
@@ -47,7 +55,7 @@ impl Page {
     pub const fn selecting(&self) -> bool {
         match self {
             Self::Info(info) => info.selecting,
-            Self::Empty | Self::Stems { .. } => false,
+            Self::Empty | Self::Stems { .. } | Self::StemFx { .. } => false,
         }
     }
 }
@@ -61,6 +69,18 @@ pub fn render_phase(page: &Page, frame: &mut Frame, bright: bool) {
     let (shifted, pads, fx, backspin) = match page {
         Page::Empty => return,
         Page::Info(info) => return super::info::render(info, frame, bright),
+        Page::StemFx {
+            deck,
+            slot,
+            layout,
+            routes,
+            fx,
+            backspin,
+        } => {
+            let top = render_headers(*fx, *backspin, frame);
+            render_stem_fx(frame, top, *deck, *slot, *layout, *routes);
+            return;
+        }
         Page::Stems {
             shifted,
             pads,
@@ -115,6 +135,59 @@ pub fn render_phase(page: &Page, frame: &mut Frame, bright: bool) {
         let status_y = y + (pad_height - 20).min(56);
         frame.centered_text(x + PAD_WIDTH / 2, y + 16, action, SCALE, ink);
         frame.centered_text(x + PAD_WIDTH / 2, status_y, status, SCALE, ink);
+    }
+}
+
+fn render_stem_fx(
+    frame: &mut Frame,
+    top: usize,
+    deck: u8,
+    slot: u8,
+    layout: Option<usize>,
+    routes: [Option<bool>; 5],
+) {
+    const ROUTING: u16 = rgb(136, 98, 231);
+    let title = format!("{} STEM FX", char::from(b'A' + deck));
+    frame.centered_text(WIDTH / 2, top + 11, &title, 3, PRIMARY);
+    let stems = match layout {
+        Some(1) => ["STEM 1", "", "", ""],
+        Some(2) => ["INST", "VOX", "", ""],
+        Some(3) => ["DRUM", "HARM", "VOX", ""],
+        Some(4) => ["DRUM", "BASS", "HARM", "VOX"],
+        _ => ["", "", "", ""],
+    };
+    let rows = top + 54;
+    if layout.is_none() {
+        frame.centered_text(WIDTH / 2, rows + 20, "WAITING FOR DJAY", SCALE, SECONDARY);
+    }
+    for (index, label) in stems
+        .into_iter()
+        .chain(["FX 1", "FX 2", "FX 3", "DECK"])
+        .enumerate()
+    {
+        if label.is_empty() {
+            continue;
+        }
+        let x = MARGIN + (index % 4) * (PAD_WIDTH + GAP);
+        let y = rows + (index / 4) * ((HEIGHT - rows - 8) / 2);
+        let height = (HEIGHT - rows - 16) / 2;
+        let state = match index {
+            0..=3 => routes[index + 1],
+            4..=6 => Some(index - 4 == usize::from(slot)),
+            _ if layout.is_some() => routes[0],
+            _ => None,
+        };
+        let (fill, ink, status) = match state {
+            Some(true) if (4..=6).contains(&index) => (ROUTING, BACKGROUND, "EDIT"),
+            Some(true) => (PRIMARY, BACKGROUND, "ON"),
+            Some(false) if (4..=6).contains(&index) => (PANEL, PRIMARY, ""),
+            Some(false) => (PANEL, PRIMARY, "OFF"),
+            None => (PANEL, SECONDARY, "?"),
+        };
+        frame.rect(x, y, PAD_WIDTH, height, BORDER);
+        frame.rect(x + 1, y + 1, PAD_WIDTH - 2, height - 2, fill);
+        frame.centered_text(x + PAD_WIDTH / 2, y + 7, label, SCALE, ink);
+        frame.centered_text(x + PAD_WIDTH / 2, y + height - 17, status, SCALE, ink);
     }
 }
 

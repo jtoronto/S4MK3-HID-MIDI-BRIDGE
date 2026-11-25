@@ -63,7 +63,10 @@ fn real_preview_export_is_offline_and_refuses_overwriting_images() -> anyhow::Re
         );
         assert!(!String::from_utf8_lossy(&output.stdout).contains("S4_USB_FOUND"));
         let files = std::fs::read_dir(&path)?.collect::<Result<Vec<_>, _>>()?;
-        assert_eq!(files.len(), 51);
+        assert_eq!(files.len(), 54);
+        for state in ["two-stems", "four-stems", "unknown"] {
+            assert!(path.join(format!("stem-fx-{state}.ppm")).is_file());
+        }
         for state in ["left", "right", "acquired"] {
             assert!(path.join(format!("tempo-pickup-{state}.ppm")).is_file());
         }

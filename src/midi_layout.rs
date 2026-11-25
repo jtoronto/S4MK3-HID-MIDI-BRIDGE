@@ -11,11 +11,15 @@ pub const fn normalize(backend: Backend, mut message: Message) -> Option<Message
             let channel = message.status & 0x0f;
             let family = message.status & 0xf0;
             let number = message.number;
+            if let (12..=15, 0xb0, 51..=69) = (channel, family, number) {
+                message.number = number - 19;
+                return Some(message);
+            }
             let canonical = match (channel, family, number) {
                 (12..=15, 0x80 | 0x90, 0..=4 | 6 | 8 | 15..=20 | 32..=35 | 40..=63)
-                | (12..=15, 0xb0, 21 | 22 | 32..=37 | 80..=112) => channel - 12,
+                | (12..=15, 0xb0, 21 | 22 | 32..=37 | 80..=113) => channel - 12,
                 (7, 0x80 | 0x90, 0..=3) => 4,
-                (6, 0x80 | 0x90, 0..=3) | (6, 0xb0, 0..=8) => 6,
+                (6, 0x80 | 0x90, 0..=3) | (6, 0xb0, 0..=9) => 6,
                 _ => return None,
             };
             message.status = family | canonical;

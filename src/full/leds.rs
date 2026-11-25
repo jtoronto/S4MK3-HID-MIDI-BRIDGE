@@ -237,7 +237,7 @@ pub struct LocalState {
     /// Jump-size selection belongs to logical decks, not physical sides.
     pub move_selecting: [bool; 4],
     pub eq_selecting: bool,
-    pub mute_fx_buttons: bool,
+    pub(super) stem_fx_slot: [Option<u8>; 2],
     /// Parameter knobs 1-3 and dry/wet, by physical FX strip.
     pub fx_positions: [[Option<u8>; 4]; 2],
     /// Per-slot acquisition gates, by physical FX strip.
@@ -263,7 +263,7 @@ impl Default for LocalState {
             tempo_indication: [Indication::Off; 2],
             move_selecting: [false; 4],
             eq_selecting: false,
-            mute_fx_buttons: true,
+            stem_fx_slot: [None; 2],
             fx_positions: [[None; 4]; 2],
             fx_acquired: [[false; 6]; 2],
         }
@@ -385,22 +385,26 @@ impl ButtonRenderer<'_> {
         for (offsets, mode, color) in [
             ([9, 32], PadMode::Hotcue, color),
             ([57, 68], PadMode::Samples, Color::Cyan),
-            ([10, 33], PadMode::Stems, Color::Green),
+            (
+                [10, 33],
+                PadMode::Stems,
+                if self.local.stem_fx_slot[side].is_some() {
+                    Color::Purple
+                } else {
+                    Color::Green
+                },
+            ),
         ] {
             self.set(
                 offsets[side],
                 self.palette(color, self.local.pads[side] == mode),
             );
         }
-        let mute = if self.local.mute_fx_buttons {
-            // The physical MUTE lamps are white-only; the hue bits cannot make them cyan.
-            match self.feedback.mute_fx {
-                Some(true) => self.palette(Color::White, true),
-                Some(false) => Color::White.base() + self.config.palette_inactive_intensity,
-                None => 0,
-            }
-        } else {
-            self.palette(Color::Green, self.local.pads[side] == PadMode::Stems)
+        // The physical MUTE lamps are white-only; the hue bits cannot make them cyan.
+        let mute = match self.feedback.mute_fx {
+            Some(true) => self.palette(Color::White, true),
+            Some(false) => Color::White.base() + self.config.palette_inactive_intensity,
+            None => 0,
         };
         self.set([58, 69][side], mute);
         for slot in 0..2 {
@@ -460,6 +464,23 @@ impl ButtonRenderer<'_> {
 
     fn pads(&mut self, side: usize) {
         let deck = self.local.decks[side];
+        if let Some(slot) = self.local.stem_fx_slot[side] {
+            let routing = self.feedback.stem_fx[deck];
+            let flags = routing.routes[usize::from(slot)];
+            let count = routing.layout().unwrap_or(0);
+            for pad in 0..8 {
+                let value = match pad {
+                    0..=3 if pad < count => {
+                        self.state_palette(Color::Purple, flags[pad + 1].map(u8::from))
+                    }
+                    4..=6 => self.palette(Color::White, pad - 4 == usize::from(slot)),
+                    7 if count != 0 => self.state_palette(Color::Purple, flags[0].map(u8::from)),
+                    _ => 0,
+                };
+                self.set([0, 23][side] + pad, value);
+            }
+            return;
+        }
         let mode = self.local.pads[side];
         for pad in 0..8 {
             let note = match mode {
@@ -953,13 +974,6 @@ mod tests {
             });
             assert_eq!(render(&feedback, &local), [expected; 2]);
         }
-        let windows = LocalState {
-            mute_fx_buttons: false,
-            ..local
-        };
-        let windows_report = render_buttons(&config, &feedback, &windows);
-        assert_eq!(windows_report[1 + 58], Color::Green.base() + 2);
-        assert_eq!(windows_report[1 + 69], windows_report[1 + 33]);
     }
 
     #[test]

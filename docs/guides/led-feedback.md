@@ -269,7 +269,7 @@ For example:
 | `palette_active_intensity`, `palette_inactive_intensity` | Palette lamp/pad/ring intensities, 0-3; the inactive value also controls REV/FLX idle |
 | `inactive_display` | `dim` or `dark`; applies to software and local inactive indicators |
 | `quantize_mixed` | `dim` or `dark`; bright means all four known deck states are on |
-| `tempo_center_tolerance` | Optional local white center indicator, off by default. With the macOS pickup mapping, confirmed red mismatch and blue matched center take priority. |
+| `tempo_center_tolerance` | Optional local white center indicator, off by default. With a pickup-enabled mapping, confirmed red mismatch and blue matched center take priority. |
 | `loop_enabled`, `loop_color` | Firmware flashes the whole ring green while looping; exit restores the deck-colored segment. Flash rate is controlled by hardware, not configurable. |
 | `chase_period_ms` | Normal-mode playback revolution period, 250-10000 ms (default 2000); TT uses physical movement instead. |
 | `meter_brightness` | 0 off, 125 dim, or 127 bright |
@@ -299,10 +299,10 @@ Available palette names: `red`, `carrot`, `orange`, `honey`, `yellow`, `lime`,
   The bridge reports `END_WARNING_UNAVAILABLE` once at startup. No wall-clock
   playback estimate substitutes for real state.
 - REC, library buttons, and Filter reset have momentary indicators where
-  persistent software-state output is unresolved. On macOS, both MUTE lamps
-  use one global Mute FX output (channel 7 CC 9). The white-only lamps are
+  persistent software-state output is unresolved. Both MUTE lamps use one
+  global Mute FX feedback value. The white-only lamps are
   bright when on, dim when off (even in Dark idle mode), and dark until
-  feedback arrives. Windows keeps the STEMS alias and its layer indicator.
+  feedback arrives.
   Sampler loaded/empty and Neural Mix availability are not inferred from silence.
 - Track loading-success output is a candidate state signal: a false value
   invalidates cached cue colors and channel level. Replacement/load/unload

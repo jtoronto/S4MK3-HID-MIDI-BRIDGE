@@ -11,7 +11,7 @@ fn tempo_warning_needs_motion_and_clears_on_return_or_pickup() -> anyhow::Result
     let visible =
         |translator: &Translator, feedback: &FeedbackState| match pages(translator, feedback)[0] {
             Page::Info(info) => info.tempo_pickup,
-            Page::Empty | Page::Stems { .. } => None,
+            Page::Empty | Page::Stems { .. } | Page::StemFx { .. } => None,
         };
     feed(&mut feedback, &[0x96, 2, 127, 0xb2, 113, 127]);
     translator.update_tempo_pickup(&feedback, Duration::ZERO);
@@ -49,6 +49,38 @@ fn tempo_warning_needs_motion_and_clears_on_return_or_pickup() -> anyhow::Result
     assert_eq!(translator.decks[0], Deck::A);
     translator.update_tempo_pickup(&feedback, Duration::from_millis(165));
     assert_eq!(visible(&translator, &feedback), None);
+    Ok(())
+}
+
+#[test]
+fn windows_decoded_tempo_feedback_drives_pickup_warning() -> anyhow::Result<()> {
+    use crate::midi_transport::Backend;
+
+    for backend in [Backend::Loopbe, Backend::Bloop] {
+        let mut translator = Translator {
+            decks: [Deck::C, Deck::B],
+            tempos: [Some(0.5), None],
+            ..Translator::default()
+        };
+        let mut feedback = FeedbackState::default();
+        let mut decoder = crate::full::feedback::Decoder::default();
+        decoder.feed(&[0x96, 2, 127, 0xbe, 113, 127], |message| {
+            if let Some(message) = crate::midi_layout::normalize(backend, message) {
+                feedback.apply(message, Duration::ZERO);
+            }
+        });
+        translator.update_tempo_pickup(&feedback, Duration::ZERO);
+        translator.translate(
+            &[Control::Slider("left_tempo_fader", 0.75)],
+            None,
+            &mut Vec::new(),
+        )?;
+        translator.update_tempo_pickup(&feedback, Duration::from_millis(75));
+        let Page::Info(info) = pages(&translator, &feedback)[0] else {
+            anyhow::bail!("expected information page");
+        };
+        assert_eq!(info.tempo_pickup, TempoPickup::new(95, 127));
+    }
     Ok(())
 }
 

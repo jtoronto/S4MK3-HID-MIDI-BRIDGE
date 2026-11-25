@@ -32,10 +32,11 @@ Both modes show four large readouts for the selected logical deck:
 | KEY | Current pitch-adjusted numerical key, such as 11A. A reported no-key value shows --. Missing or unrecognized feedback shows ?. |
 | RANGE | Djay's shared tempo-fader range. Shift+Sync cycles this globally, not just for the selected deck. |
 
-Tempo pickup guidance is available in current macOS source builds. If your
-selected Djay mapping predates tempo pickup feedback, install and select the
-mapping bundled with the build. If you already imported a pickup-enabled
-mapping, the display and bezel changes do not require another import.
+Tempo pickup guidance is available in current macOS and Windows source
+builds. On Windows, the detent LED works in both bridge modes, but the
+display requires **NI Bridge** mode with screens active. Install and select
+the mapping bundled with the build if your current mapping predates tempo
+pickup feedback. Display-only changes do not require another import.
 
 The tempo detent LED turns red for a persistent mismatch and blue when both
 the physical and software faders are centered. Brief gaps while Djay
@@ -63,8 +64,8 @@ The font is embedded; nothing needs installing on the DJ laptop.
 
 ## STEMS page
 
-STEMS selects the Neural Mix layer. Windows retains MUTE as an alias; the
-updated macOS MUTE buttons do not change the screen. The screen has four columns:
+STEMS selects the Neural Mix layer. MUTE toggles global Neural Mix Mute FX
+without changing the screen. The screen has four columns:
 DRUM, BASS, HARM and VOX. Pads 1-4 control mute; pads 5-8 control solo in the
 same order. With Shift held, the upper row becomes ONLY (exclusive solo);
 the lower row remains ordinary SOLO.
@@ -74,6 +75,32 @@ is active, not that the stem is audible. A thick outline shows a physical hold
 independently of software state. A question mark means feedback is unknown.
 Exclusive state is shown only when all four solo values are known and exactly
 one is on. Mouse changes in Djay also refresh the display.
+
+### Stem FX routing
+
+Press **STEMS** again while in STEMS to open **STEM FX** on that side.
+The STEMS button changes from green to purple. The screen shows the
+selected deck and the Manual FX slot being edited:
+
+| Pads | Action |
+| --- | --- |
+| 1–4 | Toggle the stem shown above that pad. Unavailable stems are blank. |
+| 5–7 | Select FX 1, FX 2, or FX 3 to edit. |
+| 8 | Route the selected FX slot to the whole deck. |
+
+The screen and pads update from Djay feedback, whether the change came
+from a pad or the Djay UI. Multiple stems can show ON. `?` means Djay has
+not confirmed the route; if the layout is unknown, the route pads do not
+send commands. Press **STEMS** again to return to mute/solo.
+
+Install and select the new bundled Djay mapping to get the routing
+commands and feedback. Windows **NI Bridge** mode can show the screen;
+**Direct HID** provides the same pad controls and LEDs without a screen.
+
+In either three-stem layout the screen labels remain **DRUM / HARM / VOX**.
+When Djay is set to Drums / Bass / Melodic, **HARM** indicates Bass and
+**VOX** indicates Melodic. The tested MIDI layout fields do not distinguish
+those two groupings.
 
 ## FX pickup header
 
@@ -107,14 +134,16 @@ restoration responsibility. See the [ordered recovery guide](screen-driver-hando
 
 ## Feedback and implementation reference
 
-These messages travel from Djay to the **S4 MK3 MIDI Full** destination.
-Channels below are human, one-based channels:
+These messages travel from Djay to the **S4 MK3 MIDI Full** destination on
+macOS. Channels below are human, one-based channels. For Windows wire
+addresses, see the [Djay action reference](../reference/djay-action-reference.md#generated-s4-mapping-shape).
 
 | Channel | Message | Meaning |
 | --- | --- | --- |
 | 1-4, decks A-D | CC80-89 | Selected jump-size flags, 1/8 through 64 beats |
 | 1-4, decks A-D | CC90-111 | Active loop-size flags |
 | 1-4, decks A-D | CC112 | Calibrated current key; 0 means no key |
+| 1-4, decks A-D | CC113 | Software tempo-fader position for pickup |
 | 7 | CC8 | Global tempo range |
 
 Deck-channel Note6 reports active looping. Missing/conflicting sizes remain

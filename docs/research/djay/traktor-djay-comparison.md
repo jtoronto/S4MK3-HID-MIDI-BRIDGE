@@ -53,8 +53,8 @@ not its historical evidence.
 The table retains the original comparison. Its encoder mapping is superseded
 by the current overlay below; source identifiers in this snapshot aren't a
 description of the corrected full-profile physical naming.
-The table also predates the [macOS Mute FX mapping](../../reference/djay-action-reference.md#current-source-macos-mute-overlay);
-Windows still uses MUTE as a STEMS alias.
+The table also predates the [Mute FX mapping](../../reference/djay-action-reference.md#current-source-mute-fx-overlay);
+its MUTE entry describes the historical STEMS alias, not current behavior.
 
 | Control | Traktor factory behavior and manual evidence | Current bridge / Djay mapping | Equivalence and remaining evidence |
 | --- | --- | --- | --- |

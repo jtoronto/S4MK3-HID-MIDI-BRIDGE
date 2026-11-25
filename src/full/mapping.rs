@@ -116,15 +116,14 @@ fn generate_controls(jog: &jog::Config, core_midi: bool) -> Result<Value> {
         }
     }
     push_info_outputs(&mut outputs, &mut output_addresses)?;
-    if core_midi {
-        push_tempo_positions(&mut outputs, &mut output_addresses)?;
-        push_mute_fx(
-            &mut controls,
-            &mut addresses,
-            &mut outputs,
-            &mut output_addresses,
-        )?;
-    }
+    push_tempo_positions(&mut outputs, &mut output_addresses)?;
+    push_extensions(
+        &mut controls,
+        &mut addresses,
+        &mut outputs,
+        &mut output_addresses,
+        core_midi,
+    )?;
     for deck in 1_u8..=4 {
         let selected = super::catalog::deck_selection_binding(deck)
             .ok_or_else(|| anyhow::anyhow!("deck selector missing"))?;
@@ -248,6 +247,89 @@ fn push_tempo_positions(
                 meter: true,
             },
         )?;
+    }
+    Ok(())
+}
+
+fn push_extensions(
+    controls: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+    outputs: &mut Vec<Value>,
+    output_addresses: &mut BTreeSet<(u8, u8, u8)>,
+    core_midi: bool,
+) -> Result<()> {
+    push_stem_fx(controls, addresses, outputs, output_addresses, core_midi)?;
+    push_mute_fx(controls, addresses, outputs, output_addresses)?;
+    Ok(())
+}
+
+fn push_stem_fx(
+    controls: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+    outputs: &mut Vec<Value>,
+    output_addresses: &mut BTreeSet<(u8, u8, u8)>,
+    core_midi: bool,
+) -> Result<()> {
+    use super::stem_fx;
+
+    for deck in 0..4 {
+        let turntable = deck + 1;
+        for slot in 0..u8::try_from(stem_fx::SLOTS)? {
+            let fx = slot + 1;
+            for (route, (action, state)) in stem_fx::VARIANTS.into_iter().enumerate() {
+                let route = u8::try_from(route)?;
+                let address = if core_midi {
+                    stem_fx::address(deck, slot, route)
+                } else {
+                    stem_fx::windows_address(deck, slot, route)
+                };
+                push_control(
+                    controls,
+                    addresses,
+                    super::catalog::stem_fx_binding(address.number),
+                    &format!("turntable{turntable}.fx{fx}Routing.{action}"),
+                    address.channel,
+                )?;
+                push_output(
+                    outputs,
+                    output_addresses,
+                    OutputSpec {
+                        key_path: &format!("turntable{turntable}.fx{fx}.routing.{state}"),
+                        channel: if core_midi { address.channel } else { deck },
+                        data: if core_midi {
+                            address.number
+                        } else {
+                            stem_fx::WINDOWS_FIRST_FEEDBACK + slot * 5 + route
+                        },
+                        message_type: 3,
+                        meter: false,
+                    },
+                )?;
+            }
+        }
+        for (index, suffix) in stem_fx::LAYOUTS.into_iter().enumerate() {
+            push_output(
+                outputs,
+                output_addresses,
+                OutputSpec {
+                    key_path: &format!(
+                        "turntable{turntable}.view.state.hasUnmixerToolTrackMode{suffix}"
+                    ),
+                    channel: if core_midi {
+                        stem_fx::FIRST_CHANNEL + deck
+                    } else {
+                        deck
+                    },
+                    data: if core_midi {
+                        stem_fx::FIRST_LAYOUT + u8::try_from(index)?
+                    } else {
+                        stem_fx::WINDOWS_FIRST_FEEDBACK + 15 + u8::try_from(index)?
+                    },
+                    message_type: 3,
+                    meter: false,
+                },
+            )?;
+        }
     }
     Ok(())
 }
@@ -814,41 +896,102 @@ mod tests {
     }
 
     #[test]
-    fn tempo_pickup_feedback_is_continuous_per_deck_and_macos_only() -> anyhow::Result<()> {
-        use crate::midi_transport::Backend;
-        let native = generated_outputs()?;
-        for deck in 1_u64..=4 {
-            let key = format!("turntable{deck}.effects.tempo.currentValue");
-            let matches: Vec<_> = native
-                .iter()
-                .filter(|out| {
-                    field(out, "keyPath").and_then(Value::as_string) == Some(key.as_str())
-                })
-                .collect();
-            let [out] = matches.as_slice() else {
-                anyhow::bail!("expected exactly one tempo position output for deck {deck}");
-            };
-            let number = |name| field(out, name).and_then(Value::as_unsigned_integer);
-            assert_eq!(number("midiChannel"), Some(deck - 1));
-            assert_eq!(number("midiMessageType"), Some(3));
-            assert_eq!(number("midiData"), Some(113));
-            assert_eq!(number("midiMinValue"), Some(0));
-            assert_eq!(number("midiMaxValue"), Some(127));
-            assert_eq!(
-                field(out, "controlType").and_then(Value::as_string),
-                Some("control")
-            );
+    fn stem_fx_mapping_pairs_per_deck_commands_and_state_on_core_midi() -> anyhow::Result<()> {
+        let controls = generated_controls()?;
+        let outputs = generated_outputs()?;
+        let contains = |rows: &[Value], key: &str, channel: u64, number: u64, kind: u64| {
+            rows.iter().any(|row| {
+                field(row, "keyPath").and_then(Value::as_string) == Some(key)
+                    && field(row, "midiChannel").and_then(Value::as_unsigned_integer)
+                        == Some(channel)
+                    && field(row, "midiData").and_then(Value::as_unsigned_integer) == Some(number)
+                    && field(row, "midiMessageType").and_then(Value::as_unsigned_integer)
+                        == Some(kind)
+            })
+        };
+        for deck in 1..=4 {
+            let channel = 11 + deck;
+            for slot in 1..=3 {
+                let base = 32 + 5 * (slot - 1);
+                assert!(contains(
+                    &controls,
+                    &format!("turntable{deck}.fx{slot}Routing.routingDeck"),
+                    channel,
+                    base,
+                    1
+                ));
+                assert!(contains(
+                    &outputs,
+                    &format!("turntable{deck}.fx{slot}.routing.isDeck"),
+                    channel,
+                    base,
+                    3
+                ));
+                for stem in 1..=4 {
+                    assert!(contains(
+                        &controls,
+                        &format!("turntable{deck}.fx{slot}Routing.routingGenericChannel{stem}"),
+                        channel,
+                        base + stem,
+                        1
+                    ));
+                    assert!(contains(
+                        &outputs,
+                        &format!("turntable{deck}.fx{slot}.routing.genericChannel{stem}"),
+                        channel,
+                        base + stem,
+                        3
+                    ));
+                }
+            }
+            for (number, suffix) in [(47, "One"), (48, "Two"), (49, "Three"), (50, "Four")] {
+                assert!(contains(
+                    &outputs,
+                    &format!("turntable{deck}.view.state.hasUnmixerToolTrackMode{suffix}"),
+                    channel,
+                    number,
+                    3
+                ));
+            }
         }
-        for backend in [Backend::Loopbe, Backend::Bloop] {
-            let windows = generate_for_backend(&jog::DEFAULT, backend)?;
-            let outputs = field(&windows, "outputs")
+        Ok(())
+    }
+
+    #[test]
+    fn tempo_pickup_feedback_is_continuous_per_deck_on_all_backends() -> anyhow::Result<()> {
+        use crate::midi_transport::Backend;
+        for backend in [Backend::CoreMidi, Backend::Loopbe, Backend::Bloop] {
+            let mapping = generate_for_backend(&jog::DEFAULT, backend)?;
+            let outputs = field(&mapping, "outputs")
                 .and_then(Value::as_array)
-                .context("Windows outputs")?;
-            assert!(!outputs.iter().any(|out| {
-                field(out, "keyPath")
-                    .and_then(Value::as_string)
-                    .is_some_and(|key| key.ends_with(".effects.tempo.currentValue"))
-            }));
+                .context("outputs")?;
+            for deck in 1_u64..=4 {
+                let key = format!("turntable{deck}.effects.tempo.currentValue");
+                let matches: Vec<_> = outputs
+                    .iter()
+                    .filter(|out| {
+                        field(out, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                    })
+                    .collect();
+                let [out] = matches.as_slice() else {
+                    anyhow::bail!("expected exactly one tempo position output for deck {deck}");
+                };
+                let number = |name| field(out, name).and_then(Value::as_unsigned_integer);
+                let channel = if backend == Backend::CoreMidi {
+                    deck - 1
+                } else {
+                    deck + 11
+                };
+                assert_eq!(number("midiChannel"), Some(channel));
+                assert_eq!(number("midiMessageType"), Some(3));
+                assert_eq!(number("midiData"), Some(113));
+                assert_eq!(number("midiMinValue"), Some(0));
+                assert_eq!(number("midiMaxValue"), Some(127));
+                assert_eq!(
+                    field(out, "controlType").and_then(Value::as_string),
+                    Some("control")
+                );
+            }
         }
         Ok(())
     }

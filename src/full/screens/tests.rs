@@ -8,6 +8,121 @@ fn feed(feedback: &mut FeedbackState, bytes: &[u8]) {
     });
 }
 
+fn deck_c_fx_three_routes(
+    translator: &Translator,
+    feedback: &FeedbackState,
+) -> anyhow::Result<[Option<bool>; 5]> {
+    match pages(translator, feedback)[0] {
+        Page::StemFx {
+            deck: 2,
+            slot: 2,
+            layout: Some(2),
+            routes,
+            ..
+        } => Ok(routes),
+        other => anyhow::bail!("expected deck C / FX 3 / two stems, got {other:?}"),
+    }
+}
+
+#[test]
+fn stem_fx_second_press_routes_selected_deck_and_waits_for_djay() -> anyhow::Result<()> {
+    use crate::full::leds::{Color, LedConfig, render_buttons};
+
+    let mut translator = Translator::default();
+    let mut feedback = FeedbackState::default();
+    let mut output = Vec::new();
+    let stems = "left_stems_mode";
+    translator.translate(&[Control::Button(stems, true)], None, &mut output)?;
+    assert!(matches!(
+        pages(&translator, &feedback)[0],
+        Page::Stems { .. }
+    ));
+    translator.translate(
+        &[Control::Button(stems, false), Control::Button(stems, true)],
+        None,
+        &mut output,
+    )?;
+    translator.translate(
+        &[
+            Control::Button(stems, true),
+            Control::Button("left_pad_2", true),
+        ],
+        None,
+        &mut output,
+    )?;
+    assert!(output.is_empty(), "unknown layout must not send a route");
+    assert!(matches!(
+        pages(&translator, &feedback)[0],
+        Page::StemFx { layout: None, .. }
+    ));
+    assert!(matches!(pages(&translator, &feedback)[1], Page::Info(_)));
+
+    // Deck C has two stems; switch to FX 3 and request its second stem.
+    translator.translate(
+        &[
+            Control::Button("left_pad_2", false),
+            Control::Button("left_deck_switch_c", true),
+        ],
+        None,
+        &mut output,
+    )?;
+    feed(
+        &mut feedback,
+        &[0xbe, 47, 127, 48, 127, 49, 0, 50, 0, 42, 127, 44, 0],
+    );
+    translator.sync_front_panel(&feedback, &mut output)?;
+    output.clear();
+    translator.translate(
+        &[
+            Control::Button("left_pad_7", true),
+            Control::Button("left_pad_3", true),
+            Control::Button("left_pad_2", true),
+        ],
+        None,
+        &mut output,
+    )?;
+    assert_eq!(output, [[0x9e, 44, 127], [0x8e, 44, 0]]);
+    assert_eq!(
+        deck_c_fx_three_routes(&translator, &feedback)?[2],
+        Some(false),
+        "a command is not confirmation"
+    );
+    // Interleaved feedback for another deck is not applied to deck C.
+    feed(
+        &mut feedback,
+        &[0xbc, 42, 127, 44, 0, 0xbe, 42, 0, 43, 127, 44, 127],
+    );
+    assert_eq!(
+        deck_c_fx_three_routes(&translator, &feedback)?,
+        [Some(false), Some(true), Some(true), None, None]
+    );
+    let config = LedConfig::default();
+    let leds = render_buttons(&config, &feedback, &translator.local_led_state());
+    assert_eq!(
+        leds[11],
+        Color::Purple.base() + config.palette_active_intensity
+    );
+    assert_eq!([leds[2], leds[3]], [leds[11], 0]);
+
+    output.clear();
+    translator.translate(
+        &[
+            Control::Button(stems, false),
+            Control::Button(stems, true),
+            Control::Button("left_pad_2", false),
+            Control::Button("left_pad_2", true),
+        ],
+        None,
+        &mut output,
+    )?;
+    assert!(matches!(
+        pages(&translator, &feedback)[0],
+        Page::Stems { .. }
+    ));
+    assert_eq!(output, [[0x92, 57, 127]]);
+    Ok(())
+}
+
 #[test]
 fn fx_warnings_follow_target_decks_on_info_and_stems_without_cached_value_replay()
 -> anyhow::Result<()> {
@@ -40,7 +155,7 @@ fn fx_warnings_follow_target_decks_on_info_and_stems_without_cached_value_replay
         let warning = match pages(&translator, &feedback)[0] {
             Page::Info(info) => info.fx,
             Page::Stems { fx, .. } => fx,
-            Page::Empty => anyhow::bail!("expected deck page"),
+            Page::Empty | Page::StemFx { .. } => anyhow::bail!("expected deck page"),
         };
         // Then the visible deck owns both strips' parameter and dry/wet warnings.
         assert_eq!(warning.deck, 2);
@@ -140,7 +255,7 @@ fn pads(
 ) -> anyhow::Result<[PadState; 8]> {
     match pages(translator, feedback)[side] {
         Page::Stems { pads, .. } => Ok(pads),
-        Page::Empty | Page::Info(_) => anyhow::bail!("expected STEMS"),
+        Page::Empty | Page::Info(_) | Page::StemFx { .. } => anyhow::bail!("expected STEMS"),
     }
 }
 
@@ -418,7 +533,7 @@ fn backspin_projects_original_owner_across_deck_and_page_switches_and_coexists_w
                     assert_eq!(fx.deck, switched_deck.channel());
                     assert_eq!(fx.mismatch, [1, 0]);
                 }
-                Page::Empty => anyhow::bail!("expected active page"),
+                Page::Empty | Page::StemFx { .. } => anyhow::bail!("expected active page"),
             }
             let Page::Info(other) = visible[side ^ 1] else {
                 anyhow::bail!("expected info on other side");
@@ -435,7 +550,7 @@ fn backspin_projects_original_owner_across_deck_and_page_switches_and_coexists_w
             match pages(&translator, &feedback)[side] {
                 Page::Info(info) => assert_eq!(info.backspin, None),
                 Page::Stems { backspin, .. } => assert_eq!(backspin, None),
-                Page::Empty => anyhow::bail!("expected active page"),
+                Page::Empty | Page::StemFx { .. } => anyhow::bail!("expected active page"),
             }
         }
     }

@@ -116,6 +116,17 @@ pub(super) fn pages(translator: &Translator, feedback: &FeedbackState) -> [Page;
             }
         }
         let backspin = translator.backspin_deck(side);
+        if let Some(slot) = local.stem_fx_slot[side] {
+            let routing = feedback.stem_fx[usize::from(deck)];
+            return Page::StemFx {
+                deck,
+                slot,
+                layout: routing.layout(),
+                routes: routing.routes[usize::from(slot)],
+                fx,
+                backspin,
+            };
+        }
         match translator.pads[side] {
             PadMode::Hotcue | PadMode::Samples => {
                 let deck = usize::from(translator.decks[side].channel());
@@ -247,11 +258,46 @@ pub fn write_previews(path: &std::path::Path) -> anyhow::Result<()> {
         frame.write_ppm(&path.join(format!("{name}.ppm")))?;
     }
     write_info_previews(path, &mut frame)?;
+    write_stem_fx_previews(path, &mut frame)?;
     write_tempo_pickup_previews(path, &mut frame)?;
     write_fx_previews(path, &mut frame)?;
     write_backspin_previews(path, &mut frame)?;
     page::stopped(&mut frame);
     frame.write_ppm(&path.join("stopped.ppm"))?;
+    Ok(())
+}
+
+fn write_stem_fx_previews(
+    path: &std::path::Path,
+    frame: &mut s4mk3_hid_midi_bridge::screens::Frame,
+) -> anyhow::Result<()> {
+    use s4mk3_hid_midi_bridge::screens::page;
+    for (name, layout, routes) in [
+        (
+            "stem-fx-two-stems",
+            Some(2),
+            [Some(false), Some(true), Some(true), None, None],
+        ),
+        (
+            "stem-fx-four-stems",
+            Some(4),
+            [Some(false), Some(true), Some(false), None, Some(true)],
+        ),
+        ("stem-fx-unknown", None, [None; 5]),
+    ] {
+        page::render(
+            &Page::StemFx {
+                deck: 0,
+                slot: 1,
+                layout,
+                routes,
+                fx: FxWarning::default(),
+                backspin: (layout == Some(4)).then_some(0),
+            },
+            frame,
+        );
+        frame.write_ppm(&path.join(format!("{name}.ppm")))?;
+    }
     Ok(())
 }
 

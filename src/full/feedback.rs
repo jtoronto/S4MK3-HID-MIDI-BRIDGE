@@ -14,7 +14,10 @@ use midir::MidiInputConnection;
 use tracing::debug;
 use tracing::info;
 
-use super::catalog::{EQ_MODE_NOTE, EXT_THRU_CC, INTERNAL_MODE_CC};
+use super::{
+    catalog::{EQ_MODE_NOTE, EXT_THRU_CC, INTERNAL_MODE_CC},
+    stem_fx,
+};
 
 pub const PAD_COLOR_TOKENS: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 pub const PAD_WHITE_TOKEN: u8 = 9;
@@ -43,6 +46,7 @@ pub struct FeedbackState {
     /// Canonical FX parameters 1-3, then independent slot wet/dry values.
     pub fx_values: [[Option<u8>; 6]; 4],
     pub mute_fx: Option<bool>,
+    pub(super) stem_fx: [stem_fx::Feedback; 4],
     instant_fx_order: [[Option<usize>; 4]; 4],
     /// A playback output arrived from the mapping during this bridge session.
     pub playback_received: bool,
@@ -62,6 +66,7 @@ impl Default for FeedbackState {
             internal: [None; 4],
             fx_values: [[None; 6]; 4],
             mute_fx: None,
+            stem_fx: [stem_fx::Feedback::default(); 4],
             instant_fx_order: [[None; 4]; 4],
             playback_received: false,
         }
@@ -79,6 +84,12 @@ impl FeedbackState {
             return None;
         }
         let deck = usize::from(message.status & 0x0f);
+        if let Some(routes) = deck
+            .checked_sub(usize::from(stem_fx::FIRST_CHANNEL))
+            .and_then(|deck| self.stem_fx.get_mut(deck))
+        {
+            return routes.apply(message);
+        }
         if deck == usize::from(super::catalog::MUTE_FX_FEEDBACK_CHANNEL)
             && message.number == super::catalog::MUTE_FX_FEEDBACK_CC
         {

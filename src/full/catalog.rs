@@ -12,6 +12,10 @@ pub const MUTE_FX_FEEDBACK_CHANNEL: u8 = 6;
 pub const MUTE_FX_FEEDBACK_CC: u8 = 9;
 pub const MUTE_FX_BINDING: Binding = note("mute_mode", 4, "mixer.toggleUnmixerMuteFxEnabled", None);
 
+pub(super) const fn stem_fx_binding(number: u8) -> Binding {
+    note("stem_fx_route", number, "", None)
+}
+
 pub const EXT_INPUTS: [&str; 4] = [
     "mixer_ch1_ext",
     "mixer_ch2_ext",

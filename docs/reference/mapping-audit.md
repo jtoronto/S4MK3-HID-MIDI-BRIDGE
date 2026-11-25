@@ -301,8 +301,8 @@ seek command and, for toggle-based preview, reliable preview state.
    to their respective decks; changing deck focus does not move the mixer faders.
 3. HOTCUE pads set/jump to cues; Shift clears them. SAMPLES uses shared A/C
    and B/D banks; Shift stops a sample. STEMS selects four mutes and four
-   solos; Shift on the first four pads is exclusive solo. On macOS source
-   builds, MUTE instead toggles [global Mute FX](djay-action-reference.md#current-source-macos-mute-overlay).
+   solos; Shift on the first four pads is exclusive solo. On current source
+   builds, MUTE toggles [global Mute FX](djay-action-reference.md#current-source-mute-fx-overlay).
    Stem numbers are native channel indices; confirm content with Djay's
    Neural Mix layout.
 4. Channel FX1/FX2 select the left/right strip's target deck. Channel FX SELECT

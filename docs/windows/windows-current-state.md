@@ -15,6 +15,11 @@ for provenance; those paths are not required to build or use the app.
   The worker still uses WinMM. LoopBe remains an explicit CLI backend, while
   the normal app and generated Windows mapping use BLOOP. Feedback has separate
   address domains so outgoing control echoes are not treated as Djay state.
+  Control behavior, feedback state, LED policy and page rendering are shared
+  with macOS. The platforms differ at transport boundaries: CoreMIDI versus
+  Windows MIDI, and raw USB screen writes versus the NI service path in
+  Windows NI Bridge mode. The screen transports encode the shared raster
+  independently; a preview alone does not verify either transport's colors.
 - `windows/bridge-app/` is a self-contained win-x64 .NET/Avalonia tray host.
   It stores preferences, generates mappings through the packaged engine,
   supervises the bridge process and its endpoint lease, and provides settings
@@ -52,6 +57,17 @@ See [Windows development setup](windows-setup.md) for operational instructions, 
 
 ## Evidence and unresolved behavior
 
+- **Stem FX, Mute FX, and tempo pickup:** current source builds add the second
+  **STEMS** press for Manual FX routing and the red tempo detent LED for a
+  confirmed fader mismatch. Either **MUTE** button toggles global Neural
+  Mix Mute FX without changing the pad layer; both LEDs follow Djay's
+  reported state. **NI Bridge** with active screens also shows the
+  Stem FX page and the enlarged pickup guide; **Direct HID** has no screen
+  output. Install and select the mapping from the same build. The
+  [screen reference](../guides/screens.md) explains how to use these controls
+  and why the two three-stem layouts share the same labels. A user retest
+  of the Windows pickup color and Mute FX fixes passed; this does not
+  establish coverage of every deck, FX slot, or bridge mode.
 - **Earlier diagnostics:** the [November 7 Encdr run](validation/windows-encdr-pattern-validation-20261107.md)
   verified independent solid-color display updates, not production pages.
   The [November 9 wheel trace](validation/windows-motor-timing-validation-20261109.md)
