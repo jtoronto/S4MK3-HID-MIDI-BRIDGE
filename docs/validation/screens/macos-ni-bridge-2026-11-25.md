@@ -14,10 +14,21 @@ negative screen acknowledgment and cancellation while awaiting a reply.
 
 All 82 Swift tests passed, including managed startup, live tension and stop
 against a child process fixture. Desktop automation was denied Accessibility
-and input access; no interactive GUI test or screenshot was obtained.
+and input access. The user instead tested the stopped app: switching modes
+restored the Direct HID controls and retained the NI tension setting. Their
+screenshots exposed a missing section: NI mode showed only tension, hiding
+the shared jog settings. After the fix in `14e42fd`, the user confirmed the
+rebuilt Jog tab showed all four Windows groups: NI tension, Vinyl at startup,
+Backspin, and Scratch and pitch bend mapping. This was a settings check, not
+a physical platter test.
 
 **Not verified:** a session with NIHardwareAgent and a real S4, physical
-screen updates, platter feel, or a full Djay set. For an attended check, stop
+screen updates, platter feel, or a full Djay set. The packaged CLI's argument
+and config checks ran without hardware, but they did not reach NI acquisition:
+the executable requires HID and CoreMIDI first and cannot redirect its NI
+connection to the private fixture. The fixture results above therefore do not
+prove end-to-end startup, missing-service behavior or shutdown of the packaged
+process. For an attended check, stop
 Direct HID, select NI Bridge, leave the NI service running, and start. Confirm
 both screens update, both platters respond and the Jog tension slider changes
 their feel. Stop and confirm both platters release before switching back to
