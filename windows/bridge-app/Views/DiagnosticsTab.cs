@@ -1,3 +1,4 @@
+using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Media;
 using S4Bridge.Models;
@@ -59,10 +60,14 @@ internal sealed partial class SettingsView
             Height = UiTheme.LogHeight,
             FontFamily = new FontFamily("Cascadia Mono,Consolas,monospace")
         };
+        var assembly = typeof(SettingsView).Assembly;
+        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!
+            .InformationalVersion.Split('+', 2)[0];
+        var build = assembly.GetName().Version!.Revision;
         var controls = new List<Control>
         {
             UiTheme.SectionView("Version and log detail",
-                UiTheme.Selectable("S4 MK3 Bridge 0.3.0-beta.1 (build 8) | .NET 10 | Avalonia 11.3.8"),
+                UiTheme.Selectable($"S4 MK3 Bridge {version} (build {build}) | .NET 10 | Avalonia 11.3.8"),
                 level, fields.Toggle("Raw HID reports", run.RawReports, v => run.RawReports = v)),
             UiTheme.SectionView("Live platter diagnostics", platter,
                 UiTheme.Text("Physical RPM and outgoing MIDI CC4 counts/s, not audible Djay playback speed. Diagnostics continue while Settings is hidden.", true))

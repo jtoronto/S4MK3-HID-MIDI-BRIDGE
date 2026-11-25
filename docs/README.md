@@ -36,6 +36,7 @@ record; they are not evidence of broader physical acceptance.
 - [release 0.2.0 beta.1](releases/notes/release-0.2.0-beta.1.md)
 - [release 0.2.0 beta.2](releases/notes/release-0.2.0-beta.2.md)
 - [release 0.2.1 beta.1](releases/notes/release-0.2.1-beta.1.md)
+- [release 0.4.0 beta.1](releases/notes/release-0.4.0-beta.1.md)
 - [release 0.3.0 beta.1](releases/notes/release-0.3.0-beta.1.md)
 
 ### releases/validation
@@ -44,6 +45,7 @@ record; they are not evidence of broader physical acceptance.
 - [release 0.2.0 beta.1 validation](releases/validation/release-0.2.0-beta.1-validation.md)
 - [release 0.2.0 beta.2 validation](releases/validation/release-0.2.0-beta.2-validation.md)
 - [release 0.2.1 beta.1 validation](releases/validation/release-0.2.1-beta.1-validation.md)
+- [release 0.4.0 beta.1 validation](releases/validation/release-0.4.0-beta.1-validation.md)
 - [release 0.3.0 beta.1 validation](releases/validation/release-0.3.0-beta.1-validation.md)
 
 ### research/design

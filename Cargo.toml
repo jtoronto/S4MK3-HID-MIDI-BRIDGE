@@ -1,9 +1,9 @@
 [package]
 name = "s4mk3-hid-midi-bridge"
-version = "0.3.0-beta.1"
+version = "0.4.0-beta.1"
 edition = "2024"
 rust-version = "1.88"
-description = "Native Instruments S4 MK3 HID-to-MIDI bridge for Djay Pro on macOS"
+description = "Native Instruments S4 MK3 HID-to-MIDI bridge for Djay Pro on macOS and Windows"
 publish = false
 default-run = "s4mk3-hid-midi-bridge"
 

@@ -55,7 +55,7 @@ Both modes keep the **Vinyl at startup**, **Backspin**, and **Scratch and pitch 
 | Apply one effect to several decks | Press each channel's **ON** to select the decks, then hold a mixer FX button. Release it to end the effect. This is separate from the two FX strips above the decks.                                                             |
 | Mix an external source            | Set up the S4 inputs under **Djay → Settings → DVS** first. **EXT** then switches that deck between the external input and its track. [See the illustrated setup](docs/user-guide.md#required-djay-dvs-setup).                   |
 
-The published [0.3.0-beta.1 release](docs/releases/notes/release-0.3.0-beta.1.md) includes motorized playback, screens, EXT switching and multi-deck Instant FX. **NI Bridge on Mac, Stem FX routing, the MUTE echo switch and the tempo pickup guide are newer additions**; they are not in that download.
+See [what's new in 0.4.0-beta.1](docs/releases/notes/release-0.4.0-beta.1.md) for Windows support, NI Bridge on Mac, Stem FX routing, the MUTE echo switch and the tempo pickup guide. Those features are not included in the older [0.3.0-beta.1 Mac download](docs/releases/notes/release-0.3.0-beta.1.md).
 
 ## On the S4 screens
 

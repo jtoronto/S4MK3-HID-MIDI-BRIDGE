@@ -14,8 +14,8 @@
     <NuGetAudit>false</NuGetAudit>
     <AssemblyName>S4Bridge</AssemblyName>
     <ApplicationIcon>Assets/AppIcon.ico</ApplicationIcon>
-    <Version>0.3.0-beta.1</Version>
-    <AssemblyVersion>0.3.0.8</AssemblyVersion>
+    <Version>0.4.0-beta.1</Version>
+    <AssemblyVersion>0.4.0.9</AssemblyVersion>
     <PublishTrimmed>false</PublishTrimmed>
     <PublishSingleFile>false</PublishSingleFile>
   </PropertyGroup>
