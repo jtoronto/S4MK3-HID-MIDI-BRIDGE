@@ -71,6 +71,8 @@ platters and both screens. In that mode, leave the NI service running; the
 Direct HID screen toggle and driver handover instructions do not apply.
 The **Jog** tab shows one NI tension setting for both wheels (0–255, default
 107). Changing it does not change the motor tuning used by Direct HID.
+Both modes offer Vinyl at startup, backspin detection, and scratch and pitch
+bend mapping. Backspin motor assistance is only available in Direct HID.
 
 The following screen setup instructions are for **Direct HID**.
 

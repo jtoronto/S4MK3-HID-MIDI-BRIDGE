@@ -1510,26 +1510,7 @@ struct BridgeSettingsView: View {
     }
 
     private var jogTab: some View {
-        Group {
-            if controller.run.mode == .ni {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("NI jog wheel tension").font(.headline)
-                    HStack {
-                        Text("Both wheels")
-                        Slider(value: Binding(
-                            get: { Double(controller.niJog.value) },
-                            set: { controller.setNIJogTension(Int($0)) }
-                        ), in: 0...255, step: 1)
-                        Text("\(controller.niJog.value)").monospacedDigit()
-                    }
-                    Text("Changes are saved immediately and sent when the NI Bridge is ready. A sent value does not confirm physical wheel response.")
-                        .font(.caption).foregroundColor(.secondary)
-                    Spacer()
-                }.padding(20)
-            } else {
-                JogSettingsView(controller: controller)
-            }
-        }
+        JogSettingsView(controller: controller)
     }
 
     private var ledTab: some View {
