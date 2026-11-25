@@ -38,6 +38,10 @@ process-wrap = { version = "=10.0.1", default-features = false, features = ["tok
 recvmsg = "=1.0.0"
 tokio = { version = "=1.54.1", features = ["rt", "time", "sync", "macros", "net", "process", "io-util"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+s4-ni-message-port = { path = "src/screens/ni_service/message_port" }
+tokio = { version = "=1.54.1", features = ["rt", "time", "sync", "macros"] }
+
 [dev-dependencies]
 tokio = { version = "=1.54.1", features = ["rt", "time", "sync", "macros", "test-util", "net", "process", "io-util"] }
 

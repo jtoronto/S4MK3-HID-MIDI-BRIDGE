@@ -1461,6 +1461,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
+name = "s4-ni-message-port"
+version = "0.1.0"
+dependencies = [
+ "core-foundation-sys",
+]
+
+[[package]]
 name = "s4mk3-hid-midi-bridge"
 version = "0.3.0-beta.1"
 dependencies = [
@@ -1478,6 +1485,7 @@ dependencies = [
  "plist",
  "process-wrap",
  "recvmsg",
+ "s4-ni-message-port",
  "serde",
  "serde_json",
  "tokio",

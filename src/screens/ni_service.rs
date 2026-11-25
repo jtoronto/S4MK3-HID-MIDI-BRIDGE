@@ -3,12 +3,12 @@
 //! Protocol source: Encdr v0.8.4 `usb/ni_service/{protocol,windows}.rs`.
 //! Its S4 frame/service acceptance is unverified. Registration changes NI client
 //! state: callers must obtain operator authorization before `connect`.
-//! No tasks or threads are spawned. Dropping a session closes only its own pipes.
+//! Dropping a session closes only its own IPC resources.
 //! An interrupted exchange poisons and closes the session so a late reply cannot
 //! acknowledge a subsequent frame. Callers must retain desired frames across
 //! errors and reconnect/redraw both screens, without a shutdown image.
 
-#![cfg(any(windows, test))]
+#![cfg(any(windows, target_os = "macos", test))]
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -19,6 +19,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::{Instant, timeout_at};
 
+#[cfg(any(windows, test))]
 #[path = "ni_service/bootstrap.rs"]
 mod bootstrap;
 #[path = "ni_service/decks.rs"]
@@ -27,14 +28,20 @@ pub use super::DeckOutput;
 #[cfg(test)]
 #[path = "ni_service/fixtures.rs"]
 mod fixtures;
-#[cfg(feature = "attended-ni-jog")]
+#[cfg(all(feature = "attended-ni-jog", any(windows, test)))]
 #[path = "ni_service/left_jog.rs"]
 mod left_jog;
+#[cfg(target_os = "macos")]
+#[path = "ni_service/macos.rs"]
+mod macos;
+#[cfg(target_os = "macos")]
+pub use macos::NiService;
 #[path = "ni_service/protocol.rs"]
 mod protocol;
 #[cfg(windows)]
 #[path = "ni_service/windows.rs"]
 mod windows;
+#[cfg(any(windows, test))]
 #[path = "ni_service/write.rs"]
 mod write;
 #[cfg(windows)]
@@ -84,6 +91,7 @@ impl From<io::Error> for Error {
     }
 }
 
+#[cfg(any(windows, test))]
 const fn written(expected: usize, actual: usize) -> Result<(), Error> {
     if actual != expected {
         return Err(Error::ShortWrite { expected, actual });
@@ -221,12 +229,23 @@ async fn bounded<T: Send>(
     }
 }
 
-// Message-oriented boundary, implemented by safe nonblocking Windows pipes.
+// Message-oriented boundary implemented by native transports.
 // read() is cancellation-safe: a pending call must not consume message bytes.
 // Every write is ONE complete message, including zero-length notification ACKs.
 trait Pipe: Send {
     fn read(&mut self) -> impl Future<Output = Result<Vec<u8>, Error>> + Send;
     fn write(&mut self, message: &[u8]) -> impl Future<Output = Result<(), Error>> + Send;
+
+    fn request(
+        &mut self,
+        message: &[u8],
+        _deadline: Instant,
+    ) -> impl Future<Output = Result<Vec<u8>, Error>> + Send {
+        async {
+            self.write(message).await?;
+            self.read().await
+        }
+    }
 
     fn write_guarded(
         &mut self,
@@ -260,6 +279,31 @@ trait Connector: Send + Sync {
             let mut pipe = self.open(name).await?;
             pipe.write(registration).await?;
             pipe.read().await
+        }
+    }
+
+    fn registration_ack(
+        request: &mut Self::Request,
+        notification: &mut Self::Notification,
+        pending: &mut VecDeque<Vec<u8>>,
+        ack: &[u8],
+        _deadline: Instant,
+    ) -> impl Future<Output = Result<Vec<u8>, Error>> + Send {
+        async {
+            request.write(ack).await?;
+            loop {
+                tokio::select! {
+                    biased;
+                    note = notification.read() => {
+                        if pending.len() == 64 {
+                            return Err(Error::Malformed("notification backlog"));
+                        }
+                        pending.push_back(note?);
+                        notification.write(&[]).await?;
+                    }
+                    reply = request.read() => return reply,
+                }
+            }
         }
     }
 }
@@ -298,24 +342,19 @@ impl<C: Connector> Registration<C> {
             ack_required: false,
         };
         let ack = protocol::ack(&ports.notification)?;
-        bounded(cancel, deadline, result.request.write(&ack)).await?;
         tracing::info!(stage = "registration-ack-reply", "NI_SERVICE_SETUP");
         // ACK replies are required; an absent or unrecognized reply is not success.
-        let reply = bounded(cancel, deadline, async {
-            loop {
-                tokio::select! {
-                    biased;
-                    note = result.notification.read() => {
-                        if result.pending.len() == 64 {
-                            return Err(Error::Malformed("notification backlog"));
-                        }
-                        result.pending.push_back(note?);
-                        result.notification.write(&[]).await?;
-                    }
-                    reply = result.request.read() => return reply,
-                }
-            }
-        })
+        let reply = bounded(
+            cancel,
+            deadline,
+            C::registration_ack(
+                &mut result.request,
+                &mut result.notification,
+                &mut result.pending,
+                &ack,
+                deadline,
+            ),
+        )
         .await?;
         protocol::accepted(&reply)?;
         tracing::info!(stage = "registration-accepted", "NI_SERVICE_SETUP");
@@ -513,10 +552,7 @@ impl<C: Connector> Session<C> {
         // Pinning the whole exchange preserves one write and one reply across
         // unrelated notifications. Cancellation/loss drops the owning resources.
         let request = &mut resources.instance.request;
-        let transaction = async {
-            request.write(packet).await?;
-            protocol::accepted(&request.read().await?)
-        };
+        let transaction = async { protocol::accepted(&request.request(packet, deadline).await?) };
         tokio::pin!(transaction);
         loop {
             tokio::select! {
