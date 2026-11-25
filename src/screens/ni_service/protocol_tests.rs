@@ -6,7 +6,7 @@ fn solid_display_frames_match_physically_verified_encdr_messages() {
     // Retained Encdr a541465 offline frames from the attended two-screen test.
     for (index, rgb, pair) in [(0, 0x001f, [0xf8, 0]), (1, 0xf800, [0, 0x1f])] {
         let mut actual = Vec::new();
-        display(index, &vec![rgb; PIXELS], &mut actual);
+        display(index, &vec![rgb; PIXELS], PixelOrder::Bgr565, &mut actual);
         let expected = [
             0x44, 0x73, 0x64, 3, index, 0, 0, 0, 0, 0, 0, 0, 0xf0, 0, 0x40, 1, 0x20, 0, 0, 0, 0x84,
             0, index, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0x40, 0, 0xf0, 1, 0, 0x96, 0, pair[0],

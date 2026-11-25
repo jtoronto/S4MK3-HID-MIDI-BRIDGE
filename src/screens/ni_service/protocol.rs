@@ -191,7 +191,23 @@ pub fn setup() -> Vec<Vec<u8>> {
     ]
 }
 
-pub fn display(index: u8, pixels: &[u16], output: &mut Vec<u8>) {
+#[derive(Clone, Copy)]
+pub enum PixelOrder {
+    Rgb565,
+    Bgr565,
+}
+
+impl PixelOrder {
+    const fn encode(self, rgb: u16) -> [u8; 2] {
+        let value = match self {
+            Self::Rgb565 => rgb,
+            Self::Bgr565 => ((rgb & 0x001f) << 11) | (rgb & 0x07e0) | ((rgb & 0xf800) >> 11),
+        };
+        value.to_be_bytes()
+    }
+}
+
+pub fn display(index: u8, pixels: &[u16], order: PixelOrder, output: &mut Vec<u8>) {
     output.clear();
     output.extend_from_slice(&words(&[0x0364_7344, u32::from(index), 0, 0x0140_00f0, 0]));
     output.extend_from_slice(&[
@@ -214,8 +230,7 @@ pub fn display(index: u8, pixels: &[u16], output: &mut Vec<u8>) {
                 count[count.len() - 1],
             ]);
             for &rgb in pairs[start] {
-                let bgr = ((rgb & 0x001f) << 11) | (rgb & 0x07e0) | ((rgb & 0xf800) >> 11);
-                output.extend_from_slice(&bgr.to_be_bytes());
+                output.extend_from_slice(&order.encode(rgb));
             }
         } else {
             while i < pairs.len() {
@@ -233,8 +248,7 @@ pub fn display(index: u8, pixels: &[u16], output: &mut Vec<u8>) {
             ]);
             for pair in &pairs[start..i] {
                 for &rgb in *pair {
-                    let bgr = ((rgb & 0x001f) << 11) | (rgb & 0x07e0) | ((rgb & 0xf800) >> 11);
-                    output.extend_from_slice(&bgr.to_be_bytes());
+                    output.extend_from_slice(&order.encode(rgb));
                 }
             }
         }

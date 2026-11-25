@@ -161,7 +161,10 @@ impl Identity {
 
 /// An exactly sized logical RGB565 raster (the existing renderer's pixel format).
 #[derive(Clone, Copy)]
-pub struct Raster<'a>(&'a [u16]);
+pub struct Raster<'a> {
+    pixels: &'a [u16],
+    order: protocol::PixelOrder,
+}
 
 impl<'a> Raster<'a> {
     /// # Errors
@@ -170,7 +173,24 @@ impl<'a> Raster<'a> {
         if pixels.len() != protocol::PIXELS {
             return Err(Error::Malformed("raster dimensions"));
         }
-        Ok(Self(pixels))
+        Ok(Self {
+            pixels,
+            // Keep the attended Encdr diagnostic payload contract.
+            order: protocol::PixelOrder::Bgr565,
+        })
+    }
+
+    /// Construct a raster for the normal NI screen presenter.
+    /// Its service payload uses RGB565: the raw USB BGR swap produces reversed
+    /// colors on this path. `new` retains the attended Encdr diagnostic bytes.
+    ///
+    /// # Errors
+    /// Rejects a raster other than 320 by 240 pixels.
+    pub fn presenter(pixels: &'a [u16]) -> Result<Self, Error> {
+        Ok(Self {
+            order: protocol::PixelOrder::Rgb565,
+            ..Self::new(pixels)?
+        })
     }
 }
 
@@ -554,14 +574,14 @@ impl<C: Connector> Session<C> {
         // closes all pipes rather than returning a half-used session to callers.
         let mut resources = self.resources.take().ok_or(Error::Disconnected)?;
         for (target_index, raster) in [0_u8, 1].into_iter().zip(frames) {
-            protocol::display(target_index, raster.0, &mut self.packet);
+            protocol::display(target_index, raster.pixels, raster.order, &mut self.packet);
             if tracing::enabled!(target: "s4_screen_route_diag", tracing::Level::DEBUG) {
                 tracing::debug!(
                     target: "s4_screen_route_diag",
                     target_index,
                     header_target = self.packet[4],
                     embedded_target = self.packet[22],
-                    hash = crate::screens::route_fingerprint(raster.0),
+                    hash = crate::screens::route_fingerprint(raster.pixels),
                     "SCREEN_ROUTE_SEND"
                 );
             }

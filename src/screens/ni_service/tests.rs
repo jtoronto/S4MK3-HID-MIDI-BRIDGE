@@ -307,6 +307,73 @@ async fn service_session_gates_control_and_publishes_both_bgr_rasters() -> TestR
 }
 
 #[tokio::test(start_paused = true)]
+async fn presenter_publishes_logical_colors_through_run_and_literal_packets() -> TestResult {
+    let (bus, service) = fixture();
+    let (_cancel, rx) = watch::channel(false);
+    let (session, peer) = tokio::join!(
+        Session::connect(&bus, identity()?, rx),
+        service.handshake("S4ABC123", Some(&ACTIVE)),
+    );
+    let mut session = session?;
+    let mut peer = peer?;
+    let mut frame = crate::screens::Frame::default();
+    crate::screens::page::render(
+        &crate::screens::page::Page::Info(crate::screens::page::Info {
+            tempo_pickup: crate::screens::page::TempoPickup::new(0, 127),
+            ..Default::default()
+        }),
+        &mut frame,
+    );
+    // Force the first pair into a literal block; the pickup background also
+    // supplies long compressed runs in the rendered page.
+    frame.pixels[0] = 0xf800;
+    frame.pixels[1] = 0x001f;
+    frame.pixels[2] = 0x07e0;
+    frame.pixels[3] = 0xffff;
+    let raster = Raster::presenter(&frame.pixels)?;
+    let (result, accepted) = tokio::join!(session.publish_pair([raster, raster]), async {
+        for _ in 0..2 {
+            let message = peer.instance.read().await?;
+            let mut pixels = Vec::new();
+            let mut offset = 36;
+            let mut pickup_in_run = false;
+            while message[offset] != 3 {
+                let kind = message[offset];
+                let count = usize::from(message[offset + 1]) << 16
+                    | usize::from(message[offset + 2]) << 8
+                    | usize::from(message[offset + 3]);
+                offset += 4;
+                if kind == 1 {
+                    let pair = [
+                        u16::from_be_bytes([message[offset], message[offset + 1]]),
+                        u16::from_be_bytes([message[offset + 2], message[offset + 3]]),
+                    ];
+                    pickup_in_run |= pair == [0xfcf3; 2];
+                    for _ in 0..count {
+                        pixels.extend_from_slice(&pair);
+                    }
+                    offset += 4;
+                } else {
+                    assert_eq!(kind, 0);
+                    for _ in 0..count * 2 {
+                        pixels.push(u16::from_be_bytes([message[offset], message[offset + 1]]));
+                        offset += 2;
+                    }
+                }
+            }
+            assert_eq!(&pixels[..4], &[0xf800, 0x001f, 0x07e0, 0xffff]);
+            assert_eq!(pixels[200 * 320 + 170], 0xfcf3);
+            assert!(pickup_in_run);
+            peer.instance.write(&YES).await?;
+        }
+        Ok::<(), Error>(())
+    });
+    result?;
+    accepted?;
+    Ok(())
+}
+
+#[tokio::test(start_paused = true)]
 async fn setup_requires_exact_service_serial_and_positive_control() -> TestResult {
     for (serial, control) in [
         ("OTHER123", Some(ACTIVE.as_slice())),

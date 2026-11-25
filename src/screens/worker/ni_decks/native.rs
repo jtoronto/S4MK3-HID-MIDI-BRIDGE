@@ -4,8 +4,11 @@ use crate::screens::ni_service::{NiService, Raster};
 impl Transport for NiService {
     async fn publish(&mut self, frames: &[Frame; 2]) -> anyhow::Result<()> {
         let [left, right] = frames.each_ref();
-        self.publish_pair([Raster::new(&left.pixels)?, Raster::new(&right.pixels)?])
-            .await?;
+        self.publish_pair([
+            Raster::presenter(&left.pixels)?,
+            Raster::presenter(&right.pixels)?,
+        ])
+        .await?;
         Ok(())
     }
 
