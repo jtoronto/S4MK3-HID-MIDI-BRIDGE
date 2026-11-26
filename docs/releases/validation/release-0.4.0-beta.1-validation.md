@@ -37,3 +37,26 @@ No change of API package is needed.
 Do not publish this ZIP. `REVIEW-GAPS.md` alongside it records the third-party
 debug symbols, corresponding-source delivery, and dependency notices still
 requiring review. This package has not been run on Windows.
+
+## Final local Windows artifacts — 2026-11-26
+
+Use `dist/release-0.4.0-beta.1/windows/`, not the earlier private review
+directory. The portable was rebuilt from `dce87c1` with a packaging-only
+change to omit `Windows.Devices.Midi2.pdb` before generating the file
+manifest. All 621 portable package files passed verification. Inno Setup
+7.1.1 compiled the per-user installer from that exact portable payload.
+
+| File | SHA-256 |
+| --- | --- |
+| `S4-MK3-Bridge-0.4.0-beta.1-win-x64-Setup.exe` | `7d61a60021ed26d71bab567ea869ce4dd8414d05e6934a85592e270bc3942687` |
+| `S4-MK3-Bridge-0.4.0-beta.1-win-x64.zip` | `c83635dccacb98d51b16d9a7cfa0ac8333c1788729304d072812c11205b5226b` |
+| `S4-MK3-Bridge-0.4.0-beta.1-win-x64-source.tar.gz` | `b8f25727ed0a90a6669a01f9a18b2f76c5193046b851f4bdbf4563dae859ca2e` |
+
+An independent extractor (innounp 2.71.4) unpacked the final installer.
+All 620 files listed in the portable manifest matched, as did the manifest
+itself. No payload files were missing or extra. The installer is unsigned.
+
+All three checksum sidecars verified locally. The source archive retains
+the packaging patch, locked inputs, build instructions and notices. Read
+its `MAINTAINER-REVIEW.md` before publishing. No native Windows install,
+upgrade, uninstall, or controller session was exercised with these files.
