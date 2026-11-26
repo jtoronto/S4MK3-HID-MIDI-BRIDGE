@@ -27,7 +27,7 @@ otool -L "$ROOT/target/release/$BINARY" |
 
 mkdir -p "$OUTPUT"
 cp "$ROOT/target/release/$BINARY" "$OUTPUT/$BINARY"
-cp "$ROOT/docs/jog-tension-diagnostic.md" "$OUTPUT/README.md"
+cp "$ROOT/docs/research/jog/jog-tension-diagnostic.md" "$OUTPUT/README.md"
 cp "$ROOT/examples/jog-diagnostic-replay.jsonl" "$OUTPUT/jog-diagnostic-replay.jsonl"
 cp "$ROOT/examples/jog-diagnostic-fader-replay.jsonl" "$OUTPUT/jog-diagnostic-fader-replay.jsonl"
 cp "$ROOT/examples/jog-diagnostic-tension-replay.jsonl" "$OUTPUT/jog-diagnostic-tension-replay.jsonl"
@@ -35,7 +35,7 @@ cp "$ROOT/examples/jog-diagnostic-continuity-replay.jsonl" "$OUTPUT/jog-diagnost
 cp "$ROOT/examples/jog-diagnostic-damped-replay.jsonl" "$OUTPUT/jog-diagnostic-damped-replay.jsonl"
 cp "$ROOT/examples/jog-diagnostic-assist-replay.jsonl" "$OUTPUT/jog-diagnostic-assist-replay.jsonl"
 cp "$ROOT/examples/jog-diagnostic-wheels-replay.jsonl" "$OUTPUT/jog-diagnostic-wheels-replay.jsonl"
-cp "$ROOT/docs/jog-fader-braking-protocol.md" "$OUTPUT/jog-fader-braking-protocol.md"
+cp "$ROOT/docs/research/jog/jog-fader-braking-protocol.md" "$OUTPUT/jog-fader-braking-protocol.md"
 codesign --force --sign - "$OUTPUT/$BINARY"
 codesign --verify --strict "$OUTPUT/$BINARY"
 ditto -c -k --sequesterRsrc --keepParent "$OUTPUT" "$ARCHIVE"

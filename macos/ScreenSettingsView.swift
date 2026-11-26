@@ -10,6 +10,21 @@ struct ScreenSettingsView: View {
     }
 
     var body: some View {
+        Group {
+            if controller.run.mode == .ni {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Screens are managed by the Native Instruments service in NI Bridge mode.")
+                    Text("The direct-mode screen handover settings are not used.")
+                        .font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                directSettings
+            }
+        }
+    }
+
+    private var directSettings: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 GroupBox("S4 screens") {

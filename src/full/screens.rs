@@ -1,6 +1,6 @@
 //! Adapt held MIDI owners and confirmed Djay state to the hardware screens.
 
-use s4mk3_hid_midi_bridge::screens::page::{FxWarning, Info, PadState, Page};
+use s4mk3_hid_midi_bridge::screens::page::{FxWarning, Info, PadState, Page, TempoPickup};
 
 use super::{Address, Translator, catalog::PadMode, feedback::FeedbackState};
 
@@ -29,6 +29,26 @@ impl Output {
                 enabled,
             )?),
         })
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    pub fn ni_decks(initial_tension: Option<u8>) -> anyhow::Result<Self> {
+        Ok(Self {
+            enabled: true,
+            managed: true,
+            worker: Some(s4mk3_hid_midi_bridge::screens::Worker::start_ni_decks(
+                initial_tension,
+            )?),
+        })
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    pub fn stop_ni_decks(&mut self) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        self.worker
+            .as_mut()
+            .context("NI deck worker missing at shutdown")?
+            .stop_ni_decks()
     }
 
     pub fn control(&self) -> Option<s4mk3_hid_midi_bridge::screens::Control> {
@@ -98,6 +118,17 @@ pub(super) fn pages(translator: &Translator, feedback: &FeedbackState) -> [Page;
             }
         }
         let backspin = translator.backspin_deck(side);
+        if let Some(slot) = local.stem_fx_slot[side] {
+            let routing = feedback.stem_fx[usize::from(deck)];
+            return Page::StemFx {
+                deck,
+                slot,
+                layout: routing.layout(),
+                routes: routing.routes[usize::from(slot)],
+                fx,
+                backspin,
+            };
+        }
         match translator.pads[side] {
             PadMode::Hotcue | PadMode::Samples => {
                 let deck = usize::from(translator.decks[side].channel());
@@ -107,6 +138,7 @@ pub(super) fn pages(translator: &Translator, feedback: &FeedbackState) -> [Page;
                     loop_size: feedback.info.active_loop_size(deck),
                     key: feedback.info.key_raw[deck].and_then(key::label),
                     tempo_range: feedback.info.tempo_range,
+                    tempo_pickup: translator.tempo_gesture[side].warning(),
                     selecting: translator.move_selecting[deck],
                     fx,
                     backspin,
@@ -228,10 +260,46 @@ pub fn write_previews(path: &std::path::Path) -> anyhow::Result<()> {
         frame.write_ppm(&path.join(format!("{name}.ppm")))?;
     }
     write_info_previews(path, &mut frame)?;
+    write_stem_fx_previews(path, &mut frame)?;
+    write_tempo_pickup_previews(path, &mut frame)?;
     write_fx_previews(path, &mut frame)?;
     write_backspin_previews(path, &mut frame)?;
     page::stopped(&mut frame);
     frame.write_ppm(&path.join("stopped.ppm"))?;
+    Ok(())
+}
+
+fn write_stem_fx_previews(
+    path: &std::path::Path,
+    frame: &mut s4mk3_hid_midi_bridge::screens::Frame,
+) -> anyhow::Result<()> {
+    use s4mk3_hid_midi_bridge::screens::page;
+    for (name, layout, routes) in [
+        (
+            "stem-fx-two-stems",
+            Some(2),
+            [Some(false), Some(true), Some(true), None, None],
+        ),
+        (
+            "stem-fx-four-stems",
+            Some(4),
+            [Some(false), Some(true), Some(false), None, Some(true)],
+        ),
+        ("stem-fx-unknown", None, [None; 5]),
+    ] {
+        page::render(
+            &Page::StemFx {
+                deck: 0,
+                slot: 1,
+                layout,
+                routes,
+                fx: FxWarning::default(),
+                backspin: (layout == Some(4)).then_some(0),
+            },
+            frame,
+        );
+        frame.write_ppm(&path.join(format!("{name}.ppm")))?;
+    }
     Ok(())
 }
 
@@ -401,6 +469,35 @@ fn write_info_previews(
             );
         }
         page::render_phase(&pages(&translator, &feedback)[0], frame, bright);
+        frame.write_ppm(&path.join(format!("{name}.ppm")))?;
+    }
+    Ok(())
+}
+
+fn write_tempo_pickup_previews(
+    path: &std::path::Path,
+    frame: &mut s4mk3_hid_midi_bridge::screens::Frame,
+) -> anyhow::Result<()> {
+    use s4mk3_hid_midi_bridge::screens::page;
+    for (name, physical, target, warnings) in [
+        ("tempo-pickup-right", 36, 92, false),
+        ("tempo-pickup-left", 114, 23, true),
+        ("tempo-pickup-acquired", 92, 92, false),
+    ] {
+        let info = Info {
+            jump: Some("8"),
+            loop_active: Some(false),
+            key: Some("9A"),
+            tempo_range: Some(4),
+            tempo_pickup: TempoPickup::new(physical, target),
+            backspin: warnings.then_some(0),
+            fx: FxWarning {
+                mismatch: [u8::from(warnings), 0],
+                ..FxWarning::default()
+            },
+            ..Info::default()
+        };
+        page::render(&Page::Info(info), frame);
         frame.write_ppm(&path.join(format!("{name}.ppm")))?;
     }
     Ok(())

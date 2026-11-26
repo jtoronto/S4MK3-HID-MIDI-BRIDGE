@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 use super::catalog::PadMode;
 use super::feedback::FeedbackState;
+use super::tempo_pickup::Indication;
 
 const REPORT_LEN: usize = 95;
 const MIXER_ROW: usize = 4;
@@ -232,9 +233,11 @@ pub struct LocalState {
     pub held: [bool; 11],
     /// Physical tempo-fader positions normalized to 0.0..=1.0.
     pub tempo: [Option<f32>; 2],
+    pub(super) tempo_indication: [Indication; 2],
     /// Jump-size selection belongs to logical decks, not physical sides.
     pub move_selecting: [bool; 4],
     pub eq_selecting: bool,
+    pub(super) stem_fx_slot: [Option<u8>; 2],
     /// Parameter knobs 1-3 and dry/wet, by physical FX strip.
     pub fx_positions: [[Option<u8>; 4]; 2],
     /// Per-slot acquisition gates, by physical FX strip.
@@ -257,8 +260,10 @@ impl Default for LocalState {
             grid: [false; 2],
             held: [false; 11],
             tempo: [None; 2],
+            tempo_indication: [Indication::Off; 2],
             move_selecting: [false; 4],
             eq_selecting: false,
+            stem_fx_slot: [None; 2],
             fx_positions: [[None; 4]; 2],
             fx_acquired: [[false; 6]; 2],
         }
@@ -380,14 +385,28 @@ impl ButtonRenderer<'_> {
         for (offsets, mode, color) in [
             ([9, 32], PadMode::Hotcue, color),
             ([57, 68], PadMode::Samples, Color::Cyan),
-            ([10, 33], PadMode::Stems, Color::Green),
-            ([58, 69], PadMode::Stems, Color::Green),
+            (
+                [10, 33],
+                PadMode::Stems,
+                if self.local.stem_fx_slot[side].is_some() {
+                    Color::Purple
+                } else {
+                    Color::Green
+                },
+            ),
         ] {
             self.set(
                 offsets[side],
                 self.palette(color, self.local.pads[side] == mode),
             );
         }
+        // The physical MUTE lamps are white-only; the hue bits cannot make them cyan.
+        let mute = match self.feedback.mute_fx {
+            Some(true) => self.palette(Color::White, true),
+            Some(false) => Color::White.base() + self.config.palette_inactive_intensity,
+            None => 0,
+        };
+        self.set([58, 69][side], mute);
         for slot in 0..2 {
             let selected = [[0, 2], [1, 3]][side][slot];
             self.set(
@@ -418,10 +437,18 @@ impl ButtonRenderer<'_> {
             [18, 41][side],
             self.palette(Color::White, self.local.grid[side]),
         );
-        if let Some(tolerance) = self.config.tempo_center_tolerance {
-            if self.local.tempo[side].is_some_and(|position| (position - 0.5).abs() <= tolerance) {
-                self.set([11, 34][side], self.palette(Color::White, true));
-            }
+        let detent = match self.local.tempo_indication[side] {
+            Indication::Mismatch(_) => Some(Color::Red),
+            Indication::Center => Some(Color::Blue),
+            Indication::Off => self
+                .config
+                .tempo_center_tolerance
+                .zip(self.local.tempo[side])
+                .filter(|(tolerance, position)| (position - 0.5).abs() <= *tolerance)
+                .map(|_| Color::White),
+        };
+        if let Some(color) = detent {
+            self.set([11, 34][side], self.palette(color, true));
         }
     }
 
@@ -437,6 +464,23 @@ impl ButtonRenderer<'_> {
 
     fn pads(&mut self, side: usize) {
         let deck = self.local.decks[side];
+        if let Some(slot) = self.local.stem_fx_slot[side] {
+            let routing = self.feedback.stem_fx[deck];
+            let flags = routing.routes[usize::from(slot)];
+            let count = routing.layout().unwrap_or(0);
+            for pad in 0..8 {
+                let value = match pad {
+                    0..=3 if pad < count => {
+                        self.state_palette(Color::Purple, flags[pad + 1].map(u8::from))
+                    }
+                    4..=6 => self.palette(Color::White, pad - 4 == usize::from(slot)),
+                    7 if count != 0 => self.state_palette(Color::Purple, flags[0].map(u8::from)),
+                    _ => 0,
+                };
+                self.set([0, 23][side] + pad, value);
+            }
+            return;
+        }
         let mode = self.local.pads[side];
         for pad in 0..8 {
             let note = match mode {
@@ -846,7 +890,7 @@ mod tests {
         let report = render_buttons(&config(), &feedback, &local);
         assert_eq!(report[1], Color::Red.base() + 2);
         assert_eq!(report[1 + 10], Color::Green.base() + 2);
-        assert_eq!(report[1 + 58], Color::Green.base() + 2);
+        assert_eq!(report[1 + 58], 0);
 
         let mut fixed = config();
         fixed.hotcue_colors = HotcueColors::FixedSlots;
@@ -854,6 +898,82 @@ mod tests {
         local.pads[0] = PadMode::Hotcue;
         let report = render_buttons(&fixed, &feedback, &local);
         assert_eq!(report[1], Color::Yellow.base() + 2);
+    }
+
+    #[test]
+    fn tempo_detent_filters_delayed_feedback_and_marks_the_synced_center() {
+        use std::time::Duration;
+
+        use super::super::{Deck, Translator, feedback::Decoder};
+
+        let config = config();
+        let mut translator = Translator {
+            decks: [Deck::C, Deck::D],
+            ..Translator::default()
+        };
+        let mut feedback = FeedbackState::default();
+        let mut decoder = Decoder::default();
+        let red = Color::Red.base() + config.palette_active_intensity;
+        let blue = Color::Blue.base() + config.palette_active_intensity;
+        for (ms, cc, wire, expected) in [
+            (
+                0,
+                61_u8,
+                &[0x96, 2, 127, 0xb2, 113, 64, 0xb3, 113, 127][..],
+                blue,
+            ),
+            (5, 66, &[][..], blue),
+            (10, 72, &[][..], 0),
+            (12, 80, &[0xb2, 113, 72][..], 0),
+            (14, 91, &[0xb2, 113, 80][..], 0),
+            (16, 91, &[0xb2, 113, 91][..], 0),
+            (100, 91, &[][..], 0),
+            (105, 91, &[0xb2, 113, 127][..], 0),
+            (179, 91, &[][..], 0),
+            (180, 91, &[][..], red),
+            (182, 64, &[][..], red), // At the detent, but software is not centered.
+            (185, 64, &[0xb2, 113, 64][..], blue),
+        ] {
+            let now = Duration::from_millis(ms);
+            decoder.feed(wire, |message| {
+                feedback.apply(message, now);
+            });
+            translator.tempos = [Some(f32::from(cc) / 127.0), Some(0.5)];
+            translator.update_tempo_pickup(&feedback, now);
+            let report = render_buttons(&config, &feedback, &translator.local_led_state());
+            assert_eq!([report[12], report[35]], [expected, 0], "at {ms} ms");
+        }
+    }
+
+    #[test]
+    fn both_mute_leds_follow_global_djay_feedback_in_different_pad_modes() {
+        let config = config();
+        let dim_white = Color::White.base() + config.palette_inactive_intensity;
+        let bright_white = Color::White.base() + config.palette_active_intensity;
+        let mut feedback = FeedbackState::default();
+        let mut decoder = super::super::feedback::Decoder::default();
+        let local = LocalState {
+            decks: [2, 3],
+            pads: [PadMode::Stems, PadMode::Samples],
+            ..LocalState::default()
+        };
+        let render = |feedback: &FeedbackState, local: &LocalState| {
+            let report = render_buttons(&config, feedback, local);
+            [report[1 + 58], report[1 + 69]]
+        };
+        assert_eq!(render(&feedback, &local), [0; 2]);
+        for (bytes, expected) in [
+            ([0x94, 4, 127], 0),
+            ([0xb6, 9, 0], dim_white),
+            ([0xb6, 9, 127], bright_white),
+            ([0xb0, 9, 0], bright_white),
+            ([0xb6, 9, 0], dim_white),
+        ] {
+            decoder.feed(&bytes, |message| {
+                feedback.apply(message, std::time::Duration::ZERO);
+            });
+            assert_eq!(render(&feedback, &local), [expected; 2]);
+        }
     }
 
     #[test]
@@ -1024,11 +1144,8 @@ mod tests {
 
     #[test]
     fn config_rejects_unknown_keys_and_invalid_meter_ranges() -> anyhow::Result<()> {
-        let path = std::env::temp_dir().join(format!(
-            "s4-led-config-{}-{}.json",
-            std::process::id(),
-            std::thread::current().name().unwrap_or("test")
-        ));
+        let path =
+            std::env::temp_dir().join(format!("s4-led-config-invalid-{}.json", std::process::id()));
         std::fs::write(&path, r#"{"meter_gamma":0.0}"#)?;
         assert!(LedConfig::load(Some(&path)).is_err());
         std::fs::write(&path, r#"{"chase_period_ms":0}"#)?;

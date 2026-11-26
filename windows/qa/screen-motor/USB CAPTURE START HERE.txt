@@ -1,0 +1,70 @@
+USB + BRIDGE CAPTURE: A OFF, THEN B ACQUIRED
+
+This uses the existing diagnostic app and installed USBPcap. It does not
+install drivers or change NI services. The launcher is supplied stopped.
+
+1. Close every bridge GUI normally. Leave Djay and the matching BLOOP mapping
+   in place. Choose the same track for right-side Deck B for both runs. Leave
+   Deck B paused and right TT off. Keep the saved motor settings unchanged.
+   Both wheels remain UNTOUCHED in this test:
+   no assist, brake, scratch or manual spin gestures.
+
+2. Open 07-usb-pair.cmd. Accept the Windows administrator prompt. The launcher
+   checks its files and current S4 USB address and prepares a fresh A copy.
+
+3. Only when setup is ready and you are watching, type YES at the console's
+   confirmation. USB recording starts first. The bridge GUI opens stopped
+   only after a valid USB capture header has been received and saved.
+   Leave the separate minimized capture-host window alone.
+
+4. Confirm the GUI is stopped with YES. At the next prompt press Enter, then
+   click Start bridge. The console waits for this worker's feedback receiver
+   and the case's readiness:
+       A: S4_SCREEN_DIAG_READY off
+       B: S4_SCREEN_DIAG_READY acquired
+   B sends no images, so its ordinary Screens status may stay pending.
+
+5. Only AFTER the console confirms this connection, keep Deck B paused and use
+   its software input-mode selector in Djay. If the console says Internal is
+   unconfirmed, select Thru and then Internal while paused. This sends fresh
+   mode feedback. These are Djay's software modes, not Shift+EXT hardware input
+   settings. Eject Deck B's track in Djay, then load the agreed track again.
+   Start Deck B playback and select right-side TT. Type CHECK.
+   The console requires actual Loaded, Playing and Internal feedback, TT on,
+   and the worker's open motor gate before it starts the observation.
+   A typed answer cannot bypass this check. Finish setup within 90 seconds
+   of the Start prompt; a missing receipt or authorization stops the test.
+
+6. Once the console confirms motor authorization, observe for 20 seconds with
+   both wheels untouched. Use a 20-second timer; press Enter after that interval.
+
+7. Immediately click Stop bridge. Wait for stopped status and screen release,
+   then QUIT the bridge GUI normally. The console retries if it is still open.
+   Type STOPPED only after neutral/release are confirmed. USB recording stops
+   before you type the separate motor and ring observations.
+   If confirmation fails, use FAIL. CANCEL ends the wait and leaves the GUI
+   for you to stop/quit normally; it does not force-kill the bridge.
+
+8. The launcher checks the saved bridge trace and complete USB file for S4
+   motor/ring requests. If A is incomplete or expected USB data is absent,
+   it stops and preserves everything; B will not start.
+
+9. For the first repaired-launcher check, stop after A: press Enter at NEXT
+   and report the result. B waits for a working A baseline and a later attended
+   comparison. When proceeding with an authorized pair, type NEXT only if A's
+   motor/ring behavior was normal. Repeat steps 3-7 for B, using the same
+   settings and track. Report buzzing, flicker or failure plainly; do not
+   touch the wheel to try to help it.
+
+10. Keep the entire new usb-captures run directory. Each case contains the
+   bridge trace, observations, app/settings identity, USB capture.pcap,
+   USB process result, capture.readiness.json and combined-result.json. The
+   usb-stderr.txt file is a bounded tail of the isolated capture console.
+   pair-result.json summarizes
+   whether both recordings completed. A bad physical B response can still
+   produce a valid diagnostic recording; "complete" is not hardware acceptance.
+
+No C/D image tests are part of this launcher. Normal USBPcap shutdown and
+a valid file do not prove zero USB packet loss or a complete final kernel
+buffer tail. USBPcap also does not identify which application originated a
+request. Actual S4 traffic coverage is first checked in the attended A run.

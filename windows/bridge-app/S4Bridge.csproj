@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <WindowsSDKPackageVersion>10.0.26100.57</WindowsSDKPackageVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <CSWinRTInputs>Windows.Devices.Midi2</CSWinRTInputs>
+    <CsWinRTIncludes>Windows.Devices.Midi2</CsWinRTIncludes>
+    <RuntimeIdentifiers>win-x64;osx-arm64</RuntimeIdentifiers>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetAudit>false</NuGetAudit>
+    <AssemblyName>S4Bridge</AssemblyName>
+    <ApplicationIcon>Assets/AppIcon.ico</ApplicationIcon>
+    <Version>0.4.0-beta.1</Version>
+    <AssemblyVersion>0.4.0.9</AssemblyVersion>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishSingleFile>false</PublishSingleFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Update="Microsoft.NETCore.App" RuntimeFrameworkVersion="10.0.14" />
+    <PackageReference Include="Avalonia" Version="11.3.8" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.8" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.8" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" GeneratePathProperty="true" />
+    <PackageReference Include="Windows.Devices.Midi2" Version="0.99.92-preview.11" GeneratePathProperty="true" />
+    <None Include="$(PkgWindows_Devices_Midi2)/ref/net10.0/Windows.Devices.Midi2.winmd" Link="Windows.Devices.Midi2.winmd" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../licenses/Microsoft-MIDI-LICENSE.txt" Link="notices/Microsoft-MIDI-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(PkgMicrosoft_Windows_CsWinRT)/LICENSE" Link="notices/CsWinRT-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(PkgMicrosoft_Windows_CsWinRT)/NOTICE.txt" Link="notices/CsWinRT-NOTICE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Compile Remove="Packaging/**/*.cs" />
+    <Compile Remove="obj/**/*.cs;bin/**/*.cs" />
+    <Content Include="../../src/screens/text/LICENSE" Link="Resources/S4ScreenSans-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../examples/led-config.json" Link="Resources/default-led-config.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../examples/jog-config.json" Link="Resources/default-jog-config.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../examples/tension-config.json" Link="Resources/default-tension-config.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../LICENSE" Link="Resources/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../macos/Assets/AppIcon.png" Link="Resources/AppIcon.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets/AppIcon.ico" Link="Resources/AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="ConfigureMacGuidOptimizer" BeforeTargets="CsWinRTInvokeGuidPatcher"
+          DependsOnTargets="CsWinRTGenerateIIDOptimizerResponseFile" Condition="'$(S4ProbeDotnet)' != ''">
+    <PropertyGroup>
+      <CsWinRTIIDOptimizerCommand>"$(S4ProbeDotnet)" --roll-forward Major "$(CsWinRTPath)build/tools/IIDOptimizer/IIDOptimizer.dll" @"$(CsWinRTIIDOptimizerResponseFile)"</CsWinRTIIDOptimizerCommand>
+    </PropertyGroup>
+  </Target>
+</Project>

@@ -2,6 +2,13 @@
 use anyhow::{Context as _, ensure};
 use hidapi::HidDevice;
 
+#[path = "input/batch.rs"]
+mod batch;
+#[cfg(test)]
+#[path = "input/native_tests.rs"]
+mod native_tests;
+pub use batch::read_batch_with_observer;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReadOperation {
     Get1,
@@ -40,7 +47,7 @@ pub fn read_analog_with_observer(
     report[0] = 2;
     let mut observer = observer;
     let length = observed(ReadOperation::Get2Analog, &mut observer, || {
-        hid.get_input_report(&mut report).context(context)
+        native_read(2, &mut report, |report| hid.get_input_report(report)).context(context)
     })?;
     ensure!(length == report.len() && report[0] == 2, "{framing}");
     Ok(report)
@@ -54,66 +61,22 @@ pub fn read_batch(
     read_batch_with_observer(hid, full, buffers, None)
 }
 
-pub fn read_batch_with_observer(
-    hid: &HidDevice,
-    full: bool,
-    buffers: &mut [[u8; 128]; 3],
-    observer: Option<&mut dyn ReadObserver>,
-) -> anyhow::Result<[usize; 3]> {
-    let mut observer = observer;
-    read_batch_inner(hid, full, buffers, &mut observer)
-}
-
-fn read_batch_inner(
-    hid: &HidDevice,
-    full: bool,
-    buffers: &mut [[u8; 128]; 3],
-    observe: &mut Option<&mut dyn ReadObserver>,
-) -> anyhow::Result<[usize; 3]> {
-    let mut lengths = [0; 3];
-    if full {
-        // Touch/buttons precede jog movement, as in a complete HID report.
-        for (index, id, size, operation) in [
-            (0, 1, 23, ReadOperation::Get1),
-            (1, 3, 60, ReadOperation::Get3),
-        ] {
-            buffers[index][0] = id;
-            lengths[index] = observed(operation, observe, || {
-                hid.get_input_report(&mut buffers[index][..size])
-                    .with_context(|| format!("request S4 input report {id}"))
-            })?;
-            ensure!(
-                lengths[index] == size && buffers[index][0] == id,
-                "unexpected S4 snapshot {id} framing"
-            );
-        }
-    }
-    // In full mode this bounded read paces snapshots without a busy loop.
-    // Minimal/probe mode retains the original interrupt-only transport.
-    let length = observed(ReadOperation::InterruptRead, observe, || {
-        hid.read_timeout(&mut buffers[2], if full { 2 } else { 100 })
-            .context("read S4 HID interrupt report")
-    })?;
-    if full && length != 0 && buffers[2][0] == 2 {
-        // A queued analog interrupt can predate the startup GET. Use it as
-        // a change notification, not as authority over a newer physical snapshot.
-        let report = observe.take().map_or_else(
-            || read_analog(hid),
-            |observer| {
-                read_analog_with_observer(
-                    hid,
-                    Some(observer),
-                    "request initial S4 analog report 2",
-                    "unexpected initial S4 analog snapshot framing",
-                )
-            },
-        )?;
-        buffers[2][..report.len()].copy_from_slice(&report);
-        lengths[2] = report.len();
-    } else if accepts_interrupt(&buffers[2][..length], full) {
-        lengths[2] = length;
-    }
-    Ok(lengths)
+fn normalized_length(report: &[u8], windows: bool) -> anyhow::Result<usize> {
+    let expected = match report.first() {
+        Some(1) => 23,
+        Some(2) => 79,
+        Some(3) => 60,
+        _ => return Ok(report.len()),
+    };
+    ensure!(
+        report.len() == expected || windows && report.len() == 79,
+        "unexpected S4 interrupt framing: ID {:?}, length {}",
+        report.first(),
+        report.len()
+    );
+    // Windows interrupt buffers have the collection maximum (79 including ID).
+    // Only the descriptor-defined report bytes belong to the shared decoder.
+    Ok(expected)
 }
 
 fn observed<T>(
@@ -140,6 +103,10 @@ fn observed<T>(
     }
 }
 
+#[path = "input/native.rs"]
+mod native;
+use native::read as native_read;
+
 const fn accepts_interrupt(report: &[u8], full: bool) -> bool {
     // These interrupt copies may predate the snapshots already processed.
     // Feeding either copy back to the parser would reverse motion/touch state.
@@ -150,6 +117,22 @@ const fn accepts_interrupt(report: &[u8], full: bool) -> bool {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn windows_padding_is_removed_once_without_accepting_truncation() -> anyhow::Result<()> {
+        for (id, expected) in [(1, 23), (2, 79), (3, 60)] {
+            let mut report = [0; 79];
+            report[0] = id;
+            assert_eq!(normalized_length(&report, true)?, expected);
+            assert_eq!(normalized_length(&report[..expected], false)?, expected);
+            assert!(normalized_length(&report[..expected - 1], true).is_err());
+            if expected != 79 {
+                assert!(normalized_length(&report, false).is_err());
+            }
+        }
+        assert_eq!(normalized_length(&[], true)?, 0);
+        Ok(())
+    }
 
     #[derive(Debug, PartialEq)]
     enum RecordedCall {

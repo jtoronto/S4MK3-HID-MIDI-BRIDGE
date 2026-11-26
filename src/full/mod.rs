@@ -14,14 +14,14 @@ mod raw;
 pub mod replay;
 mod ring_position;
 pub mod screens;
+mod stem_fx;
+mod tempo_pickup;
 
 use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Context as _, bail, ensure};
 use encdr::Event;
-use midir::os::unix::VirtualOutput as _;
-use midir::{MidiOutput, MidiOutputConnection};
 use num_traits::ToPrimitive as _;
 use tracing::{debug, info, warn};
 
@@ -177,6 +177,7 @@ struct Translator {
     front_panel_ready: bool,
     led_held: [bool; 11],
     tempos: [Option<f32>; 2],
+    tempo_gesture: [tempo_pickup::Gesture; 2],
     move_selecting: [bool; 4],
     jump_sizes: [Option<usize>; 4],
     jump_revision: [u64; 4],
@@ -189,6 +190,9 @@ struct Translator {
     fx_browse_anchors: [[Option<u8>; 3]; 2],
     eq_selecting: bool,
     thru: [Option<bool>; 4],
+    core_midi_addresses: bool,
+    stem_fx_slot: [Option<u8>; 2],
+    stem_fx_layout: [Option<usize>; 4],
 }
 
 impl Default for Translator {
@@ -223,6 +227,7 @@ impl Default for Translator {
             front_panel_ready: false,
             led_held: [false; 11],
             tempos: [None; 2],
+            tempo_gesture: [tempo_pickup::Gesture::default(); 2],
             move_selecting: [false; 4],
             jump_sizes: [None; 4],
             jump_revision: [0; 4],
@@ -235,6 +240,9 @@ impl Default for Translator {
             fx_browse_anchors: [[None; 3]; 2],
             eq_selecting: false,
             thru: [None; 4],
+            core_midi_addresses: true,
+            stem_fx_slot: [None; 2],
+            stem_fx_layout: [None; 4],
         }
     }
 }
@@ -242,7 +250,7 @@ impl Default for Translator {
 pub struct FullBridge {
     feedback_input: feedback::FeedbackInput,
     feedback: feedback::FeedbackState,
-    connection: MidiOutputConnection,
+    connection: crate::midi_transport::Output,
     translator: Translator,
     raw: raw::Parser,
     controls: Vec<Control>,
@@ -253,16 +261,21 @@ pub struct FullBridge {
 
 impl FullBridge {
     pub fn new(
-        screen_output: bool,
-        screen_control: bool,
+        screens: screens::Output,
         jog_config: jog::Config,
+        backend: crate::midi_transport::Backend,
+        capture: crate::midi_capture::Handle,
+        feedback_input: Option<feedback::FeedbackInput>,
     ) -> anyhow::Result<Self> {
         jog_config.validate()?;
         // Djay can return initial state as soon as the source appears.
-        let feedback_input = feedback::FeedbackInput::new(mapping::PORT_NAME)?;
-        let connection = MidiOutput::new("S4 MK3 full bridge")?
-            .create_virtual(mapping::PORT_NAME)
-            .map_err(|error| anyhow::anyhow!("create full MIDI source: {error}"))?;
+        let feedback_input = match feedback_input {
+            Some(input) => input,
+            None => {
+                feedback::FeedbackInput::with_backend(mapping::PORT_NAME, backend, capture.clone())?
+            }
+        };
+        let connection = crate::midi_transport::output(backend, mapping::PORT_NAME, capture)?;
         info!(port = mapping::PORT_NAME, "MIDI_FULL_READY");
         Ok(Self {
             feedback_input,
@@ -271,22 +284,15 @@ impl FullBridge {
             translator: Translator {
                 jog_config,
                 vinyl: [jog_config.vinyl_enabled_at_startup; 2],
+                core_midi_addresses: backend == crate::midi_transport::Backend::CoreMidi,
                 ..Translator::default()
             },
             raw: raw::Parser::new()?,
             controls: Vec::with_capacity(160),
             messages: Vec::with_capacity(160),
-            screens: if screen_control {
-                screens::Output::managed(screen_output)?
-            } else {
-                screens::Output::new(screen_output)
-            },
+            screens,
             platter_telemetry: platter_telemetry::Telemetry::default(),
         })
-    }
-
-    pub fn screen_control(&self) -> Option<s4mk3_hid_midi_bridge::screens::Control> {
-        self.screens.control()
     }
 
     pub fn drain_feedback(&mut self, now: Duration) -> anyhow::Result<(usize, usize)> {
@@ -294,13 +300,14 @@ impl FullBridge {
         self.messages.clear();
         self.translator
             .sync_front_panel(&self.feedback, &mut self.messages)?;
+        let tempo_warning_changed = self.translator.update_tempo_pickup(&self.feedback, now);
         self.translator.observe_jog(None, now, &mut self.messages)?;
         let playback = self.translator.playback_state();
         self.translator
             .motorized_bend(None, playback, &mut self.messages)?;
         self.translator.log_motor_gate_changes(&self.feedback);
         let sent = self.send_messages(now)?;
-        if received != 0 {
+        if received != 0 || tempo_warning_changed {
             self.screens
                 .refresh(screens::pages(&self.translator, &self.feedback));
         }
@@ -323,11 +330,41 @@ impl FullBridge {
         self.translator.playback_state()
     }
 
+    #[cfg(any(windows, target_os = "macos"))]
+    pub fn update_ni_decks(
+        &self,
+        colors: &leds::LedConfig,
+        input_fresh: bool,
+    ) -> anyhow::Result<()> {
+        self.screens
+            .control()
+            .ok_or_else(|| anyhow::anyhow!("NI deck worker missing"))?
+            .set_ni_decks(
+                self.translator
+                    .ni_deck_output(&self.feedback, colors, input_fresh),
+            )
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn ni_decks_active(&self) -> anyhow::Result<bool> {
+        self.screens
+            .control()
+            .ok_or_else(|| anyhow::anyhow!("NI deck worker missing"))?
+            .ni_decks_active()
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    pub fn stop_ni_decks(&mut self) -> anyhow::Result<()> {
+        self.screens.stop_ni_decks()
+    }
+
     pub fn seed_analog(&mut self, events: &[Event]) -> anyhow::Result<()> {
         self.controls.clear();
         self.controls
             .extend(events.iter().filter_map(Control::from_event));
-        self.translator.observe_analog(&self.controls)
+        self.translator.observe_analog(&self.controls)?;
+        self.translator.observe_led_inputs(&self.controls);
+        Ok(())
     }
 
     pub fn send_report(
@@ -350,6 +387,27 @@ impl FullBridge {
             &self.feedback,
             &mut self.messages,
         )?;
+        if report.first() == Some(&1)
+            && tracing::enabled!(target: "s4_screen_route_diag", tracing::Level::DEBUG)
+        {
+            let edges: Vec<_> = self
+                .controls
+                .iter()
+                .filter(|control| matches!(control, Control::Button(name, _) if name.ends_with("_mode") || name.contains("_deck_switch_")))
+                .collect();
+            if !edges.is_empty() {
+                tracing::debug!(
+                    target: "s4_screen_route_diag",
+                    elapsed_us = now.as_micros(),
+                    report = ?report,
+                    edges = ?edges,
+                    decks = ?self.translator.decks,
+                    pad_modes = ?self.translator.pads,
+                    pages = ?screens::pages(&self.translator, &self.feedback),
+                    "SCREEN_ROUTE_INPUT"
+                );
+            }
+        }
         self.platter_telemetry.observe(
             report,
             now,
@@ -378,19 +436,30 @@ impl FullBridge {
         }
         Ok(self.messages.len())
     }
+
+    pub fn finish(&mut self) -> anyhow::Result<()> {
+        self.messages.clear();
+        self.translator.release_all(&mut self.messages);
+        let mut result = Ok(());
+        for message in &self.messages {
+            if let Err(error) = self.connection.send(message) {
+                result = Err(anyhow::anyhow!("release full-profile MIDI note: {error}"));
+            }
+        }
+        result
+    }
 }
 
 impl Drop for FullBridge {
     fn drop(&mut self) {
-        self.messages.clear();
-        self.translator.release_all(&mut self.messages);
-        for message in &self.messages {
-            if let Err(error) = self.connection.send(message) {
-                warn!(%error, "could not release full-profile MIDI note");
-            }
+        if let Err(error) = self.finish() {
+            warn!(%error, "could not release full-profile MIDI note");
         }
     }
 }
+
+#[cfg(test)]
+mod ni_deck_tests;
 
 impl Translator {
     fn report(
@@ -411,6 +480,7 @@ impl Translator {
             })
             .transpose()?;
         self.translate(controls, buttons, output)?;
+        self.update_tempo_pickup(feedback, now);
         let playback = self.playback_state();
         self.motorized_bend(Some(report), playback, output)?;
         self.log_motor_gate_changes(feedback);
@@ -433,6 +503,46 @@ impl Translator {
             }),
             continuous: self.motor_enabled,
         }
+    }
+
+    #[cfg(any(windows, target_os = "macos", test))]
+    fn ni_deck_output(
+        &self,
+        feedback: &feedback::FeedbackState,
+        colors: &leds::LedConfig,
+        input_fresh: bool,
+    ) -> [s4mk3_hid_midi_bridge::screens::DeckOutput; 2] {
+        use s4mk3_hid_midi_bridge::screens::DeckOutput;
+        let playback = self.playback_state();
+        std::array::from_fn(|side| {
+            let deck = usize::from(self.decks[side].channel());
+            let eligible = input_fresh
+                && feedback.loaded[deck] == Some(true)
+                && feedback.internal[deck] == Some(true)
+                && feedback.thru[deck] != Some(true)
+                && feedback.playing[deck].is_some();
+            DeckOutput {
+                turntable: input_fresh && self.motor_enabled[side],
+                playing: eligible
+                    && if self.motor_enabled[side] {
+                        playback.enabled[side]
+                            && (!playback.owned[side]
+                                // Scratch custody ends at forward speed; NI
+                                // must be allowed to supply that speed first.
+                                || (self.wheels[side].is_none()
+                                    && self.platter_scratch[side].is_some()
+                                    && self.touch_decks[side].is_none()
+                                    && self.wheel_motion[side].forward_or_rest(self.jog_now)))
+                    } else {
+                        feedback.playing[deck] == Some(true)
+                    },
+                ring: eligible.then(|| {
+                    colors.deck_colors[deck]
+                        .base()
+                        .saturating_add(colors.palette_active_intensity)
+                }),
+            }
+        })
     }
 
     fn observe_jog(
@@ -599,8 +709,10 @@ impl Translator {
             grid: self.grid,
             held: self.led_held,
             tempo: self.tempos,
+            tempo_indication: self.tempo_gesture.map(tempo_pickup::Gesture::indication),
             move_selecting: self.move_selecting,
             eq_selecting: self.eq_selecting,
+            stem_fx_slot: self.stem_fx_slot,
             fx_positions: self.fx_positions,
             fx_acquired: self
                 .fx_pickup
@@ -729,6 +841,20 @@ impl Translator {
             }
         }
         self.emit_mixer(output)
+    }
+
+    fn update_tempo_pickup(&mut self, feedback: &feedback::FeedbackState, now: Duration) -> bool {
+        let previous = self.tempo_gesture.map(tempo_pickup::Gesture::warning);
+        for (side, gesture) in self.tempo_gesture.iter_mut().enumerate() {
+            gesture.observe(
+                usize::from(self.decks[side].channel()),
+                feedback,
+                self.tempos[side],
+                self.shifted[side],
+                now,
+            );
+        }
+        previous != self.tempo_gesture.map(tempo_pickup::Gesture::warning)
     }
 
     fn release_inputs(&mut self, controls: &[Control], output: &mut Vec<[u8; 3]>) {
@@ -931,19 +1057,7 @@ impl Translator {
                     }
                 }
             }
-            for (suffix, mode) in [
-                ("hotcue_mode", PadMode::Hotcue),
-                ("samples_mode", PadMode::Samples),
-                ("stems_mode", PadMode::Stems),
-                ("mute_mode", PadMode::Stems),
-            ] {
-                if controls.iter().any(|input| {
-                    matches!(input, Control::Button(name, true)
-                    if name.strip_prefix(prefix).and_then(|s| s.strip_prefix('_')) == Some(suffix))
-                }) {
-                    self.pads[side] = mode;
-                }
-            }
+            self.select_pad_mode(side, controls);
             for (name, motor) in [
                 (
                     if side == 0 {
@@ -981,6 +1095,26 @@ impl Translator {
             self.wheel_touch(side, controls, output);
         }
         self.fx_targets(controls, output);
+    }
+
+    fn select_pad_mode(&mut self, side: usize, controls: &[Control]) {
+        for (suffix, mode) in [
+            ("hotcue_mode", PadMode::Hotcue),
+            ("samples_mode", PadMode::Samples),
+            ("stems_mode", PadMode::Stems),
+        ] {
+            if let Some(&Control::Button(name, true)) = controls.iter().find(|input| {
+                matches!(input, Control::Button(name, true) if side_name(name) == Some((side, suffix)))
+            }) && !self.held.contains_key(name)
+            {
+                let enter_routing = suffix == "stems_mode"
+                    && self.pads[side] == PadMode::Stems
+                    && self.stem_fx_slot[side].is_none();
+                self.stem_fx_slot[side] = enter_routing.then_some(0);
+                self.pads[side] = mode;
+                self.held.insert(name, Vec::new());
+            }
+        }
     }
 
     fn wheel_touch(&mut self, side: usize, controls: &[Control], output: &mut Vec<[u8; 3]>) {
@@ -1189,8 +1323,61 @@ impl Translator {
         Ok(routes)
     }
 
+    fn press_stem_fx(
+        &mut self,
+        name: &'static str,
+        output: &mut Vec<[u8; 3]>,
+    ) -> anyhow::Result<bool> {
+        if let Some((side, suffix)) = side_name(name)
+            && let Some(slot) = self.stem_fx_slot[side]
+            && let Some(pad) = suffix.strip_prefix("pad_")
+        {
+            let pad: u8 = pad.parse()?;
+            self.held.insert(name, Vec::new());
+            let deck = self.decks[side].channel();
+            match pad {
+                5..=7 => self.stem_fx_slot[side] = Some(pad - 5),
+                8 => {
+                    if self.stem_fx_layout[usize::from(deck)].is_some() {
+                        let address = if self.core_midi_addresses {
+                            stem_fx::address(deck, slot, 0)
+                        } else {
+                            stem_fx::windows_address(deck, slot, 0)
+                        };
+                        pulse(address, output);
+                    }
+                }
+                1..=4
+                    if self.stem_fx_layout[usize::from(deck)]
+                        .is_some_and(|count| usize::from(pad) <= count) =>
+                {
+                    let address = if self.core_midi_addresses {
+                        stem_fx::address(deck, slot, pad)
+                    } else {
+                        stem_fx::windows_address(deck, slot, pad)
+                    };
+                    pulse(address, output);
+                }
+                _ => {}
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     fn press(&mut self, name: &'static str, output: &mut Vec<[u8; 3]>) -> anyhow::Result<()> {
-        if self.held.contains_key(name) {
+        if self.held.contains_key(name) || self.press_stem_fx(name, output)? {
+            return Ok(());
+        }
+        if side_name(name).is_some_and(|(_, suffix)| suffix == catalog::MUTE_FX_BINDING.input) {
+            pulse(
+                Address {
+                    channel: catalog::MUTE_FX_INPUT_CHANNEL,
+                    number: catalog::MUTE_FX_BINDING.number,
+                },
+                output,
+            );
+            self.held.insert(name, Vec::new());
             return Ok(());
         }
         if let Some(deck) = catalog::EXT_INPUTS.iter().position(|input| *input == name) {
@@ -1386,6 +1573,7 @@ impl Translator {
         output: &mut Vec<[u8; 3]>,
     ) -> anyhow::Result<()> {
         self.thru = feedback.thru;
+        self.stem_fx_layout = feedback.stem_fx.map(stem_fx::Feedback::layout);
         // Testing contract: these are the raw cached outputs, not UI masking
         // or a play-button guess. Feedback silence does not revoke permission.
         self.playback_authorized = std::array::from_fn(|deck| {
@@ -1619,6 +1807,132 @@ mod tests {
         let mut output = Vec::new();
         state.translate(controls, None, &mut output)?;
         Ok(output)
+    }
+
+    #[test]
+    fn mute_buttons_send_global_pulses_without_switching_pad_mode() -> anyhow::Result<()> {
+        let mut state = Translator::default();
+        run(
+            &mut state,
+            &[
+                Control::Button("left_deck_switch_c", true),
+                Control::Button("right_deck_switch_d", true),
+                Control::Button("left_shift", true),
+                Control::Button("right_samples_mode", true),
+            ],
+        )?;
+        let pulse = [[0x94, 4, 127], [0x84, 4, 0]];
+        for name in ["left_mute_mode", "right_mute_mode"] {
+            assert_eq!(run(&mut state, &[Control::Button(name, true)])?, pulse);
+            assert!(run(&mut state, &[Control::Button(name, true)])?.is_empty());
+        }
+        for name in ["left_mute_mode", "right_mute_mode"] {
+            assert!(run(&mut state, &[Control::Button(name, false)])?.is_empty());
+            assert_eq!(run(&mut state, &[Control::Button(name, true)])?, pulse);
+        }
+        assert_eq!(
+            state.local_led_state().pads,
+            [PadMode::Hotcue, PadMode::Samples]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn windows_mute_buttons_use_global_feedback_without_selecting_stems() -> anyhow::Result<()> {
+        use crate::midi_transport::Backend;
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            let mut state = Translator {
+                core_midi_addresses: false,
+                ..Translator::default()
+            };
+            let mut feedback = feedback::FeedbackState::default();
+            let mut decoder = feedback::Decoder::default();
+            let config = leds::LedConfig::default();
+            for name in ["left_mute_mode", "right_mute_mode"] {
+                let output = run(&mut state, &[Control::Button(name, true)])?;
+                assert_eq!(output, [[0x94, 4, 127], [0x84, 4, 0]]);
+                for packet in output {
+                    decoder.feed(&packet, |message| {
+                        if let Some(message) = crate::midi_layout::normalize(backend, message) {
+                            feedback.apply(message, Duration::ZERO);
+                        }
+                    });
+                }
+                assert_eq!(feedback.mute_fx, None);
+                assert!(run(&mut state, &[Control::Button(name, true)])?.is_empty());
+                assert!(run(&mut state, &[Control::Button(name, false)])?.is_empty());
+            }
+            assert_eq!(state.local_led_state().pads, [PadMode::Hotcue; 2]);
+            for (value, intensity) in [
+                (0, config.palette_inactive_intensity),
+                (127, config.palette_active_intensity),
+            ] {
+                decoder.feed(&[0xb6, 9, value], |message| {
+                    if let Some(message) = crate::midi_layout::normalize(backend, message) {
+                        feedback.apply(message, Duration::ZERO);
+                    }
+                });
+                let report = leds::render_buttons(&config, &feedback, &state.local_led_state());
+                assert_eq!(
+                    [report[59], report[70]],
+                    [leds::Color::White.base() + intensity; 2]
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn windows_stem_fx_replays_feedback_and_routes_selected_deck() -> anyhow::Result<()> {
+        use crate::midi_transport::Backend;
+        for backend in [Backend::Loopbe, Backend::Bloop] {
+            let mut state = Translator {
+                core_midi_addresses: false,
+                ..Translator::default()
+            };
+            let mut feedback = feedback::FeedbackState::default();
+            let mut decoder = feedback::Decoder::default();
+            let mut output = Vec::new();
+            run(&mut state, &[Control::Button("left_stems_mode", true)])?;
+            run(&mut state, &[Control::Button("left_stems_mode", false)])?;
+            run(&mut state, &[Control::Button("left_stems_mode", true)])?;
+            run(&mut state, &[Control::Button("left_deck_switch_c", true)])?;
+            assert!(run(&mut state, &[Control::Button("left_pad_2", true)])?.is_empty());
+            run(&mut state, &[Control::Button("left_pad_2", false)])?;
+            let mut packets = Vec::new();
+            decoder.feed(&[0xbe, 66, 127, 67, 127, 68, 0, 69, 0, 63, 0], |message| {
+                packets.push(message);
+            });
+            for message in std::mem::take(&mut packets) {
+                let message = crate::midi_layout::normalize(backend, message)
+                    .ok_or_else(|| anyhow::anyhow!("stem feedback rejected"))?;
+                feedback.apply(message, Duration::ZERO);
+            }
+            state.sync_front_panel(&feedback, &mut output)?;
+            run(&mut state, &[Control::Button("left_pad_7", true)])?;
+            assert_eq!(
+                run(&mut state, &[Control::Button("left_pad_2", true)])?,
+                [[0x9a, 92, 127], [0x8a, 92, 0]]
+            );
+            assert_eq!(feedback.stem_fx[2].routes[2][2], Some(false));
+            decoder.feed(&[0xbe, 63, 127], |message| packets.push(message));
+            for message in packets {
+                let message = crate::midi_layout::normalize(backend, message)
+                    .ok_or_else(|| anyhow::anyhow!("stem feedback rejected"))?;
+                feedback.apply(message, Duration::ZERO);
+            }
+            let leds = leds::render_buttons(
+                &leds::LedConfig::default(),
+                &feedback,
+                &state.local_led_state(),
+            );
+            assert_eq!(feedback.stem_fx[2].routes[2][2], Some(true));
+            assert_eq!(
+                leds[2],
+                leds::Color::Purple.base() + leds::LedConfig::default().palette_active_intensity
+            );
+        }
+        Ok(())
     }
 
     #[test]

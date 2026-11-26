@@ -116,6 +116,11 @@ impl Motion {
         self.detected && self.continues(now)
     }
 
+    #[cfg(any(windows, target_os = "macos", test))]
+    pub(super) fn forward_or_rest(&self, now: Duration) -> bool {
+        self.window(now).is_some_and(|(delta, _)| delta >= -2)
+    }
+
     pub(super) fn continues(&self, now: Duration) -> bool {
         // Two counts are the captured near-rest sensor chatter. A single
         // zero/duplicate sample also occurs while the platter is still moving.

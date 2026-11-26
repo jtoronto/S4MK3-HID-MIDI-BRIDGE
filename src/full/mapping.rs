@@ -10,11 +10,35 @@ use plist::{Dictionary, Value};
 
 use super::catalog::{
     Binding, DECK_BINDINGS, EQ_MODE_NOTE, EXT_BINDINGS, EXT_THRU_CC, FX_LEFT_BINDINGS,
-    FX_RIGHT_BINDINGS, INTERNAL_MODE_CC, Kind, MIXER_BINDINGS, PadMode, QUICK_BINDINGS,
+    FX_RIGHT_BINDINGS, INTERNAL_MODE_CC, Kind, MIXER_BINDINGS, MUTE_FX_BINDING,
+    MUTE_FX_FEEDBACK_CC, MUTE_FX_FEEDBACK_CHANNEL, MUTE_FX_INPUT_CHANNEL, PadMode, QUICK_BINDINGS,
     pad_binding,
 };
 use super::feedback::{PAD_COLOR_TOKENS, PAD_WHITE_TOKEN};
 use super::jog;
+mod windows;
+
+pub use windows::generate as generate_for_backend;
+
+pub fn write_for_backend(
+    path: &Path,
+    config_path: Option<&Path>,
+    backend: crate::midi_transport::Backend,
+) -> Result<()> {
+    if backend == crate::midi_transport::Backend::CoreMidi {
+        return write(path, config_path);
+    }
+    let mapping = generate_for_backend(&jog::Config::load(config_path)?, backend)?;
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .with_context(|| format!("create mapping {}; choose a new file path", path.display()))?;
+    mapping
+        .to_writer_xml(&mut output)
+        .context("serialize Windows mapping")?;
+    output.flush().context("flush Windows mapping")
+}
 
 pub const PORT_NAME: &str = "S4 MK3 MIDI Full";
 const DECK_MARKER: &str = "{deck}";
@@ -41,6 +65,10 @@ pub fn generate() -> Result<Value> {
 }
 
 pub fn generate_with_jog(jog: &jog::Config) -> Result<Value> {
+    generate_controls(jog, true)
+}
+
+fn generate_controls(jog: &jog::Config, core_midi: bool) -> Result<Value> {
     jog.validate()?;
     let mut controls = Vec::new();
     let mut addresses = BTreeSet::new();
@@ -88,6 +116,14 @@ pub fn generate_with_jog(jog: &jog::Config) -> Result<Value> {
         }
     }
     push_info_outputs(&mut outputs, &mut output_addresses)?;
+    push_tempo_positions(&mut outputs, &mut output_addresses)?;
+    push_extensions(
+        &mut controls,
+        &mut addresses,
+        &mut outputs,
+        &mut output_addresses,
+        core_midi,
+    )?;
     for deck in 1_u8..=4 {
         let selected = super::catalog::deck_selection_binding(deck)
             .ok_or_else(|| anyhow::anyhow!("deck selector missing"))?;
@@ -193,6 +229,135 @@ fn push_jump_restores(
         push_deck_bindings(std::slice::from_ref(&binding), controls, addresses)?;
     }
     Ok(())
+}
+
+fn push_tempo_positions(
+    outputs: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+) -> Result<()> {
+    for deck in 1..=4 {
+        push_output(
+            outputs,
+            addresses,
+            OutputSpec {
+                key_path: &format!("turntable{deck}.effects.tempo.currentValue"),
+                channel: deck - 1,
+                data: super::catalog::TEMPO_POSITION_CC,
+                message_type: 3,
+                meter: true,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+fn push_extensions(
+    controls: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+    outputs: &mut Vec<Value>,
+    output_addresses: &mut BTreeSet<(u8, u8, u8)>,
+    core_midi: bool,
+) -> Result<()> {
+    push_stem_fx(controls, addresses, outputs, output_addresses, core_midi)?;
+    push_mute_fx(controls, addresses, outputs, output_addresses)?;
+    Ok(())
+}
+
+fn push_stem_fx(
+    controls: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+    outputs: &mut Vec<Value>,
+    output_addresses: &mut BTreeSet<(u8, u8, u8)>,
+    core_midi: bool,
+) -> Result<()> {
+    use super::stem_fx;
+
+    for deck in 0..4 {
+        let turntable = deck + 1;
+        for slot in 0..u8::try_from(stem_fx::SLOTS)? {
+            let fx = slot + 1;
+            for (route, (action, state)) in stem_fx::VARIANTS.into_iter().enumerate() {
+                let route = u8::try_from(route)?;
+                let address = if core_midi {
+                    stem_fx::address(deck, slot, route)
+                } else {
+                    stem_fx::windows_address(deck, slot, route)
+                };
+                push_control(
+                    controls,
+                    addresses,
+                    super::catalog::stem_fx_binding(address.number),
+                    &format!("turntable{turntable}.fx{fx}Routing.{action}"),
+                    address.channel,
+                )?;
+                push_output(
+                    outputs,
+                    output_addresses,
+                    OutputSpec {
+                        key_path: &format!("turntable{turntable}.fx{fx}.routing.{state}"),
+                        channel: if core_midi { address.channel } else { deck },
+                        data: if core_midi {
+                            address.number
+                        } else {
+                            stem_fx::WINDOWS_FIRST_FEEDBACK + slot * 5 + route
+                        },
+                        message_type: 3,
+                        meter: false,
+                    },
+                )?;
+            }
+        }
+        for (index, suffix) in stem_fx::LAYOUTS.into_iter().enumerate() {
+            push_output(
+                outputs,
+                output_addresses,
+                OutputSpec {
+                    key_path: &format!(
+                        "turntable{turntable}.view.state.hasUnmixerToolTrackMode{suffix}"
+                    ),
+                    channel: if core_midi {
+                        stem_fx::FIRST_CHANNEL + deck
+                    } else {
+                        deck
+                    },
+                    data: if core_midi {
+                        stem_fx::FIRST_LAYOUT + u8::try_from(index)?
+                    } else {
+                        stem_fx::WINDOWS_FIRST_FEEDBACK + 15 + u8::try_from(index)?
+                    },
+                    message_type: 3,
+                    meter: false,
+                },
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn push_mute_fx(
+    controls: &mut Vec<Value>,
+    addresses: &mut BTreeSet<(u8, u8, u8)>,
+    outputs: &mut Vec<Value>,
+    output_addresses: &mut BTreeSet<(u8, u8, u8)>,
+) -> Result<()> {
+    push_control(
+        controls,
+        addresses,
+        MUTE_FX_BINDING,
+        MUTE_FX_BINDING.target,
+        MUTE_FX_INPUT_CHANNEL,
+    )?;
+    push_output(
+        outputs,
+        output_addresses,
+        OutputSpec {
+            key_path: "turntable1.unmixer.muteWithFx",
+            channel: MUTE_FX_FEEDBACK_CHANNEL,
+            data: MUTE_FX_FEEDBACK_CC,
+            message_type: 3,
+            meter: false,
+        },
+    )
 }
 
 fn push_ext_outputs(
@@ -731,6 +896,107 @@ mod tests {
     }
 
     #[test]
+    fn stem_fx_mapping_pairs_per_deck_commands_and_state_on_core_midi() -> anyhow::Result<()> {
+        let controls = generated_controls()?;
+        let outputs = generated_outputs()?;
+        let contains = |rows: &[Value], key: &str, channel: u64, number: u64, kind: u64| {
+            rows.iter().any(|row| {
+                field(row, "keyPath").and_then(Value::as_string) == Some(key)
+                    && field(row, "midiChannel").and_then(Value::as_unsigned_integer)
+                        == Some(channel)
+                    && field(row, "midiData").and_then(Value::as_unsigned_integer) == Some(number)
+                    && field(row, "midiMessageType").and_then(Value::as_unsigned_integer)
+                        == Some(kind)
+            })
+        };
+        for deck in 1..=4 {
+            let channel = 11 + deck;
+            for slot in 1..=3 {
+                let base = 32 + 5 * (slot - 1);
+                assert!(contains(
+                    &controls,
+                    &format!("turntable{deck}.fx{slot}Routing.routingDeck"),
+                    channel,
+                    base,
+                    1
+                ));
+                assert!(contains(
+                    &outputs,
+                    &format!("turntable{deck}.fx{slot}.routing.isDeck"),
+                    channel,
+                    base,
+                    3
+                ));
+                for stem in 1..=4 {
+                    assert!(contains(
+                        &controls,
+                        &format!("turntable{deck}.fx{slot}Routing.routingGenericChannel{stem}"),
+                        channel,
+                        base + stem,
+                        1
+                    ));
+                    assert!(contains(
+                        &outputs,
+                        &format!("turntable{deck}.fx{slot}.routing.genericChannel{stem}"),
+                        channel,
+                        base + stem,
+                        3
+                    ));
+                }
+            }
+            for (number, suffix) in [(47, "One"), (48, "Two"), (49, "Three"), (50, "Four")] {
+                assert!(contains(
+                    &outputs,
+                    &format!("turntable{deck}.view.state.hasUnmixerToolTrackMode{suffix}"),
+                    channel,
+                    number,
+                    3
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn tempo_pickup_feedback_is_continuous_per_deck_on_all_backends() -> anyhow::Result<()> {
+        use crate::midi_transport::Backend;
+        for backend in [Backend::CoreMidi, Backend::Loopbe, Backend::Bloop] {
+            let mapping = generate_for_backend(&jog::DEFAULT, backend)?;
+            let outputs = field(&mapping, "outputs")
+                .and_then(Value::as_array)
+                .context("outputs")?;
+            for deck in 1_u64..=4 {
+                let key = format!("turntable{deck}.effects.tempo.currentValue");
+                let matches: Vec<_> = outputs
+                    .iter()
+                    .filter(|out| {
+                        field(out, "keyPath").and_then(Value::as_string) == Some(key.as_str())
+                    })
+                    .collect();
+                let [out] = matches.as_slice() else {
+                    anyhow::bail!("expected exactly one tempo position output for deck {deck}");
+                };
+                let number = |name| field(out, name).and_then(Value::as_unsigned_integer);
+                let channel = if backend == Backend::CoreMidi {
+                    deck - 1
+                } else {
+                    deck + 11
+                };
+                assert_eq!(number("midiChannel"), Some(channel));
+                assert_eq!(number("midiMessageType"), Some(3));
+                assert_eq!(number("midiData"), Some(113));
+                assert_eq!(number("midiMinValue"), Some(0));
+                assert_eq!(number("midiMaxValue"), Some(127));
+                assert_eq!(
+                    field(out, "controlType").and_then(Value::as_string),
+                    Some("control")
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn numeric_info_outputs_use_the_declared_deck_and_global_addresses() -> anyhow::Result<()> {
         let outputs = generated_outputs()?;
         let mut addresses = BTreeSet::new();
@@ -1137,6 +1403,37 @@ mod tests {
                 == Some("sampler.turntable2.player1.playingConsideringHoldSetting")
                 && field(control, "midiData").and_then(Value::as_unsigned_integer) == Some(48)
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn macos_mute_fx_has_one_global_action_and_feedback_address() -> anyhow::Result<()> {
+        for (entries, key, channel, family, data) in [
+            (
+                generated_controls()?,
+                "mixer.toggleUnmixerMuteFxEnabled",
+                4,
+                1,
+                4,
+            ),
+            (
+                generated_outputs()?,
+                "turntable1.unmixer.muteWithFx",
+                6,
+                3,
+                9,
+            ),
+        ] {
+            let addresses: Vec<_> = entries
+                .iter()
+                .filter(|entry| field(entry, "keyPath").and_then(Value::as_string) == Some(key))
+                .map(|entry| {
+                    ["midiChannel", "midiMessageType", "midiData"]
+                        .map(|name| field(entry, name).and_then(Value::as_unsigned_integer))
+                })
+                .collect();
+            assert_eq!(addresses, [[Some(channel), Some(family), Some(data)]]);
+        }
         Ok(())
     }
 

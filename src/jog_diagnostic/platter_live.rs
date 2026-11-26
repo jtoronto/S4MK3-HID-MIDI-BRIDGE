@@ -23,12 +23,7 @@ pub fn run(config: Config) -> anyhow::Result<()> {
     // No fallible setup between acquiring the writer and installing its guard.
     let mut session = Session::with_telemetry(
         config,
-        |report| {
-            Ok(writer
-                .as_ref()
-                .context("output writer missing")?
-                .write(report)?)
-        },
+        |report| crate::platform::write(writer.as_ref().context("output writer missing")?, report),
         &mut log,
         clock,
         stop_request.clone(),

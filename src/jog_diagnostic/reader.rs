@@ -211,13 +211,7 @@ fn acquire_snapshot(
                     )?
                     .to_vec()
                 }
-                None => crate::input::read_analog_with_observer(
-                    hid,
-                    None,
-                    "request S4 analog report 2",
-                    "unexpected S4 analog snapshot framing",
-                )?
-                .to_vec(),
+                None => crate::input::read_analog(hid)?.to_vec(),
             })
         } else {
             None

@@ -5,7 +5,16 @@ use super::jog;
 pub const EQ_MODE_NOTE: u8 = 20;
 pub const EXT_THRU_CC: u8 = 21;
 pub const INTERNAL_MODE_CC: u8 = 22;
+pub const TEMPO_POSITION_CC: u8 = 113;
 pub const SCRATCHING_MODE_NOTE: u8 = 7;
+pub const MUTE_FX_INPUT_CHANNEL: u8 = 4;
+pub const MUTE_FX_FEEDBACK_CHANNEL: u8 = 6;
+pub const MUTE_FX_FEEDBACK_CC: u8 = 9;
+pub const MUTE_FX_BINDING: Binding = note("mute_mode", 4, "mixer.toggleUnmixerMuteFxEnabled", None);
+
+pub(super) const fn stem_fx_binding(number: u8) -> Binding {
+    note("stem_fx_route", number, "", None)
+}
 
 pub const EXT_INPUTS: [&str; 4] = [
     "mixer_ch1_ext",

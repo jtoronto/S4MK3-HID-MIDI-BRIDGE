@@ -7,6 +7,7 @@ const PRIMARY: u16 = rgb(244, 248, 255);
 const SECONDARY: u16 = rgb(164, 178, 202);
 const AMBER: u16 = rgb(252, 176, 36);
 const GREEN: u16 = rgb(0, 220, 80);
+const PICKUP_RED: u16 = rgb(255, 156, 156);
 const BLACK: u16 = 0;
 const DIVIDER: u16 = rgb(60, 70, 90);
 
@@ -17,15 +18,71 @@ pub struct Info {
     pub loop_size: Option<&'static str>,
     pub key: Option<&'static str>,
     pub tempo_range: Option<u8>,
+    pub tempo_pickup: Option<TempoPickup>,
     pub selecting: bool,
     pub fx: super::page::FxWarning,
     pub backspin: Option<u8>,
 }
 
-pub(super) fn render(info: &Info, frame: &mut Frame, bright: bool) {
-    let top = super::page::render_headers(info.fx, info.backspin, frame);
-    let quadrant_height = (HEIGHT - top) / 2;
-    let range = match info.tempo_range {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TempoPickup {
+    physical: u8,
+    target: u8,
+}
+
+impl TempoPickup {
+    #[must_use]
+    pub const fn new(physical: u8, target: u8) -> Option<Self> {
+        if physical <= 127 && target <= 127 && physical.abs_diff(target) > 1 {
+            Some(Self { physical, target })
+        } else {
+            None
+        }
+    }
+
+    fn percent(self) -> u16 {
+        (u16::from(self.physical.abs_diff(self.target)) * 100 + 63) / 127
+    }
+
+    fn render(self, frame: &mut Frame, x: usize, y: usize, height: usize) {
+        let center = x + WIDTH / 4;
+        frame.centered_text(center, y + 9, "PICKUP", 2, BLACK);
+        let remaining = format!("{}%", self.percent());
+        frame.centered_text(center, y + 27, &remaining, 6, BLACK);
+
+        let left = x + 25;
+        let right = x + WIDTH / 2 - 25;
+        let y = y + height - 30;
+        let coordinate = |value| left + (usize::from(value) * (right - left) + 63) / 127;
+        let physical = coordinate(self.physical);
+        let target = coordinate(self.target);
+        frame.rect(x + 6, y, 12, 3, BLACK);
+        frame.rect(right + 7, y, 12, 3, BLACK);
+        frame.rect(right + 12, y - 5, 3, 13, BLACK);
+        frame.rect(left, y, right - left + 1, 3, DIVIDER);
+        frame.rect(
+            physical.min(target),
+            y - 1,
+            physical.abs_diff(target) + 1,
+            5,
+            BLACK,
+        );
+        frame.rect(target - 1, y - 9, 4, 14, BLACK);
+        // Keep the arrow below the rail so even a two-step gap leaves the tick visible.
+        for step in 0..=13 {
+            let x = if self.physical < self.target {
+                physical - step
+            } else {
+                physical + step
+            };
+            let half = step * 8 / 13;
+            frame.rect(x, y + 16 - half, 1, half * 2 + 1, BLACK);
+        }
+    }
+}
+
+const fn range_label(range: Option<u8>) -> &'static str {
+    match range {
         Some(4) => "±4%",
         Some(6) => "±6%",
         Some(8) => "±8%",
@@ -35,7 +92,12 @@ pub(super) fn render(info: &Info, frame: &mut Frame, bright: bool) {
         Some(50) => "±50%",
         Some(75) => "±75%",
         Some(_) | None => "?",
-    };
+    }
+}
+
+pub(super) fn render(info: &Info, frame: &mut Frame, bright: bool) {
+    let top = super::page::render_headers(info.fx, info.backspin, frame);
+    let quadrant_height = (HEIGHT - top) / 2;
     let loop_value = match info.loop_active {
         Some(true) => info.loop_size.unwrap_or("?"),
         Some(false) => "OFF",
@@ -45,13 +107,20 @@ pub(super) fn render(info: &Info, frame: &mut Frame, bright: bool) {
         ("JUMP", info.jump.unwrap_or("?")),
         ("LOOP", loop_value),
         ("KEY", info.key.unwrap_or("?")),
-        ("RANGE", range),
+        ("RANGE", range_label(info.tempo_range)),
     ]
     .into_iter()
     .enumerate()
     {
         let x = (index % 2) * (WIDTH / 2);
         let y = top + (index / 2) * quadrant_height;
+        if index == 3
+            && let Some(pickup) = info.tempo_pickup
+        {
+            frame.rect(x, y, WIDTH / 2, quadrant_height, PICKUP_RED);
+            pickup.render(frame, x, y, quadrant_height);
+            continue;
+        }
         let selecting = index == 0 && info.selecting;
         let fill = if index == 1 && info.loop_active == Some(true) {
             GREEN
@@ -62,15 +131,14 @@ pub(super) fn render(info: &Info, frame: &mut Frame, bright: bool) {
         };
         let ink = if fill == BACKGROUND { PRIMARY } else { BLACK };
         frame.rect(x, y, WIDTH / 2, quadrant_height, fill);
+        let label_y = y + match top {
+            0 => 12,
+            24 => 8,
+            _ => 6,
+        };
         frame.text(
             x + 12,
-            y + if top == 0 {
-                12
-            } else if top == 24 {
-                8
-            } else {
-                6
-            },
+            label_y,
             label,
             2,
             if fill == BACKGROUND { SECONDARY } else { BLACK },
@@ -124,6 +192,56 @@ mod tests {
         let mut frame = Frame::default();
         render(&info, &mut frame, bright);
         frame
+    }
+
+    #[test]
+    fn tempo_rail_marks_the_target_and_points_toward_it_in_either_direction() -> anyhow::Result<()>
+    {
+        use anyhow::Context as _;
+        for (physical, target, arrow_base, arrow_tip, target_x) in
+            [(0, 127, 172, 185, 295), (127, 0, 308, 295, 185)]
+        {
+            let pickup = TempoPickup::new(physical, target).context("opposite endpoints")?;
+            assert_eq!(pickup.percent(), 100);
+            let info = Info {
+                tempo_range: Some(4),
+                tempo_pickup: Some(pickup),
+                ..Info::default()
+            };
+            let image = frame(info, true);
+            assert!(
+                frame(
+                    Info {
+                        tempo_range: Some(75),
+                        ..info
+                    },
+                    true,
+                )
+                .pixels
+                    == image.pixels,
+                "the configured range must not be drawn during pickup"
+            );
+            assert_eq!(image.pixels[200 * WIDTH + 170], PICKUP_RED);
+            assert_eq!(image.pixels[226 * WIDTH + arrow_tip], BLACK);
+            assert_eq!(image.pixels[234 * WIDTH + arrow_base], BLACK);
+            assert!(
+                image.pixels[235 * WIDTH..]
+                    .chunks_exact(WIDTH)
+                    .all(|row| row[WIDTH / 2 + 1..]
+                        .iter()
+                        .all(|&pixel| pixel == PICKUP_RED)),
+                "leave clear space below the arrow for the bezel"
+            );
+            assert_eq!(image.pixels[202 * WIDTH + target_x], BLACK);
+            assert!(image.pixels[169 * WIDTH + 175..179 * WIDTH].contains(&BLACK));
+        }
+        assert!(TempoPickup::new(64, 64).is_none());
+        assert!(TempoPickup::new(63, 64).is_none());
+        assert_eq!(
+            TempoPickup::new(62, 127).map(TempoPickup::percent),
+            Some(51)
+        );
+        Ok(())
     }
 
     #[test]

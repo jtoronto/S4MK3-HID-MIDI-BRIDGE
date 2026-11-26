@@ -1,16 +1,26 @@
 //! Capture Djay's real output with paired virtual ports, without opening HID.
 
+#[cfg(unix)]
 use std::num::NonZeroU64;
+#[cfg(unix)]
 use std::sync::Arc;
+#[cfg(unix)]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
 use anyhow::ensure;
+#[cfg(unix)]
 use clap::Parser;
+#[cfg(unix)]
 use midir::os::unix::{VirtualInput as _, VirtualOutput as _};
+#[cfg(unix)]
 use midir::{MidiInput, MidiOutput};
+#[cfg(unix)]
 use tracing::{info, warn};
 
+#[cfg(unix)]
 #[derive(Parser)]
 struct Args {
     #[arg(long, default_value = "S4 MK3 MIDI Full")]
@@ -19,6 +29,12 @@ struct Args {
     seconds: NonZeroU64,
 }
 
+#[cfg(not(unix))]
+fn main() -> anyhow::Result<()> {
+    anyhow::bail!("feedback capture requires Unix virtual MIDI ports")
+}
+
+#[cfg(unix)]
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     tracing_subscriber::fmt()

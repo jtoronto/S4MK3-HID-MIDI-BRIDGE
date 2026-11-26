@@ -1,19 +1,31 @@
 //! Synthetic Serato jog experiment. No HID, audio, screens or motor access.
 
+#[cfg(unix)]
 use std::io::{self, BufRead as _};
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
+#[cfg(unix)]
 use anyhow::{Context as _, bail, ensure};
+#[cfg(unix)]
 use clap::Parser;
+#[cfg(unix)]
 use crossbeam_channel::{Receiver, Sender};
+#[cfg(unix)]
 use midir::os::unix::{VirtualInput as _, VirtualOutput as _};
+#[cfg(unix)]
 use midir::{MidiInput, MidiOutput, MidiOutputConnection};
+#[cfg(unix)]
 use tracing::{info, warn};
 
+#[cfg(unix)]
 const PORT: &str = "S4 Serato Jog Test";
+#[cfg(unix)]
 const RELEASE: [u8; 3] = [0x80, 7, 0];
+#[cfg(unix)]
 const TICKS: usize = 128;
 
+#[cfg(unix)]
 #[derive(Parser)]
 #[command(about = "Interactive synthetic jog test; opens virtual MIDI only")]
 struct Args {
@@ -25,6 +37,7 @@ struct Args {
     self_test: bool,
 }
 
+#[cfg(unix)]
 #[derive(Clone, Copy)]
 enum Command {
     Play,
@@ -36,6 +49,7 @@ enum Command {
     Quit,
 }
 
+#[cfg(unix)]
 impl Command {
     fn parse(line: &str) -> anyhow::Result<Self> {
         match line.trim() {
@@ -51,6 +65,12 @@ impl Command {
     }
 }
 
+#[cfg(not(unix))]
+fn main() -> anyhow::Result<()> {
+    anyhow::bail!("Serato jog test requires Unix virtual MIDI ports")
+}
+
+#[cfg(unix)]
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     tracing_subscriber::fmt()
@@ -99,6 +119,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn read_commands(sender: &Sender<Command>) {
     for line in io::stdin().lock().lines() {
         let command = line
@@ -121,6 +142,7 @@ fn read_commands(sender: &Sender<Command>) {
     }
 }
 
+#[cfg(unix)]
 fn interactive(
     receiver: &Receiver<Command>,
     source: &mut MidiOutputConnection,
@@ -140,6 +162,7 @@ fn interactive(
     Ok(())
 }
 
+#[cfg(unix)]
 fn perform(command: Command, source: &mut MidiOutputConnection, args: &Args) -> anyhow::Result<()> {
     let movement = match command {
         Command::Forward => Some(64 + args.step),
@@ -175,6 +198,7 @@ fn perform(command: Command, source: &mut MidiOutputConnection, args: &Args) -> 
     Ok(())
 }
 
+#[cfg(unix)]
 fn help() {
     println!(
         "Commands (type one, then Return):\n\
@@ -188,6 +212,7 @@ fn help() {
     );
 }
 
+#[cfg(unix)]
 fn loopback(args: &Args) -> anyhow::Result<()> {
     let name = format!("Serato Jog Loopback {}", std::process::id());
     let mut source = MidiOutput::new(&name)?

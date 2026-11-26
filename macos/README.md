@@ -15,15 +15,15 @@ bash macos/build-app.sh
 
 The results are `dist/S4 MK3 Bridge.app`, the transfer archive
 `dist/S4 MK3 Bridge-arm64.zip`, and the versioned release disk image
-`dist/S4 MK3 Bridge-0.3.0-beta.1-arm64.dmg`. The script compiles
+`dist/S4 MK3 Bridge-0.4.0-beta.1-arm64.dmg`. The script compiles
 `macos/S4BridgeApp.swift` against the installed Apple macOS SDK, builds
 `s4mk3-hid-midi-bridge` with `cargo build --locked --release`, copies
 `examples/led-config.json`, `examples/jog-config.json`, and
 `examples/tension-config.json` into the app resources as `default-led-config.json`,
 `default-jog-config.json`, and `default-tension-config.json`, and creates
 `S4 MK3 Bridge.djayMidiMapping` by running that same release bridge with
-`--generate-mapping`. Cargo identifies this release as `0.3.0-beta.1`;
-the bundle uses numeric version `0.3.0`, build `8`, and records the complete
+`--generate-mapping`. Cargo identifies this release as `0.4.0-beta.1`;
+the bundle uses numeric version `0.4.0`, build `9`, and records the complete
 release in `S4BridgeReleaseVersion`. The script checks alignment with Cargo.
 It generates `AppIcon.icns` from `macos/Assets/AppIcon.png` and includes an
 Applications shortcut in the compressed read-only DMG.
@@ -64,6 +64,18 @@ running.
 
 ### S4 screens
 
+**Choosing a mode in source builds:** Stop the bridge before changing modes.
+Choose **Direct HID** to keep the bridge's motor tuning and optional S4 screens.
+Choose **NI Bridge** to let the Native Instruments hardware service run both
+platters and both screens. In that mode, leave the NI service running; the
+Direct HID screen toggle and driver handover instructions do not apply.
+The **Jog** tab shows one NI tension setting for both wheels (0–255, default
+107). Changing it does not change the motor tuning used by Direct HID.
+Both modes offer Vinyl at startup, backspin detection, and scratch and pitch
+bend mapping. Backspin motor assistance is only available in Direct HID.
+
+The following screen setup instructions are for **Direct HID**.
+
 Version 0.2.0-beta.1 includes a **Screens** settings tab and shared
 **Enable S4 screens** menu toggle. Use the normal full-profile **Start bridge**
 action; **Save and restart** keeps your selected screen support and saved
@@ -81,7 +93,7 @@ mappings. A runtime-only musical-key fix does not require replacing a mapping
 that already supplies the current numeric feedback.
 Quit Traktor/Mixxx before using the screens. If NIHardwareAgent owns the display,
 use the app's handover controls rather than manually quitting it. See the
-[ordered screen-driver instructions](../docs/screen-driver-handover.md#start-with-screens).
+[ordered screen-driver instructions](../docs/guides/screen-driver-handover.md#start-with-screens).
 The app can stop NIHardwareAgent with confirmation or explicit automatic-stop
 consent, and restore an agent it stopped. Screen handover force-closes only the
 verified background driver: its normal shutdown blanks the S4 panels, while the
@@ -89,7 +101,7 @@ guarded forced stop preserves them. Active Traktor, Maschine or Komplete Kontrol
 blocks the operation; the app never closes those applications.
 Manual **Restart Native Instruments screen driver** works even with screen
 support off and no previous app ownership. See the
-[ordered handover and recovery guide](../docs/screen-driver-handover.md).
+[ordered handover and recovery guide](../docs/guides/screen-driver-handover.md).
 Screen failures turn the running status icon red while MIDI/LEDs/tension continue.
 The app's Stop/Quit path also stops screen service.
 
@@ -158,7 +170,7 @@ without flashing inactive buttons. Mode exit restores normal lighting.
 The full profile enables S4 screens when the Screens setting is on. Hardware jog tension is configured
 separately below.
 
-The [encoder live check](../docs/full-midi-test.md#encoder-layout-live-check)
+The [encoder live check](../docs/reference/full-midi-test.md#encoder-layout-live-check)
 covers A/C/B/D independence, duplicate press/release, Shift while selecting,
 active-loop movement, independent LOOP size, pulse restoration, and restart.
 
@@ -176,13 +188,13 @@ preserve software values until pickup. Mismatched parameter knobs blink their
 FX buttons; dry/wet blinks the strip's main ON button. Optional `FX SYNC` screen
 headers identify the affected deck and strip without replacing Info/STEMS.
 Install the same build's new mapping and restart the bridge after changing it.
-See [setup and operation](../docs/controls-state-sync.md). These additions are
+See [setup and operation](../docs/guides/controls-state-sync.md). These additions are
 not in the published beta.3 download.
 
 The current runtime also preserves musical-key feedback across track-loading
 notifications. Actual no-key feedback clears KEY to `--` on eject; unavailable
 feedback remains `?`. This key fix changes no MIDI addresses. See the
-[screen reference](../docs/screens.md#info-page-hotcue-and-samples).
+[screen reference](../docs/guides/screens.md#info-page-hotcue-and-samples).
 
 ### Mixer ON and Neural Mix EQ
 
@@ -197,7 +209,7 @@ that deck's EQ mode without changing the FX target. Press Filter again to
 cancel; outside selection ON retains its normal target-selection behavior.
 Filter no longer resets the selected filter. Install the new mapping under a
 new filename and preserve any custom mappings. The
-[live check](../docs/neural-mix-eq-check.md) covers feedback and transitions
+[live check](../docs/validation/controls/neural-mix-eq-check.md) covers feedback and transitions
 for all four decks.
 
 ### Hardware jog tension
@@ -228,7 +240,7 @@ booleans), out-of-range values, and unknown fields are rejected. Invalid
 saved files are preserved until explicit reset and save; invalid editor
 values remain in the editor without replacing saved preferences.
 
-The [live integration check](../docs/jog-tension-integration.md) covers
+The [live integration check](../docs/guides/jog-tension-integration.md) covers
 assistance/braking with Djay controls and LEDs, Stop/Quit clearing force,
 saved-setting restore while stopped, and explicit restart after USB reconnect.
 
@@ -236,7 +248,7 @@ The menu-bar symbol is green while the bridge is running and returns to the
 normal system appearance in other states. Diagnostics shows the app's bundled
 release version and build number.
 
-The beta.3 [timeout recovery fix](../docs/tension-timeout-recovery.md)
+The beta.3 [timeout recovery fix](../docs/validation/jog/tension-timeout-recovery.md)
 clears force after a 50 ms input gap without closing the bridge. Diagnostics
 logs `TENSION_SUSPENDED`; control/feedback processing continues while tension
 history is reset. Fresh input establishes a new baseline and logs
@@ -245,6 +257,21 @@ movement with its usual touch rules. No Stop/Start is needed, and the saved
 value is unchanged.
 Older beta.2 packages still exit on this timeout. Physical recovery testing
 remains pending.
+
+### Global Neural Mix Mute FX
+
+With the updated bridge and matching Djay mapping, either MUTE button toggles
+Djay's Mute/Solo Echo Out setting. The white-only lamps are bright when Djay
+reports on, dim when it reports off, and dark until feedback arrives. STEMS
+still selects the Neural Mix pad layer.
+
+Use **Install Djay mapping…**, save under a new name to preserve your
+existing mapping, and select it for **S4 MK3 MIDI Full** in Djay.
+If your selected mapping already supports Mute FX, a bridge-only color
+update does not require reinstalling it.
+For a live check, toggle the setting in Djay and check both LEDs, then
+toggle it from each physical MUTE button. Check that neither press changes
+the pad layer and that stem mutes/solos use the effect on more than one deck.
 
 ### Jog mapping preferences
 
@@ -338,18 +365,18 @@ Raw/debug logging is intended for troubleshooting rather than normal DJ use.
 Continuous mode permits an idle controller and stops cleanly without requiring
 input activity. A fixed-duration run retains the CLI probe's activity checks.
 
-See [configurable-controls.md](../docs/configurable-controls.md) for the
+See [configurable-controls.md](../docs/guides/configurable-controls.md) for the
 distinction between existing preferences, useful future input-sensitivity
 settings, and hardware/protocol constants that should remain fixed.
 The verified build/UI evidence and remaining limits are recorded in
-[macos-app-qa.md](../docs/macos-app-qa.md).
+[macos-app-qa.md](../docs/validation/macos/macos-app-qa.md).
 
 ## Developer checks
 
 The app's full-controller launch includes `--screens` when enabled, and a live
 screen-control pipe. The standalone CLI
 still requires an explicit `--midi full --screens`. See
-[screen setup and physical checks](../docs/screens.md), including the
+[screen setup and physical checks](../docs/guides/screens.md), including the
 NIHardwareAgent interface-ownership conflict. Beta.3 and older published
 mapping-only builds do not contain this integration.
 

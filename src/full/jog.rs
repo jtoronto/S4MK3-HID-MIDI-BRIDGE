@@ -112,6 +112,25 @@ impl Default for Config {
 }
 
 impl Config {
+    pub const fn for_ni_bridge(self) -> Self {
+        // NI owns drive; the bridge still needs stock TT gesture thresholds.
+        // Preserve mapping, Vinyl startup choices and software backspin settings.
+        Self {
+            scratch_speed: self.scratch_speed,
+            scratch_reaction: self.scratch_reaction,
+            scratch_direction: self.scratch_direction,
+            pitch_bend_speed: self.pitch_bend_speed,
+            pitch_bend_reaction: self.pitch_bend_reaction,
+            backspin_enabled: self.backspin_enabled,
+            backspin_acceleration: self.backspin_acceleration,
+            backspin_speed_increase: self.backspin_speed_increase,
+            vinyl_enabled_at_startup: self.vinyl_enabled_at_startup,
+            tt_startup_mode: self.tt_startup_mode,
+            backspin_assist_enabled: false,
+            ..DEFAULT
+        }
+    }
+
     pub const fn platter_settings(&self) -> s4mk3_hid_midi_bridge::jog::platter::Settings {
         s4mk3_hid_midi_bridge::jog::platter::Settings {
             count_direction: 1,
@@ -257,6 +276,30 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ni_uses_stock_tt_response_without_losing_shared_jog_settings() {
+        let custom = Config {
+            scratch_direction: ScratchDirection::Reversed,
+            tt_startup_mode: VinylMode::Scratch,
+            backspin_speed_increase: 7.0,
+            platter_target_rpm: 26,
+            tt_brake_gain: Some(1.25),
+            tt_pitch_bend_floor_percent: 50,
+            ..DEFAULT
+        };
+
+        assert_eq!(
+            custom.for_ni_bridge(),
+            Config {
+                scratch_direction: ScratchDirection::Reversed,
+                tt_startup_mode: VinylMode::Scratch,
+                backspin_speed_increase: 7.0,
+                backspin_assist_enabled: false,
+                ..DEFAULT
+            }
+        );
+    }
 
     #[test]
     fn bundled_preferences_match_defaults_and_partial_overrides() -> Result<()> {

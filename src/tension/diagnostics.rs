@@ -24,6 +24,56 @@ struct Sample {
 
 impl Engine {
     pub(super) fn log_regulator(&mut self, motion: &Motion, torque: [i32; 2]) {
+        use crate::screen_motor_diag::{self as diag, Kind};
+        if diag::enabled() {
+            for side in 0..2 {
+                let status = match motion.status[side] {
+                    Status::Baseline => 0,
+                    Status::Moving => 1,
+                    Status::Rest => 2,
+                    Status::Duplicate => 3,
+                };
+                diag::record(
+                    Kind::Sensor,
+                    [
+                        motion.host_us,
+                        u64::try_from(side).unwrap_or(0),
+                        u64::from(motion.counters[side]),
+                        u64::from(motion.timers[side]),
+                        u64::from(u32::from_le_bytes(motion.delta[side].to_le_bytes())),
+                        status,
+                        self.sensor_seen_us[side],
+                        self.input_deadline_us(),
+                    ],
+                    &[],
+                );
+                let mode = self.playback.as_ref().map_or(0, |wheels| {
+                    match wheels[side]
+                        .diagnostic(self.playback_state.continuous[side])
+                        .mode
+                    {
+                        playback::Mode::Disabled => 1,
+                        playback::Mode::Qualifying => 2,
+                        playback::Mode::Regulating => 3,
+                        playback::Mode::Assisting => 4,
+                    }
+                });
+                diag::record(
+                    Kind::MotorState,
+                    [
+                        motion.host_us,
+                        u64::try_from(side).unwrap_or(0),
+                        u64::from(motion.touch[side]),
+                        u64::from(self.playback_state.enabled[side]),
+                        u64::from(self.playback_state.owned[side]),
+                        u64::from(self.playback_state.continuous[side]),
+                        mode,
+                        u64::from(u32::from_le_bytes(torque[side].to_le_bytes())),
+                    ],
+                    &[],
+                );
+            }
+        }
         if !tracing::enabled!(tracing::Level::DEBUG) {
             return;
         }

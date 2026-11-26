@@ -1,0 +1,12 @@
+[package]
+name = "s4-ni-message-port"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false
+
+[dependencies]
+core-foundation-sys = "=0.8.7"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

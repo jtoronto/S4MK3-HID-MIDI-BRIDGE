@@ -26,5 +26,5 @@ Current images:
   calibrated scratch/pitch-bend defaults. Captured with an isolated controller,
   without starting the hardware bridge or changing saved user preferences.
 
-Original QA captures remain in `.omo/evidence/`; publish only selected,
-reader-facing copies here.
+Keep original QA captures only while needed for the investigation. Retain
+selected, reader-facing images here if a document depends on them.

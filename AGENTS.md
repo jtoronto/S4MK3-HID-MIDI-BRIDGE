@@ -9,8 +9,8 @@ HID-to-MIDI bridge, generated Djay mapping, and LED preferences. The DJ
 laptop must not require Rust or Cargo.
 
 A standalone hardware bridge remains a longer-term goal. Current source
-includes optional screens and motor-assisted jog tension. Additional screen
-pages, playback-driven platter rotation and new haptics remain deferred unless
+includes optional screens, motor-assisted jog tension, and motorized playback.
+Additional screen pages, motor features, and new haptics remain deferred unless
 explicitly requested.
 
 ## Architecture
@@ -34,12 +34,12 @@ explicitly requested.
 ## Read before changing behavior
 
 - `docs/user-guide.md`
-- `docs/mapping-audit.md`
-- `docs/encoder-capture.md`
-- `docs/djay-action-reference.md`
-- `docs/bridge-function-reference.md`
-- `docs/traktor-djay-comparison.md`
-- `docs/led-feedback.md`
+- `docs/reference/mapping-audit.md`
+- `docs/reference/encoder-capture.md`
+- `docs/reference/djay-action-reference.md`
+- `docs/reference/bridge-function-reference.md`
+- `docs/research/djay/traktor-djay-comparison.md`
+- `docs/guides/led-feedback.md`
 - `macos/README.md`
 
 Historical validation records describe their tested revisions. Do not assume
@@ -47,6 +47,28 @@ the packaged app or older test counts describe the current working tree.
 
 ## Documentation audiences
 
+- `docs/README.md` is the documentation index. Update it when adding, moving,
+  or retiring a major documentation entry.
+- Organize documentation by its primary purpose: `docs/guides/` for current
+  focused instructions, `docs/reference/` for technical references,
+  `docs/research/` for investigations and proposals, and `docs/validation/`
+  for historical test and acceptance evidence. Put Windows-specific setup,
+  contracts, runbooks, research, and validation under `docs/windows/`.
+  Put user-facing release notes under `docs/releases/notes/` and release
+  preparation and evidence under `docs/releases/validation/`. Keep shared
+  documentation assets in `docs/images/`, `docs/mockups/`, and
+  `docs/fixtures/`.
+- Keep `docs/user-guide.md` and `docs/issues.md` at the documentation root.
+  Choose a document's home by its primary audience and purpose rather than
+  duplicating content. Label historical proposals and results clearly, and
+  preserve their provenance and verification limits.
+- Date research, investigation, and validation records when the relevant
+  date is established; use `YYYY-MM-DD` for new dated filenames. Do not
+  invent dates for older records or rename stable links just to add one.
+  Living guides and references do not require dates in their filenames.
+- When moving or renaming documents, update affected repository links and
+  path references, check that links resolve, and preserve prominent published
+  entry points with forwarding pages where appropriate.
 - `docs/user-guide.md` is the canonical, workflow-oriented user guide. Keep it
   understandable without MIDI/development knowledge. When user-visible
   controls, mappings, feedback, setup or preferences change, update the
@@ -61,8 +83,8 @@ the packaged app or older test counts describe the current working tree.
   approval history, and user-acceptance quotes out of them.
 - Put internal build, investigation, and acceptance history in clearly named
   validation records under `docs/`, such as
-  `docs/app-screen-integration-validation.md` and
-  `docs/screen-driver-handover-validation.md`.
+  `docs/validation/screens/app-screen-integration-validation.md` and
+  `docs/validation/screens/screen-driver-handover-validation.md`.
 - A successful set is general usage evidence, not proof that every individual
   control or fault/recovery path was exercised. Preserve focused verification
   limits in the corresponding validation records.
@@ -92,10 +114,10 @@ Outputs:
 
 - `dist/S4 MK3 Bridge.app`
 - `dist/S4 MK3 Bridge-arm64.zip`
-- `dist/S4 MK3 Bridge-0.3.0-beta.1-arm64.dmg`
+- `dist/S4 MK3 Bridge-0.4.0-beta.1-arm64.dmg`
 
-Cargo package/executable: `s4mk3-hid-midi-bridge`, release `0.3.0-beta.1`.
-The bundle uses numeric version `0.3.0`, build `8`, and custom
+Cargo package/executable: `s4mk3-hid-midi-bridge`, release `0.4.0-beta.1`.
+The bundle uses numeric version `0.4.0`, build `9`, and custom
 `S4BridgeReleaseVersion` for the complete prerelease identifier.
 `macos/Assets/AppIcon.png` generates the bundled `.icns` during packaging.
 
@@ -106,7 +128,7 @@ Verify a rebuilt package:
 
        codesign --verify --deep --strict "dist/S4 MK3 Bridge.app"
        unzip -tq "dist/S4 MK3 Bridge-arm64.zip"
-       hdiutil verify "dist/S4 MK3 Bridge-0.3.0-beta.1-arm64.dmg"
+       hdiutil verify "dist/S4 MK3 Bridge-0.4.0-beta.1-arm64.dmg"
 
 Signing is currently ad-hoc, not Developer ID signing or notarization.
 
@@ -176,3 +198,24 @@ The working tree is shared and can contain user edits and unfinished work.
 - Preserve user-edited Djay mappings under their existing names.
 - Keep generated bundles, local capture logs, and large packet captures out
   of commits.
+
+## Windows build artifacts and evidence
+
+- Put one-off Windows builds, copied SDKs, Rust targets, and temporary packages
+  in a unique task-owned directory under `${TMPDIR:-/tmp}` on macOS, or the
+  platform temporary directory on Windows. Use a fresh child path for each
+  build; the Windows build scripts require output paths that do not yet exist.
+- Reuse the retained Windows cross-build toolchain instead of preserving
+  another SDK or dependency copy for each run. A build may stage its own copy
+  inside its temporary workspace.
+- Use `.omo/evidence` as scratch space only while work is in progress. Before
+  clearing it, record durable findings, verification limits and any necessary
+  provenance in `docs/`. Keep user mappings and irreplaceable source snapshots
+  outside the scratch tree. Do not make builds or maintained docs depend on it.
+- Keep an exact temporary package while an attended test or investigation
+  needs it. Once the work is finished, preserve the useful evidence and remove
+  the task-owned build workspace. Do not rely on the OS to clear it, and do
+  not remove user files or older artifacts of uncertain ownership.
+- After substantial Windows build work, check that task-owned temporary output
+  was removed and report anything intentionally retained, including why it is
+  still needed.

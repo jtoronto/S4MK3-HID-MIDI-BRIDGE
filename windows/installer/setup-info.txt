@@ -1,0 +1,7 @@
+This setup installs S4 MK3 Bridge for your Windows user and adds a Start menu shortcut. It does not start the bridge.
+
+Before installing, upgrading or uninstalling, stop the bridge and quit from its tray menu. Closing the Settings window does not quit the app.
+
+Both bridge modes need Windows MIDI Services with Basic Loopback. NI Bridge also needs the Native Instruments S4 MK3 driver and NIHardwareService. Setup does not install or change these components or djay.
+
+Setup and uninstall leave your bridge preferences and djay mappings in place. Use the portable ZIP if you prefer to run the app from a folder of your choice.

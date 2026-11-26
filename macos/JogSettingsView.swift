@@ -7,8 +7,23 @@ struct JogSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                motorized
-                wheelFeel
+                if controller.run.mode == .ni {
+                    section("NI jog wheel tension") {
+                        HStack {
+                            Text("Both wheels")
+                            Slider(value: Binding(
+                                get: { Double(controller.niJog.value) },
+                                set: { controller.setNIJogTension(Int($0)) }
+                            ), in: 0...255, step: 1)
+                            Text("\(controller.niJog.value)").monospacedDigit()
+                        }
+                        hint("Changes are saved immediately and sent when NI Bridge is ready.")
+                    }
+                    section("Vinyl at startup") { vinylStartup }
+                } else {
+                    motorized
+                    wheelFeel
+                }
                 backspin
                 mapping
             }.padding(20).frame(maxWidth: .infinity)
@@ -70,10 +85,7 @@ struct JogSettingsView: View {
             Text("Playback and touch").font(.headline)
             NumberRow(title: "Target speed", value: $controller.jog.platterTargetRpm, range: 1...45, unit: "RPM")
             hint("The speed the motor aims to maintain during playback.")
-            Toggle("Start normal mode with Vinyl enabled", isOn: $controller.jog.vinylEnabledAtStartup)
-            hint("Starts normal mode with touch scratching enabled.")
-            Toggle("Start motorized mode with Vinyl enabled", isOn: $controller.jog.ttVinylEnabledAtStartup)
-            hint("Starts TT mode with touch scratching enabled.")
+            vinylStartup
             NumberRow(title: "Switch to scratching below", value: $controller.jog.ttPitchBendFloorPercent, range: 1...95, unit: "% of target speed")
             hint("Changes from pitch bending to scratching when the platter slows below this share of its target speed.")
         }.padding(.top, 8)
@@ -99,6 +111,13 @@ struct JogSettingsView: View {
             NumberRow(title: "Overspeed limit", value: $controller.jog.platterOverspeedLimitRpm, range: 0...250, unit: "RPM")
             hint("Stops motor drive if the platter exceeds this speed. A value of 0 turns this limit off.")
         }.padding(.top, 8)
+    }
+
+    @ViewBuilder private var vinylStartup: some View {
+        Toggle("Start normal mode with Vinyl enabled", isOn: $controller.jog.vinylEnabledAtStartup)
+        hint("Starts normal mode with touch scratching enabled.")
+        Toggle("Start motorized mode with Vinyl enabled", isOn: $controller.jog.ttVinylEnabledAtStartup)
+        hint("Starts TT mode with touch scratching enabled.")
     }
 
     private var wheelFeel: some View {
@@ -144,6 +163,11 @@ struct JogSettingsView: View {
                 Text("%").foregroundColor(.secondary)
             }.disabled(!controller.jog.backspinEnabled)
             hint("Adds scratch speed during a detected backspin.")
+            if controller.run.mode == .direct { motorAssist }
+        }
+    }
+
+    @ViewBuilder private var motorAssist: some View {
             Toggle("Use motor assistance for backspins", isOn: $controller.jog.backspinAssistEnabled)
                 .disabled(!controller.jog.backspinEnabled)
             hint("Helps backspins keep moving in normal mode. TT uses its own playback assistance.")
@@ -156,7 +180,6 @@ struct JogSettingsView: View {
                 Text("\(controller.jog.backspinAssistStrength)%").frame(width: 42, alignment: .trailing)
             }.disabled(!controller.jog.backspinEnabled || !controller.jog.backspinAssistEnabled)
             hint("Lower it for gentler follow-through; raise it for a stronger push.")
-        }
     }
 
     private var mapping: some View {

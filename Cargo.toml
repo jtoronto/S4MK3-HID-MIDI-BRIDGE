@@ -1,11 +1,19 @@
 [package]
 name = "s4mk3-hid-midi-bridge"
-version = "0.3.0-beta.1"
+version = "0.4.0-beta.1"
 edition = "2024"
 rust-version = "1.88"
-description = "Native Instruments S4 MK3 HID-to-MIDI bridge for Djay Pro on macOS"
+description = "Native Instruments S4 MK3 HID-to-MIDI bridge for Djay Pro on macOS and Windows"
 publish = false
 default-run = "s4mk3-hid-midi-bridge"
+
+[features]
+attended-ni-jog = []
+
+[[bin]]
+name = "s4-ni-left-jog"
+path = "src/bin/s4-ni-left-jog.rs"
+required-features = ["attended-ni-jog"]
 
 [dependencies]
 anyhow = "1"
@@ -22,6 +30,23 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(windows)'.dependencies]
+interprocess = "=2.2.3"
+mio = { version = "=1.2.4", default-features = false, features = ["s4-cancel-pipe-writes-on-drop"] }
+process-wrap = { version = "=10.0.1", default-features = false, features = ["tokio1", "job-object", "kill-on-drop", "creation-flags"] }
+recvmsg = "=1.0.0"
+tokio = { version = "=1.54.1", features = ["rt", "time", "sync", "macros", "net", "process", "io-util"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+s4-ni-message-port = { path = "src/screens/ni_service/message_port" }
+tokio = { version = "=1.54.1", features = ["rt", "time", "sync", "macros"] }
+
+[dev-dependencies]
+tokio = { version = "=1.54.1", features = ["rt", "time", "sync", "macros", "test-util", "net", "process", "io-util"] }
+
+[patch.crates-io]
+mio = { path = "vendor/mio" }
 
 [lints.rust]
 unsafe_code = "forbid"

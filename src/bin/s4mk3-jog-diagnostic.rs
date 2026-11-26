@@ -4,6 +4,8 @@
 mod input;
 #[path = "../jog_diagnostic/mod.rs"]
 mod jog_diagnostic;
+#[path = "../platform.rs"]
+mod platform;
 
 use clap::Parser as _;
 

@@ -2,27 +2,32 @@
 
 use anyhow::Context as _;
 use encdr::Event;
-use midir::os::unix::VirtualOutput as _;
-use midir::{MidiOutput, MidiOutputConnection};
+#[cfg(all(test, target_os = "macos"))]
+use midir::{MidiOutput, os::unix::VirtualOutput as _};
 use num_traits::ToPrimitive as _;
 use tracing::{info, warn};
 
 pub const PORT_NAME: &str = "S4 MK3 MIDI";
 
 pub struct MidiBridge {
-    connection: MidiOutputConnection,
+    connection: crate::midi_transport::Output,
+    released: bool,
 }
 
 impl MidiBridge {
-    pub fn new() -> anyhow::Result<Self> {
-        let connection = MidiOutput::new("S4 MK3 Bridge")?
-            .create_virtual(PORT_NAME)
-            .map_err(|error| anyhow::anyhow!("create virtual MIDI source: {error}"))?;
+    pub fn new(
+        backend: crate::midi_transport::Backend,
+        capture: crate::midi_capture::Handle,
+    ) -> anyhow::Result<Self> {
+        let connection = crate::midi_transport::output(backend, PORT_NAME, capture)?;
         info!(
             port = PORT_NAME,
             "MIDI_READY: fixed decks 1/2; mixer channels 1-4"
         );
-        Ok(Self { connection })
+        Ok(Self {
+            connection,
+            released: false,
+        })
     }
 
     pub fn send(&mut self, event: &Event) -> anyhow::Result<bool> {
@@ -45,17 +50,29 @@ impl MidiBridge {
         info!(bytes = %format_args!("{message:02x?}"), "MIDI_SENT");
         Ok(true)
     }
+
+    pub fn finish(&mut self) -> anyhow::Result<()> {
+        if !self.released {
+            self.released = true;
+            let mut result = Ok(());
+            for status in [0x80, 0x81] {
+                for note in [0, 1] {
+                    if let Err(error) = self.connection.send(&[status, note, 0]) {
+                        result = Err(anyhow::anyhow!("release minimal MIDI button: {error}"));
+                    }
+                }
+            }
+            return result;
+        }
+        Ok(())
+    }
 }
 
 impl Drop for MidiBridge {
     fn drop(&mut self) {
         // Release any mapped buttons still held when the bounded bridge stops.
-        for status in [0x80, 0x81] {
-            for note in [0, 1] {
-                if let Err(error) = self.connection.send(&[status, note, 0]) {
-                    warn!(%error, "could not release MIDI button during shutdown");
-                }
-            }
+        if let Err(error) = self.finish() {
+            warn!(%error, "could not release MIDI button during shutdown");
         }
     }
 }
@@ -164,6 +181,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn virtual_source_delivers_translated_message_to_a_real_receiver() -> anyhow::Result<()> {
         // Given a real CoreMIDI source and receiver subscribed before sending.
         let name = format!("S4 MIDI integration {}", std::process::id());

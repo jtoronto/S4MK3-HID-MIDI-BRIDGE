@@ -4,6 +4,7 @@
 pub struct State {
     pub key_raw: [Option<u8>; 4],
     pub tempo_range: Option<u8>,
+    pub tempo_position: [Option<u8>; 4],
     pub jump_revision: [u64; 4],
     jump: [[Option<bool>; 10]; 4],
     active_loop: [[Option<bool>; 22]; 4],
@@ -74,6 +75,10 @@ impl State {
                 self.key_raw[channel] = Some(message.value);
                 return old != self.key_raw[channel];
             }
+            if message.number == crate::full::catalog::TEMPO_POSITION_CC {
+                let old = self.tempo_position[channel].replace(message.value);
+                return old != Some(message.value);
+            }
         }
         if channel == 6 && message.number == 8 {
             let old = self.tempo_range;
@@ -124,6 +129,7 @@ impl State {
     }
 
     pub fn clear_deck(&mut self, deck: usize) {
+        self.tempo_position[deck] = None;
         // displayKeyIndex is deck-owned: its new key (or zero on eject) can
         // arrive before the song's loadingSuccess=false notification.
         if let Some(states) = self.active_loop.get_mut(deck) {
